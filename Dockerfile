@@ -59,15 +59,3 @@ RUN cd /tmp && \
     chmod +x /usr/bin/confounded && \
     chmod 777 /confounded -R && \
     echo "Done importing Confounded code"
-
-####################################################################################
-# Copy files into the image
-####################################################################################
-
-COPY prepdata /prepdata
-COPY adjust /adjust
-COPY metrics /metrics
-COPY figures /figures
-COPY all.sh /
-
-ENTRYPOINT /all.sh

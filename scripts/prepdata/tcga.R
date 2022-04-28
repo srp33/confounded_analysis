@@ -6,6 +6,10 @@ mutation_file_path = commandArgs()[8]
 cancer_types_file_path = commandArgs()[9]
 out_file_path = commandArgs()[10]
 
+# Not sure why I have to do this...
+# https://github.com/tidyverse/vroom/issues/364
+Sys.setenv(VROOM_CONNECTION_SIZE = 500072)
+
 rnaseq = read_tsv(rnaseq_file_path)
 mutations = read_tsv(mutation_file_path)
 cancer_types = read_tsv(cancer_types_file_path)

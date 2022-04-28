@@ -2,7 +2,7 @@ library(readr)
 library(dplyr)
 
 IN_FILE <- "/data/tcga/unadjusted.csv"
-OUT_DIR <- "/data/"
+OUT_DIR <- "/data"
 MEDIUM <- paste0(OUT_DIR, "/tcga_medium/unadjusted.csv")
 SMALL <- paste0(OUT_DIR, "/tcga_small/unadjusted.csv")
 

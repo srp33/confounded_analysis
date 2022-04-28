@@ -2,6 +2,8 @@
 
 set -e
 
+thisDir=$(dirname $0)
+
 printf "\033[0;32mDownloading the GSE37199 dataset\033[0m\n"
 
 raw_loc="/tmp/raw.tar.gz"
@@ -14,4 +16,4 @@ tar -zxvf $raw_loc -C /tmp
 
 printf "\033[0;32mTidying the GSE37199 dataset\033[0m\n"
 
-python gse37199.py $expression_tsv $clinical_tsv $out_csv
+python $thisDir/gse37199.py $expression_tsv $clinical_tsv $out_csv

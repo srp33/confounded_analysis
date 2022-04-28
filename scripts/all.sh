@@ -2,10 +2,8 @@
 
 set -e
 
-cd prepdata
-bash all.sh 
-cd ../
-   
+bash /scripts/prepdata/all.sh 
+
 #cd adjust
 #bash all.sh
 #cd ../
