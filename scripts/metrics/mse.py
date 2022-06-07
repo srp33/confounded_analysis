@@ -35,5 +35,6 @@ for method in ["scaled", "combat", "confounded"]:
     print("Calculating MSE for the {} method on the {} dataset".format(method, dataset), flush=True)
     value = calculate_mse(unadj, df)
 
+    print(f"Saving output to {args.output_path}.")
     with open(args.output_path, "a") as output_file:
         output_file.write("{},{},{},{}\n".format("MSE", method, dataset, value))

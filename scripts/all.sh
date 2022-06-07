@@ -2,16 +2,7 @@
 
 set -e
 
-bash /scripts/prepdata/all.sh 
-
-#cd adjust
-#bash all.sh
-#cd ../
-
-#cd metrics 
-#bash all.sh
-#cd ../
-
-#cd figures
-#bash all.sh
-#cd ../
+#bash /scripts/prepdata/all.sh &> /outputs/prepdata.log
+#bash /scripts/adjust/all.sh &> /outputs/adjust.log
+bash /scripts/metrics/all.sh &> /outputs/metrics.log
+#bash /scripts/figures/all.sh &> /outputs/figures.log

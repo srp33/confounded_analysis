@@ -10,6 +10,7 @@ mkdir -p data/simulated_expression data/bladderbatch data/gse37199 data/tcga dat
 mkdir -p outputs/figures outputs/tables outputs/metrics
 chmod 777 outputs -R
 
+#docker run -d --rm \
 docker run -i -t --rm \
   --user $(id -u):$(id -g) \
   -v $(pwd)/data:/data \

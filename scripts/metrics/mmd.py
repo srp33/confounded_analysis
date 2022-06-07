@@ -60,5 +60,6 @@ for method in ["scaled", "combat", "confounded"]:
     print("Calculating MMD for the {} method on the {} dataset".format(method, dataset), flush=True)
     value = calculate_mmd(df, args.batch_col)
 
+    print(f"Saving output to {args.output_path}.")
     with open(args.output_path, "a") as output_file:
         output_file.write("{},{},{},{}\n".format("MMD", method, dataset, value))

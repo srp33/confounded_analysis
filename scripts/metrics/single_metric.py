@@ -5,7 +5,6 @@ from sklearn.svm import SVC
 import os.path
 from os import path
 import numpy as np
-
 import sys
 import time
 import random
@@ -44,13 +43,13 @@ if not os.path.exists(args.output_dir + output):
         output_file.write("metric, adjuster, dataset, score\n")
         #output_file.write("Result\n")
 
-datasets = ["simulated_expression", "bladderbatch", "gse37199", 
+datasets = ["simulated_expression", "bladderbatch", "gse37199",
                 "tcga_small", "tcga_medium", "tcga"
                 ]
-batch_labels = ["Batch", "batch", "plate", 
-              "CancerType", "CancerType", "CancerType" 
+batch_labels = ["Batch", "batch", "plate",
+              "CancerType", "CancerType", "CancerType"
               ]
-true_labels = ["Class", "batch", "Stage", 
+true_labels = ["Class", "batch", "Stage",
                 "TP53_Mutated", "TP53_Mutated", "TP53_Mutated"
                 ]
 results = []
@@ -79,7 +78,7 @@ if path.exists(args.input_dir + "batch_classification.csv"):
     all_data = np.hstack((true, batch_values))
 
     for ime in range(len(datasets)) :
-        
+
         batch_random = random_accuracy(datasets[ime], batch_labels[ime])
         true_random = random_accuracy(datasets[ime], true_labels[ime])
         for line in all_data:
@@ -95,4 +94,4 @@ with open(args.output_dir + output, 'a') as output_file:
         output_file.write(",".join(line) + "\n")
 
 
-        
+

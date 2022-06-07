@@ -2,7 +2,7 @@
 
 set -e
 
-#bash ./mse.sh
-#bash ./mmd.sh
-#bash ./classify.sh
-bash single_metric.sh
+#bash /scripts/metrics/mse.sh
+#bash /scripts/metrics/mmd.sh
+#bash /scripts/metrics/classify.sh
+bash /scripts/metrics/single_metric.sh
