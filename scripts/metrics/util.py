@@ -2,6 +2,11 @@ import os
 import glob
 import numpy as np
 import pandas as pd
+from sklearn.model_selection import cross_val_score
+from sklearn.preprocessing import robust_scale
+from sklearn.preprocessing import label_binarize
+from sklearn.model_selection import StratifiedKFold
+from sklearn.model_selection import GridSearchCV
 
 def __sort_by_length(strings):
     return sorted(strings, key=len)
@@ -80,7 +85,6 @@ def no_extension(path):
     filename = os.path.split(path)[-1]
     return os.path.splitext(filename)[0]
 
-
 def split_discrete_continuous(df):
     discrete_types = ["int", "object"]
     discrete = df.select_dtypes(include=discrete_types)
@@ -91,3 +95,32 @@ def split_into_batches(df, batch_col):
     discrete, continuous = split_discrete_continuous(df)
     batches = set(df[batch_col])
     return tuple((continuous[df[batch_col] == batch] for batch in batches))
+
+def cross_validate(df, predict_column, learner, iterations, folds, n_jobs):
+    meta_cols = list(df.select_dtypes(include=['object', 'int']).columns)
+
+    X = robust_scale(df.drop(meta_cols, axis="columns"))
+    y = df[predict_column]
+
+    #classes = []
+    #for element in y:
+    #    if (element not in classes) :
+    #        classes.append(element)
+    #y = label_binarize(y, classes = classes)
+
+    scoring_metric = "roc_auc"
+
+    scores = []
+    for i in range(iterations):
+        fit_params = learner[1]
+        if "random_state" in fit_params:
+            fit_params["random_state"] = i
+
+        estimator = learner[0](**fit_params)
+
+        kfold = StratifiedKFold(n_splits=folds, shuffle=True, random_state=i)
+        iter_scores = list(cross_val_score(estimator, X, y, scoring=scoring_metric, cv=kfold, n_jobs=n_jobs))
+
+        scores.append(sum(iter_scores) / len(iter_scores))
+
+    return scores
