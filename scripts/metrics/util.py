@@ -113,6 +113,7 @@ def cross_validate(df, predict_column, learner, iterations, folds, n_jobs):
     scores = []
     for i in range(iterations):
         fit_params = learner[1]
+
         if "random_state" in fit_params:
             fit_params["random_state"] = i
 

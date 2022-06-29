@@ -85,13 +85,13 @@ if path.exists(args.input_dir + "batch_classification.csv"):
             if line[2] == datasets[ime] :
                 #score = (float(line[3]) - true_random) + ( batch_random - float(line[4]))
                 #score = float(line[3]) - abs(float(line[4]) - batch_random)
+                #####################################################
+                #####################################################
                 score = (float(line[3]) - true_random) - abs(batch_random - float(line[4]))
+                #####################################################
+                #####################################################
                 results.append([line[0], line[1], line[2], str(score)])
-
 
 with open(args.output_dir + output, 'a') as output_file:
     for line in results:
         output_file.write(",".join(line) + "\n")
-
-
-
