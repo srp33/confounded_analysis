@@ -96,11 +96,14 @@ def split_into_batches(df, batch_col):
     batches = set(df[batch_col])
     return tuple((continuous[df[batch_col] == batch] for batch in batches))
 
-def cross_validate(df, predict_column, learner, iterations, folds, n_jobs):
+def cross_validate(df, predict_column, learner, iterations, folds, n_jobs, scale_numerics=False):
     meta_cols = list(df.select_dtypes(include=['object', 'int']).columns)
 
-    X = robust_scale(df.drop(meta_cols, axis="columns"))
+    X = df.drop(meta_cols, axis="columns")
     y = df[predict_column]
+
+    if scale_numerics == True:
+        X = robust_scale(X)
 
     #classes = []
     #for element in y:
