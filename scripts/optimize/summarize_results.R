@@ -3,10 +3,11 @@ library(readr)
 library(tidyr)
 
 results_file_path = commandArgs(trailingOnly = TRUE)[1]
+unadjusted_name = commandArgs(trailingOnly = TRUE)[2]
 
 data = read_tsv(results_file_path)
 
-unadjusted = filter(data, dataset == "unadjusted") %>%
+unadjusted = filter(data, dataset == unadjusted_name) %>%
     select(-dataset) %>%
     group_by(algorithm, column) %>%
     summarize(unadjusted_value = mean(value)) %>%
@@ -40,9 +41,9 @@ data = inner_join(batch_data, class_data) %>%
     mutate(class_rank = rank(class_score)) %>%
     mutate(combined_rank = batch_rank + class_rank) %>%
 #    filter(batch_unadjusted_value < 0.3 | batch_unadjusted_value > 0.7) %>%
-    filter(batch_value > 0.4 & batch_value < 0.6) %>%
+#    filter(batch_value > 0.4 & batch_value < 0.6) %>%
 #    filter(class_value > 0.8) %>%
-    filter(class_value > (class_unadjusted_value - 0.02)) %>%
+#    filter(class_value > (class_unadjusted_value - 0.02)) %>%
     arrange(desc(combined_rank))
 
 #print(batch_data, n=5, width=Inf)
