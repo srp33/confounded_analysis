@@ -1,5 +1,4 @@
 data
 __pycache__
-outputs
 tmp*
 outputs/*.log
