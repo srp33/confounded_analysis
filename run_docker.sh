@@ -9,8 +9,8 @@ docker build -t $image .
 mkdir -p data/simulated_expression/optimizations data/bladderbatch data/gse20194 data/tcga data/tcga_medium data/tcga_small
 mkdir -p outputs/figures outputs/metrics outputs/optimizations outputs/tables
 
-#docker run -i -t --rm \
-docker run -d --rm \
+#docker run -d --rm \
+docker run -i -t --rm \
   --user $(id -u):$(id -g) \
   -v $(pwd)/data:/data \
   -v $(pwd)/outputs:/outputs \
