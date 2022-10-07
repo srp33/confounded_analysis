@@ -19,4 +19,4 @@ docker run -i -t --rm \
   $image \
   bash -c /scripts/all.sh
 
-chmod 777 outputs -R
+#chmod 777 outputs -R
