@@ -4,7 +4,7 @@ set -e
 
 ###bash /scripts/optimize/run_scenarios.sh simulated_expression unadjusted.csv Batch Class
 
-#bash /scripts/optimize/run_scenarios.sh gse20194 unadjusted.csv batch treatment_response Sample "age,race,er_status,pr_status,bmn_grade,her2_status,histology,treatment_code"
+bash /scripts/optimize/run_scenarios.sh gse20194 unadjusted.csv batch treatment_response Sample "age,race,er_status,pr_status,bmn_grade,her2_status,histology,treatment_code"
 
 tmp_dir=/tmp/confounded
 out_dir=/outputs/optimizations/gse20194

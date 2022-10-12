@@ -22,7 +22,7 @@ mkdir -p ${tmp_dir}/adjusted/${dataset} ${tmp_dir}/results/${dataset}
 #rm -f ${tmp_dir}/adjusted/* ${tmp_dir}/results/*
 rm -f ${tasks_file1} ${tasks_file2}
 
-for minibatch_size in 100 50
+for minibatch_size in 100 50 25
 do
     for ds_layers in 10 5 20
     do
@@ -34,7 +34,7 @@ do
                 do
                     for loss_weight in 1.0 2.0
                     do
-                        for minibatch_iterations in 10000 1000
+                        for minibatch_iterations in 10000 1000 100
                         do
                             for learning_rate in 0.0001 0.001
                             do
