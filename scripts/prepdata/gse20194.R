@@ -39,6 +39,9 @@ pData = read_excel("/tmp/gse20194_meta.xls") %>%
     dplyr::rename(bmn_grade = `BMNgrd`) %>%
     dplyr::select(-`title`, -`source name`, -`organism`, -`molecule`, -`label`, -`platform`, -`Additional information`, -`Tbefore`, -`Nbefore`, -`ER`, -`Her2 IHC`, -`Her2 FISH`, -`Treatments Comments`)
 
+if (!dir.exists("/data/gse20194"))
+    dir.create("/data/gse20194")
+
 inner_join(eData, pData) %>%
     dplyr::select(-CEL_file) %>%
     dplyr::select(Sample, age, race, er_status, treatment_response, pr_status, batch, bmn_grade, her2_status, histology, treatment_code, matches("^\\d.+")) %>%
