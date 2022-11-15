@@ -32,11 +32,11 @@ do
             do
                 for scaling in linear sigmoid
                 do
-                    for loss_weight in 1.0 2.0
+                    for loss_weight in 1.0 2.0 4.0
                     do
                         for minibatch_iterations in 10000 1000 100
                         do
-                            for learning_rate in 0.0001 0.001
+                            for learning_rate in 0.0001 0.001 0.00001
                             do
                                 tmp_adjusted_file=${tmp_dir}/adjusted/${dataset}/${minibatch_size}_${ds_layers}_${ae_layers}_${code_size}_${scaling}_${loss_weight}_${minibatch_iterations}_${learning_rate}.tsv
                                 tmp_results_file=${tmp_dir}/results/${dataset}/${minibatch_size}_${ds_layers}_${ae_layers}_${code_size}_${scaling}_${loss_weight}_${minibatch_iterations}_${learning_rate}.tsv
