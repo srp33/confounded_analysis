@@ -29,7 +29,8 @@ adjusted = filter(data, dataset != "unadjusted") %>%
 batch_data = inner_join(adjusted, unadjusted, by=c("column")) %>%
     filter(column == "Batch") %>%
     select(-column) %>%
-    mutate(batch_score = unadjusted_value - value) %>%
+    #mutate(batch_score = unadjusted_value - value) %>%
+    mutate(batch_score = -abs(0.5 - value)) %>%
     dplyr::rename(batch_value = value) %>%
     dplyr::rename(batch_unadjusted_value = unadjusted_value)
 
@@ -48,6 +49,6 @@ combined_data = inner_join(batch_data, class_data)
 combined_data %>%
     mutate(batch_rank = rank(batch_score) / nrow(combined_data)) %>%
     mutate(class_rank = rank(class_score) / nrow(combined_data)) %>%
-    mutate(combined_rank = (batch_rank + class_rank) / 2) %>%
+    mutate(combined_rank = ((batch_rank * class_rank) / 2)) %>%
     arrange(desc(combined_rank)) %>%
     write_tsv(out_file_path)

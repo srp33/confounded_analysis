@@ -26,15 +26,14 @@ if args.variables:
     with open(args.output_path, "w") as output_file:
         output_file.write("\t".join(args.variables.split(",")) + "\tdataset\talgorithm\titeration\tcolumn\tvalue\n")
 
-random.seed(0)
 cache = DataFrameCache()
 dataset = os.path.basename(args.input_path).replace(".csv", "")
-num_cv_iterations = 2
+num_cv_iterations = 5
 num_folds = 5
 
 LEARNERS = [
-    ("Random Forests", RandomForestClassifier(n_estimators = 100, random_state = 33)),
-    ("Support Vector Machines", SVC(gamma = "auto", kernel = "rbf", random_state = 33)),
+    ("Random Forests", RandomForestClassifier(n_estimators = 100)),
+    ("Support Vector Machines", SVC(gamma = "auto", kernel = "rbf")),
     ("k-nearest Neighbors", KNeighborsClassifier(n_neighbors = 10))
 ]
 
@@ -59,6 +58,8 @@ y_class = df[args.class_column].to_numpy()
 with open(args.output_path, "a") as output_file:
     for learner in LEARNERS:
         for i in range(1, num_cv_iterations + 1):
+            random.seed(i)
+
             print(f"Performing classification for {dataset}, {learner[0]}, iteration {i}.")
             batch_scores = cross_val_score(learner[1], X, y_batch, cv = num_folds, scoring = "roc_auc", n_jobs = 1)
             class_scores = cross_val_score(learner[1], X, y_class, cv = num_folds, scoring = "roc_auc", n_jobs = 1)
@@ -71,5 +72,5 @@ with open(args.output_path, "a") as output_file:
             else:
                 variable_values = ["NA" for x in args.variables.split(",")]
 
-            output_file.write("\t".join(variable_values) + f"\t{dataset}\t{learner[0]}\t{i}\tBatch\t{batch_scores[i]}\n")
-            output_file.write("\t".join(variable_values) + f"\t{dataset}\t{learner[0]}\t{i}\tClass\t{class_scores[i]}\n")
+            output_file.write("\t".join(variable_values) + f"\t{dataset}\t{learner[0]}\t{i}\tBatch\t{batch_score}\n")
+            output_file.write("\t".join(variable_values) + f"\t{dataset}\t{learner[0]}\t{i}\tClass\t{class_score}\n")

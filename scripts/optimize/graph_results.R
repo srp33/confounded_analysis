@@ -16,6 +16,8 @@ plot_data = select(data, minibatch_size:learning_rate, combined_rank) %>%
   select(parameter, parameter_value, combined_rank) %>%
   mutate(combined_rank = as.double(combined_rank))
 
+set.seed(0)
+
 # Prevents Rplots.pdf from being created
 pdf(NULL)
 

@@ -72,7 +72,7 @@ fi
 
 if [ -f ${tasks_file2} ]
 then
-    parallel --jobs 20 --retries 0 --progress --eta -- < ${tasks_file2}
+    parallel --jobs 12 --retries 0 --progress --eta -- < ${tasks_file2}
 fi
 
 if [ ! -f ${tmp_dir}/results/${dataset}/0 ]
