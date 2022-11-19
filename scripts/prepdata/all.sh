@@ -2,10 +2,11 @@
 
 set -e
 
-#bash /scripts/prepdata/simulate_expression.sh
-#bash /scripts/prepdata/bladderbatch.sh
 #bash /scripts/prepdata/gse20194.sh
-bash /scripts/prepdata/gse24080.sh
+#bash /scripts/prepdata/gse24080.sh
+bash /scripts/prepdata/gse49711.sh
+
+#bash /scripts/prepdata/bladderbatch.sh
 #Other possibilities:
 #https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE47792 (SEQC superseries)
 #https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE54275 (specifically, the samples for GPL15932)
