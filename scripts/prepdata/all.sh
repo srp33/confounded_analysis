@@ -2,9 +2,10 @@
 
 set -e
 
-#bash /scripts/prepdata/gse20194.sh
-#bash /scripts/prepdata/gse24080.sh
+bash /scripts/prepdata/gse20194.sh
+bash /scripts/prepdata/gse24080.sh
 bash /scripts/prepdata/gse49711.sh
+
 
 #bash /scripts/prepdata/bladderbatch.sh
 #Other possibilities:

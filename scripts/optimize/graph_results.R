@@ -4,6 +4,7 @@ library(readr)
 library(tidyr)
 
 in_file_path = commandArgs(trailingOnly = TRUE)[1]
+out_file_path = commandArgs(trailingOnly = TRUE)[2]
 
 data = read_tsv(in_file_path)
 
@@ -29,4 +30,4 @@ ggplot(plot_data, aes(x = parameter_value, y = combined_rank)) +
   ylab("Combined rank (higher is better)") +
   theme_bw()
 
-ggsave("/outputs/optimizations/gse20194/summarized_results.pdf", height=6, width=8)
+ggsave(out_file_path, height=6, width=8)

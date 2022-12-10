@@ -65,14 +65,17 @@ do
     done
 done
 
+wc -l ${tasks_file1}
+exit
+
 if [ -f ${tasks_file1} ]
 then
-    parallel --jobs 12 --retries 0 --progress --eta -- < ${tasks_file1}
+    parallel --jobs 24 --retries 0 --progress --eta -- < ${tasks_file1}
 fi
 
 if [ -f ${tasks_file2} ]
 then
-    parallel --jobs 12 --retries 0 --progress --eta -- < ${tasks_file2}
+    parallel --jobs 24 --retries 0 --progress --eta -- < ${tasks_file2}
 fi
 
 if [ ! -f ${tmp_dir}/results/${dataset}/0 ]
