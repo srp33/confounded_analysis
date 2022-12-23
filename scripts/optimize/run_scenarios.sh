@@ -65,9 +65,6 @@ do
     done
 done
 
-wc -l ${tasks_file1}
-exit
-
 if [ -f ${tasks_file1} ]
 then
     parallel --jobs 24 --retries 0 --progress --eta -- < ${tasks_file1}

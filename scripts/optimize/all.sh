@@ -3,7 +3,7 @@
 set -e
 
 #bash /scripts/optimize/run_scenarios.sh gse20194 unadjusted.csv batch treatment_response Sample "age,race,er_status,pr_status,bmn_grade,her2_status,histology,treatment_code"
-#bash /scripts/optimize/run_scenarios2.sh gse49711 unadjusted.csv Sex Class Sample_ID "INSS_Stage"
+bash /scripts/optimize/run_scenarios.sh gse49711 unadjusted.csv Sex Class Sample_ID "INSS_Stage"
 
 tmp_dir=/tmp/confounded
 
@@ -48,3 +48,4 @@ tmp_dir=/tmp/confounded
 ##################################################
 
 #Rscript /scripts/optimize/combine_results.R /outputs/optimizations/gse20194/summarized_results.tsv /outputs/optimizations/gse49711/summarized_results.tsv /outputs/optimizations/combined_results.tsv /outputs/optimizations/combined_results.pdf
+#TODO: Make scatterplots of batch score and class score between the two datasets.
