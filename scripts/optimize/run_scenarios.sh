@@ -70,10 +70,12 @@ then
     parallel --jobs 24 --retries 0 --progress --eta -- < ${tasks_file1}
 fi
 
-if [ -f ${tasks_file2} ]
-then
+#TODO: Recalculate metrics for both datasets now that we are ignore datasets with inf values.
+#      Recreate graphs and make sure you find an exclude NA values.
+#if [ -f ${tasks_file2} ]
+#then
     parallel --jobs 24 --retries 0 --progress --eta -- < ${tasks_file2}
-fi
+#fi
 
 if [ ! -f ${tmp_dir}/results/${dataset}/0 ]
 then

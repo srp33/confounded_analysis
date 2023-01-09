@@ -26,7 +26,6 @@ if args.variables:
     with open(args.output_path, "w") as output_file:
         output_file.write("\t".join(args.variables.split(",")) + "\tdataset\talgorithm\titeration\tcolumn\tvalue\n")
 
-cache = DataFrameCache()
 dataset = os.path.basename(args.input_path).replace(".csv", "")
 num_cv_iterations = 5
 num_folds = 5
@@ -37,7 +36,8 @@ LEARNERS = [
     ("k-nearest Neighbors", KNeighborsClassifier(n_neighbors = 10))
 ]
 
-df = cache.get_dataframe(args.input_path)
+# Setting low_memory=False avoids a warning when you have values (like 4S) that pandas thinks should be numbers.
+df = pd.read_csv(args.input_path, low_memory=False)
 
 # Keep only the gene-expression columns
 X_cols = df.columns.tolist()
@@ -49,23 +49,31 @@ for col in args.covariate_columns.split(","):
 
 X = df[X_cols]
 
-# Scale the X values
-X = RobustScaler().fit(X).transform(X)
+num_inf_values = np.isinf(X).values.sum()
 
-y_batch = df[args.batch_column].to_numpy()
-y_class = df[args.class_column].to_numpy()
+if num_inf_values == 0:
+    # Scale the X values
+    X = RobustScaler().fit(X).transform(X)
+
+    y_batch = df[args.batch_column].to_numpy()
+    y_class = df[args.class_column].to_numpy()
 
 with open(args.output_path, "a") as output_file:
     for learner in LEARNERS:
         for i in range(1, num_cv_iterations + 1):
             random.seed(i)
 
-            print(f"Performing classification for {dataset}, {learner[0]}, iteration {i}.")
-            batch_scores = cross_val_score(learner[1], X, y_batch, cv = num_folds, scoring = "roc_auc", n_jobs = 1)
-            class_scores = cross_val_score(learner[1], X, y_class, cv = num_folds, scoring = "roc_auc", n_jobs = 1)
+            if num_inf_values == 0:
+                print(f"Performing classification for {dataset}, {learner[0]}, iteration {i}.")
+                batch_scores = cross_val_score(learner[1], X, y_batch, cv = num_folds, scoring = "roc_auc", n_jobs = 1)
+                class_scores = cross_val_score(learner[1], X, y_class, cv = num_folds, scoring = "roc_auc", n_jobs = 1)
 
-            batch_score = float(np.mean(batch_scores))
-            class_score = float(np.mean(class_scores))
+                batch_score = float(np.mean(batch_scores))
+                class_score = float(np.mean(class_scores))
+            else:
+                print(f"NOT performing classification for {dataset}, {learner[0]}, iteration {i} because there are inf values.")
+                batch_score = "NA"
+                class_score = "NA"
 
             if args.variable_values:
                 variable_values = args.variable_values.split(",")
