@@ -52,10 +52,10 @@ do
                                     echo "confounded ${unadjusted_file} -o ${tmp_adjusted_file} -m ${minibatch_size} -l ${ds_layers} -a ${ae_layers} -b ${batch_col} -c ${code_size} -s ${scaling} -w ${loss_weight} -i ${minibatch_iterations} -g ${learning_rate}" >> ${tasks_file1}
                                 fi
 
-                                if [ ! -f ${tmp_results_file} ]
-                                then
+#                                if [ ! -f ${tmp_results_file} ]
+#                                then
                                     echo "python /scripts/optimize/calculate_metrics.py -i ${tmp_adjusted_file} -o ${tmp_results_file} -b ${batch_col} -p ${class_col} -s ${sample_col} -c "${covariate_cols}" -z ${minibatch_size},${ds_layers},${ae_layers},${code_size},${scaling},${loss_weight},${minibatch_iterations},${learning_rate}" >> ${tasks_file2}
-                                fi
+#                                fi
                             done
                         done
                     done
@@ -70,12 +70,10 @@ then
     parallel --jobs 24 --retries 0 --progress --eta -- < ${tasks_file1}
 fi
 
-#TODO: Recalculate metrics for both datasets now that we are ignore datasets with inf values.
-#      Recreate graphs and make sure you find an exclude NA values.
-#if [ -f ${tasks_file2} ]
-#then
+if [ -f ${tasks_file2} ]
+then
     parallel --jobs 24 --retries 0 --progress --eta -- < ${tasks_file2}
-#fi
+fi
 
 if [ ! -f ${tmp_dir}/results/${dataset}/0 ]
 then

@@ -17,7 +17,8 @@ unadjusted = filter(data, dataset == unadjusted_name) %>%
     summarize(unadjusted_value = mean(unadjusted_value)) %>%
     ungroup()
 
-adjusted = filter(data, dataset != "unadjusted") %>%
+adjusted = filter(data, dataset != unadjusted_name) %>%
+    filter(!is.na(value)) %>%
     select(-dataset) %>%
     group_by(minibatch_size, ds_layers, ae_layers, code_size, scaling, loss_weight, minibatch_iterations, learning_rate, algorithm, column) %>%
     summarize(value = mean(value)) %>%
