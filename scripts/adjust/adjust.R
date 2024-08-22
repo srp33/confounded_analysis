@@ -116,12 +116,15 @@ scale_adjust <- function(matrix_, batch)
 batch_adjust_tidy <- function(df, adjuster, batch_col = "Batch") {
   orig_col_names = colnames(df)
   batch = pull(df, batch_col)
-  df = select(df, -batch_col)
+  df = select(df, -all_of(batch_col))
 
   categorical <- df %>%
     select_if(~!is.numeric(.) || is.whole(.))
   quantitative <- df %>%
     select_if(~is.numeric(.) && !is.whole(.))
+
+print(quantitative)
+stop()
 
   if (adjuster == "combat") {
     adjusted = ComBat_ignore_nonvariance(as.matrix(quantitative), batch)

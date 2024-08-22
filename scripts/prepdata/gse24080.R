@@ -1,4 +1,3 @@
-library(doParallel)
 library(dplyr)
 library(readr)
 library(readxl)
@@ -6,23 +5,52 @@ library(SCAN.UPC)
 library(stringr)
 library(tibble)
 
-registerDoParallel(cores=16)
-
 CEL_file_pattern = "/tmp/GSE24080/*.CEL.gz"
 
-eSet = SCAN(CEL_file_pattern, probeSummaryPackage="hgu133plus2hsentrezgprobe")
+normalized_dir_path = "/tmp/GSE24080"
 
-eData = t(data.matrix(exprs(eSet))) %>%
-  as.data.frame() %>%
-  rownames_to_column("CEL_file") %>%
-  as_tibble() %>%
-  mutate(CEL_file = str_replace_all(CEL_file, "\\.gz", "")) %>%
-  mutate(CEL_file = str_replace_all(CEL_file, "^GSM\\d+_", ""))
+for (CEL_file_path in list.files(path = normalized_dir_path, pattern = ".CEL.gz", full.names=TRUE)) {
+    CEL_file_name = basename(CEL_file_path)
+    CEL_file_name = str_replace_all(CEL_file_name, "\\.gz", "")
+    CEL_file_name = str_replace_all(CEL_file_name, "^GSM\\d+_", "")
+
+    out_file_path = paste0(normalized_dir_path, "/", CEL_file_name)
+
+    if (!file.exists(out_file_path)) {
+        SCAN(CEL_file_path, outFilePath=out_file_path, probeSummaryPackage="hgu133plus2hsentrezgprobe")
+    }
+}
+
+eData = NULL
+#for (f in list.files(path = normalized_dir_path, pattern = ".CEL$", full.names=TRUE)[1:3]) {
+for (f in list.files(path = normalized_dir_path, pattern = ".CEL$", full.names=TRUE)) {
+    print(paste0("Parsing from ", f))
+    fData = read.table(f, sep="\t", col.names=TRUE)
+    colnames(fData) = basename(f)
+
+    if (is.null(eData)) {
+        eData = tibble(Gene = rownames(fData)) %>%
+            bind_cols(fData)
+    } else {
+        eData = inner_join(eData, tibble(Gene = rownames(fData)) %>%
+            bind_cols(fData), by = "Gene")
+    }
+}
+
+genes = pull(eData, Gene)
+genes = sub("_at", "", genes)
+eData = select(eData, -Gene) %>%
+    as.matrix() %>%
+    t()
+colnames(eData) = genes
+cel_files = rownames(eData)
+eData = bind_cols(tibble(CEL_file = cel_files), as_tibble(eData))
 
 download.file("https://www.ncbi.nlm.nih.gov/geo/download/?acc=GSE24080&format=file&file=GSE24080%5FMM%5FUAMS565%5FClinInfo%5F27Jun2008%5FLS%5Fclean%2Exls%2Egz", "/tmp/gse24080_meta.xls.gz")
 gunzip("/tmp/gse24080_meta.xls.gz", overwrite = TRUE)
 
 # It has ArrayScanDate, but it's unclear how these correspond to batches.
+# The multiple myeloma (MM) data set (endpoints F, G, H and I) was contributed by the Myeloma Institute for Research and Therapy at the University of Arkansas for Medical Sciences. Gene expression profiling of highly purified bone marrow plasma cells was performed in newly diagnosed patients with MM57,58,59. The training set consisted of 340 cases enrolled in total therapy 2 (TT2) and the validation set comprised 214 patients enrolled in total therapy 3 (TT3)59.  https://www.nature.com/articles/nbt.1665
 pData = read_excel("/tmp/gse24080_meta.xls") %>%
     filter(`MAQC_Distribution_Status` %in% c("Training", "Validation")) %>%
     dplyr::rename(batch = `MAQC_Distribution_Status`) %>%
