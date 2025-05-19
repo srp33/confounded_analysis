@@ -1,3 +1,5 @@
+out_file_path = "/data/gse49711/unadjusted.csv"
+
 library(dplyr)
 library(GEOquery)
 library(readr)
@@ -48,4 +50,4 @@ data = inner_join(metadata, expr_data, by="Sample_ID")
 if (!dir.exists("/data/gse49711"))
     dir.create("/data/gse49711")
 
-write_csv(data, "/data/gse49711/unadjusted.csv")
+write_csv(data, out_file_path)

@@ -4,9 +4,9 @@ p_load("tidyverse", "kableExtra")
 source("functions.R")
 
 # Load data -------
-IN_DIR = "../data/metrics/"
-FIG_DIR = "../data/output/"
-TAB_DIR = "../data/output/"
+IN_DIR = "/outputs/metrics/"
+FIG_DIR = "/outputs/figures"
+TAB_DIR = "/outputs/tables/"
 
 mse <- read_csv(paste(c(IN_DIR, "/mse.csv"), collapse = ""))
 mmd <- read_csv(paste(c(IN_DIR, "/mmd.csv"), collapse = ""))

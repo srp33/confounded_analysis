@@ -2,11 +2,12 @@ import argparse
 import numpy as np
 from sklearn.metrics.pairwise import rbf_kernel, linear_kernel
 from util import *
+from pathlib import Path
 
 parser = argparse.ArgumentParser()
-parser.add_argument("-i", "--input-dir", help="Input directory", required=True)
-parser.add_argument("-b", "--batch-col", help="Batch column", required=True)
-parser.add_argument("-o", "--output-path", help="Path to output file", required=True)
+parser.add_argument("-i", "--input-dir", type=Path, help="Input directory", required=True)
+parser.add_argument("-b", "--batch-col", type=Path, help="Batch column", required=True)
+parser.add_argument("-o", "--output-path", type=Path, help="Path to output file", required=True)
 args = parser.parse_args()
 
 def mmd(sample1, sample2, kernel=rbf_kernel):

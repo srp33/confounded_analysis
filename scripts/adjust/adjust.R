@@ -32,8 +32,7 @@ is.whole <- function(a, tol = 1e-7) {
     (is.complex(a) && {ri <- c(Re(a),Im(a)); is.eq(ri, floor(ri))})
 }
 
-ComBat_ignore_nonvariance <- function(matrix_, batch)
-{
+ComBat_ignore_nonvariance <- function(matrix_, batch) {
   #' Run ComBat and ignore nonvarying features.
   #'
   #' ComBat requires that all features have some variance (and probably assumes
@@ -59,8 +58,7 @@ ComBat_ignore_nonvariance <- function(matrix_, batch)
   t(matrix_)
 }
 
-scale_adjust <- function(matrix_, batch)
-{
+scale_adjust <- function(matrix_, batch) {
   #' Run ComBat and ignore nonvarying features.
   #'
   #' @param matrix_ The matrix to batch adjust by scaling. Columns are
@@ -123,8 +121,8 @@ batch_adjust_tidy <- function(df, adjuster, batch_col = "Batch") {
   quantitative <- df %>%
     select_if(~is.numeric(.) && !is.whole(.))
 
-print(quantitative)
-stop()
+  print(quantitative)
+  stop()
 
   if (adjuster == "combat") {
     adjusted = ComBat_ignore_nonvariance(as.matrix(quantitative), batch)

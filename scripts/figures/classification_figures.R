@@ -7,8 +7,8 @@ library(stringr)
 
 
 # Load data -------
-IN_DIR = "/output/metrics/"
-FIG_DIR = "/output/figures/"
+IN_DIR = "/outputs/metrics/"
+FIG_DIR = "/outputs/figures/"
 SAMPLE_DIR = "/../data/"
 
 cbp2 <- c("#E69F00", "#56B4E9","#009E73","#F0E442", 

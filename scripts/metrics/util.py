@@ -7,6 +7,7 @@ from sklearn.preprocessing import robust_scale
 from sklearn.preprocessing import label_binarize
 from sklearn.model_selection import StratifiedKFold
 from sklearn.model_selection import GridSearchCV
+from pathlib import Path
 
 def __sort_by_length(strings):
     return sorted(strings, key=len)
@@ -50,25 +51,33 @@ def log_scale(df):
     df = df.where(df.min() < 0, df - df.min())
     return np.log(df + 1.0)
 
+
 class Logger(object):
     def __init__(self, metric):
         self.metric = metric
         self.values = {
-            "metric": [],
             "adjuster": [],
             "dataset": [],
             "value": [],
         }
 
     def log(self, adjuster, dataset, value):
-        self.values["metric"].append(self.metric)
         self.values["adjuster"].append(adjuster)
         self.values["dataset"].append(dataset)
         self.values["value"].append(value)
 
     def save(self, path):
+        # Appends new values to existing file
         df = pd.DataFrame(self.values)
+        if os.path.exists(path):
+            df = pd.concat([df, pd.read_csv(path)])
         df.to_csv(path, index=False)
+
+    def save_pivoted(self, path):
+        df = pd.DataFrame(self.values).drop("metric", axis=1)
+        pivoted = df.pivot(index='dataset', columns='adjuster', values='value')
+        pivoted.to_csv(Path(path) / self.metric)
+
 
 class DataFrameCache(object):
     def __init__(self):

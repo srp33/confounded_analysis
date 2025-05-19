@@ -6,7 +6,7 @@ library(tidyr)
 library(stringr)
 
 # Load data ---------
-df <- read_csv("/output/metrics/mnist_confounded_log.csv") %>% 
+df <- read_csv("/outputs/metrics/mnist_confounded_log.csv") %>% 
   select(ae_loss, disc_loss, iteration) %>% 
   gather("Function", "Loss Function", -iteration) %>% 
   mutate(Function = str_replace(Function, "_loss", "")) %>%
@@ -26,4 +26,4 @@ pdf(NULL)
   theme_bw(base_size = 18) +
   ylab("Loss value")
 
-ggsave("/output/figures/loss_chart.pdf")
+ggsave("/outputs/figures/loss_chart.pdf")

@@ -4,7 +4,7 @@ set -e
 
 # https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE20194
 # https://pubmed.ncbi.nlm.nih.gov/20064235/
-#bash /scripts/prepdata/gse20194.sh
+bash /scripts/prepdata/gse20194.sh
 
 # https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE24080
 # https://pubmed.ncbi.nlm.nih.gov/20064235/
@@ -12,11 +12,10 @@ bash /scripts/prepdata/gse24080.sh
 
 # https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE49711
 # https://pubmed.ncbi.nlm.nih.gov/25150839/
-#bash /scripts/prepdata/gse49711.sh
+bash /scripts/prepdata/gse49711.sh
 
-
-#bash /scripts/prepdata/bladderbatch.sh
 #Other possibilities:
+#bash /scripts/prepdata/bladderbatch.sh
 #https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE47792 (SEQC superseries)
 #https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE49711 (same as GSE49711 but uses Agilent microarrays)
 #https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE54275 (specifically, the samples for GPL15932)
