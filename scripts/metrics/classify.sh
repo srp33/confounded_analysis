@@ -15,14 +15,14 @@ script_path="$(dirname $0)/classify.py"
 # python "${script_path}" -i /data/simulated_expression -o ${true_out_path} -c Class
 
 
-# It doesn't make sense to measure true-class accuracy for bladderbatch because it is confounded with batch
-python "${script_path}" -i /data/bladderbatch -o ${batch_out_path} -c batch
+python "${script_path}" -i /data/gse20194 -o ${batch_out_path} -c batch
+python "${script_path}" -i /data/gse20194 -o ${true_out_path} -c er_status
+python "${script_path}" -i /data/gse20194 -o ${true_out_path} -c her2_status
+python "${script_path}" -i /data/gse20194 -o ${true_out_path} -c pr_status
 
-# python "${script_path}" -i /data/gse37199 -o ${batch_out_path} -c plate
-# python "${script_path}" -i /data/gse37199 -o ${true_out_path} -c Stage
+python "${script_path}" -i /data/gse24080 -o ${batch_out_path} -c batch
+python "${script_path}" -i /data/gse24080 -o ${true_out_path} -c efs_outcome_label
+python "${script_path}" -i /data/gse24080 -o ${true_out_path} -c os_outcome_label
 
-for dataset in tcga tcga_medium tcga_small
-do
-  python "${script_path}" -i /data/$dataset -o ${batch_out_path} -c CancerType
-  python "${script_path}" -i /data/$dataset -o ${true_out_path} -c TP53_Mutated
-done
+python "${script_path}" -i /data/gse49711 -o ${batch_out_path} -c Class
+python "${script_path}" -i /data/gse49711 -o ${true_out_path} -c INSS_Stage

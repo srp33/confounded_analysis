@@ -5,14 +5,20 @@ set -e
 printf "\033[0;32mCalculating MSE\033[0m\n"
 
 out_path="/outputs/metrics/mse.csv"
+pivot_path="/outputs/metrics/pivot_mse.csv"
 
-rm -f ${out_path}
+# Save previous files to an archive
+if [ -f "${out_path}" ]; then
+  mkdir -p archive
+  mod_date=$(date -r "${out_path}" +%Y-%m-%d)
+  filename=$(basename -- "${out_path}")
+  mv "${out_path}" "archive/${mod_date}_${filename}"
+fi
 
 script_path="$(dirname $0)/mse.py"
 
-python "${script_path}" -i /data/simulated_expression -o "$out_path"
-python "${script_path}" -i /data/bladderbatch -o "$out_path"
-python "${script_path}" -i /data/gse37199 -o "$out_path"
-python "${script_path}" -i /data/tcga -o "$out_path"
-python "${script_path}" -i /data/tcga_medium -o "$out_path"
-python "${script_path}" -i /data/tcga_small -o "$out_path"
+python "${script_path}" -i /data/gse20194 -b batch -o "$out_path"
+python "${script_path}" -i /data/gse24080 -b batch -o "$out_path"
+python "${script_path}" -i /data/gse49711 -b Class -o "$out_path"
+
+python "$(dirname $0)/pivot_metics.py" -i "$out_path" -o "$pivot_path"

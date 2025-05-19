@@ -34,18 +34,31 @@ random_accuracy <- function(data, label) {
   return(max / total)
 }
 
-datasets = c("simulated_expression", "bladderbatch", "gse37199", 
-                "tcga_small", "tcga_medium", "tcga"
-                )
-titles = c("Simulated Data", "Bladderbatch", "GSE 37199", 
-                "TCGA Small", "TCGA Medium", "TCGA"
-                )
-batch_labels = c("Batch", "batch", "plate",
-              "CancerType", "CancerType", "CancerType"
-	      )
-true_labels = c("Class", "batch", "Stage",
-                "TP53_Mutated", "TP53_Mutated", "TP53_Mutated"
-                )
+#                     dataset,    title,                            batch_label,  true_label
+gse20194_er_info =  c("gse20194", "GSE 20194 ER",                   "batch",      "er_status")
+gse20194_her2_info =c("gse20194", "GSE 20194 HER2",                 "batch",      "her2_status")
+gse20194_pr_info =  c("gse20194", "GSE 20194 PR",                   "batch",      "pr_status")
+
+gse24080_efs_info = c("gse24080",  "GSE 24080 Eventfree Survival",  "batch",      "efs_outcome_label")
+gse24080_os_info =  c("gse24080",  "GSE 24080 Overall Survival",    "batch",      "os_outcome_label")
+
+gse49711_stage_info=c("gse49711",  "GSE 49711 Stage",               "Class",      "INSS_Stage")
+
+# Combine into a list
+all_info <- list(
+  gse20194_er_info,
+  gse20194_her2_info,
+  gse20194_pr_info,
+  gse24080_efs_info,
+  gse24080_os_info,
+  gse49711_stage_info
+)
+
+# Extract components into separate vectors
+datasets     <- sapply(all_info, function(x) x[1])
+titles       <- sapply(all_info, function(x) x[2])
+batch_labels <- sapply(all_info, function(x) x[3])
+true_labels  <- sapply(all_info, function(x) x[4])
 
 order <- c("unadjusted", "scaled", "combat", "confounded")
 
@@ -83,44 +96,10 @@ for(x in 1:length(datasets)) {
 }
 
 print(batchall)
-#-- TCGA dataset comparisons
-title = "TCGA Dataset Comparisons"
-batchall <- batchall %>% mutate(valType = batch_labels[x])
-trueall <- trueall %>% mutate(valType = true_labels[x])
-tcga_sets <- c("tcga", "tcga_medium", "tcga_small")
-tcga_batch <- filter(batchall, dataset %in% tcga_sets)
-tcga_true <-filter(trueall, dataset %in% tcga_sets)
-
-#-- find the average for each
-batch_averages = group_by(tcga_batch, valType, dataset, adjuster, metric) %>%
-  summarize(ave=median(value))
-true_averages = group_by(tcga_true, valType, dataset, adjuster, metric) %>%
-  summarize(ave=median(value))
-averages = rbind(true_averages, batch_averages)
-print(averages)
-averages = group_by(averages, valType, adjuster, metric)
-level_order <- c("tcga_small", "tcga_medium", "tcga")
-
-# Save figures ------------------
-
-ggplot() +
-  geom_line(data = averages, mapping = aes(x = factor(dataset, level_order), y = ave, color = adjuster, linetype = valType, group = interaction(adjuster, valType)), size = 1.5) +
-  geom_point(data = averages, mapping = aes(x = factor(dataset, level_order), y = ave, color = adjuster), size = 1.5) +
-  geom_hline(yintercept = random_accuracy("tcga", "TP53_Mutated"), color = "#000000", linetype = "dotted") +
-  geom_hline(yintercept = random_accuracy("tcga", "CancerType"), color = "#000000", linetype = "solid") +
-  ggtitle(title) +
-  theme_bw(base_size = 18) + theme(axis.title.x=element_blank(), legend.title=element_blank(), axis.text.x = element_text(angle = 90)) +
-  scale_y_continuous(name = "Average Accuracy", limits = c(0.0, 1.0)) +
-  scale_x_discrete(labels = c("small", "medium", "full")) + 
-  facet_wrap(vars(metric), strip.position = "top") +
-  scale_colour_manual(values=cbp2)
-ggsave(paste(c(FIG_DIR, "tcga_comparisons.pdf"), collapse = ""), width = 11, height = 8.5, units = 'in')
-
 
 #metric comparison --------------
 metriccomp <- read_csv(paste(c(IN_DIR, "singlemetriccomparison_minus.csv"), collapse = ""))
-tcga_only <- filter(metriccomp, dataset %in% tcga_sets)
-metricdata <- filter(metriccomp, dataset %in% c("bladderbatch", "gse37199", "tcga", "simulated_expression"))
+metricdata <- filter(metriccomp, dataset %in% datasets)
 
 score_averages = group_by(metricdata, adjuster, metric, dataset) %>%
   summarize(ave=median(score), 
@@ -129,8 +108,8 @@ score_averages <- group_by(score_averages, adjuster, metric)
 
 # Save figure --------------------
 ggplot() +
-  geom_jitter(data = metricdata, mapping = aes(x = factor(dataset, c("bladderbatch", "gse37199","tcga", "simulated_expression")), y = score,  color = adjuster), position=position_jitterdodge()) + 
-  geom_boxplot(data = metricdata, mapping = aes(x = factor(dataset, c("bladderbatch", "gse37199","tcga", "simulated_expression")), y = score, color = adjuster)) +
+  geom_jitter(data = metricdata, mapping = aes(x = factor(dataset, datasets), y = score,  color = adjuster), position=position_jitterdodge()) + 
+  geom_boxplot(data = metricdata, mapping = aes(x = factor(dataset, datasets), y = score, color = adjuster)) +
   
   ggtitle("Single Metric Comparison")+
   facet_wrap(vars(metric))+
@@ -140,22 +119,9 @@ ggplot() +
   scale_colour_manual(values=cbp2)
 ggsave(paste(c(FIG_DIR, "singlemetriccomparison_minus.pdf"), collapse = ""), width = 11, height = 8.5, units = 'in')
 
-
 ggplot() +
-  geom_jitter(data = tcga_only, mapping = aes(x = factor(dataset, c("tcga_small", "tcga_medium", "tcga")), y = score,  color = adjuster), position=position_jitterdodge()) +
-  geom_boxplot(data = tcga_only, mapping = aes(x = factor(dataset, c("tcga_small", "tcga_medium", "tcga")), y = score, color = adjuster)) +
-
-  ggtitle("Single Metric Comparison - TCGA")+
-  facet_wrap(vars(metric))+
-  theme_bw(base_size = 12) +
-  scale_y_continuous(name = "Score: (true - trueRandom) - abs(batchRandom - batch)", limits = c(-1.0, 1.0)) +
-  theme(axis.title.x=element_blank(), legend.title=element_blank(), axis.text.x = element_text(angle = 90)) +
-  scale_colour_manual(values=cbp2)
-ggsave(paste(c(FIG_DIR, "singlemetriccomparison_tcga_minus.pdf"), collapse = ""), width = 11, height = 8.5, units = 'in')
-
-ggplot() +
-	geom_line(data = score_averages, mapping = aes(x = factor(dataset, c("bladderbatch", "gse37199","tcga", "simulated_expression")), y = ave, color = adjuster, linetype = metric, group = interact))+
-	geom_point(data = score_averages, mapping = aes(x = factor(dataset, c("bladderbatch", "gse37199","tcga", "simulated_expression")), y = ave, color = adjuster, pch = metric)) +
+	geom_line(data = score_averages, mapping = aes(x = factor(dataset, datasets), y = ave, color = adjuster, linetype = metric, group = interact))+
+	geom_point(data = score_averages, mapping = aes(x = factor(dataset, datasets), y = ave, color = adjuster, pch = metric)) +
 	ggtitle("Single Metric Score Averages")+
   theme_bw(base_size = 12) +
   scale_y_continuous(name = "Average Score: (true - trueRandom) - abs(batchRandom - batch)", limits = c(-1.0, 1.0)) +
