@@ -12,7 +12,7 @@ if [ -f "${out_path}" ]; then
   mkdir -p archive
   mod_date=$(date -r "${out_path}" +%Y-%m-%d)
   filename=$(basename -- "${out_path}")
-  mv "${out_path}" "archive/${mod_date}_${filename}"
+  mv "${out_path}" "/outputs/metrics/archive/${mod_date}_${filename}"
 fi
 
 script_path="$(dirname $0)/mse.py"
