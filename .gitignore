@@ -3,4 +3,5 @@ data
 __pycache__
 tmp*
 outputs/*.log
+outputs/metrics/archive
 .DS_Store
