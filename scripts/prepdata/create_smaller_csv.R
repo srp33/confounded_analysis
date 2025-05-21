@@ -1,4 +1,4 @@
-library(readr)
+suppressPackageStartupMessages(library(readr))
 
 in_file_path = commandArgs(trailingOnly=TRUE)[1]
 num_columns = as.integer(commandArgs(trailingOnly=TRUE)[2])

@@ -1,10 +1,12 @@
 out_file_path = "/data/gse49711/unadjusted.csv"
 
-library(dplyr)
-library(GEOquery)
-library(readr)
-library(stringr)
-library(tibble)
+suppressPackageStartupMessages({
+    library(dplyr)
+    library(GEOquery)
+    library(readr)
+    library(stringr)
+    library(tibble)
+})
 
 download.file("https://www.ncbi.nlm.nih.gov/geo/download/?acc=GSE49711&format=file&file=GSE49711%5FSEQC%5FNB%5FTAV%5FG%5Flog2%2Efinal%2Etxt%2Egz", "/tmp/gse49711.expr.tsv.gz")
 

@@ -1,9 +1,11 @@
-library(dplyr)
-library(readr)
-library(readxl)
-library(SCAN.UPC)
-library(stringr)
-library(tibble)
+suppressPackageStartupMessages({
+    library(dplyr)
+    library(readr)
+    library(readxl)
+    library(SCAN.UPC)
+    library(stringr)
+    library(tibble)
+})
 
 CEL_file_pattern = "/tmp/GSE24080/*.CEL.gz"
 

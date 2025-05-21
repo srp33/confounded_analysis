@@ -1,9 +1,11 @@
 # Setup ------
-library(ggplot2)
-library(dplyr)
-library(readr)
-library(tidyr)
-library(stringr)
+suppressPackageStartupMessages({
+  library(ggplot2)
+  library(dplyr)
+  library(readr)
+  library(tidyr)
+  library(stringr)
+})
 
 
 # Load data -------

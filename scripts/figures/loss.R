@@ -1,9 +1,11 @@
 # Load packages -----
-library(ggplot2)
-library(dplyr)
-library(readr)
-library(tidyr)
-library(stringr)
+suppressPackageStartupMessages({
+  library(ggplot2)
+  library(dplyr)
+  library(readr)
+  library(tidyr)
+  library(stringr)
+})
 
 # Load data ---------
 df <- read_csv("/outputs/metrics/mnist_confounded_log.csv") %>% 

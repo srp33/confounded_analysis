@@ -2,12 +2,14 @@
 options(error=function() { traceback(2); if(!interactive()) quit("no", status = 1, runLast = FALSE) })
 
 # Load dependencies --------------------------------
-library(dplyr)
-library(readr)
-library(docstring)
-library(stringr)
-library(argparse)
-library(sva)
+suppressPackageStartupMessages({
+  library(dplyr)
+  library(readr)
+  library(docstring)
+  library(stringr)
+  library(argparse)
+  library(sva)
+})
 
 # Parse command line args --------------------------
 
@@ -122,7 +124,6 @@ batch_adjust_tidy <- function(df, adjuster, batch_col = "Batch") {
     select_if(~is.numeric(.) && !is.whole(.))
 
   print(quantitative)
-  stop()
 
   if (adjuster == "combat") {
     adjusted = ComBat_ignore_nonvariance(as.matrix(quantitative), batch)

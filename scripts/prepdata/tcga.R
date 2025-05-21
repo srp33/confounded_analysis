@@ -1,5 +1,7 @@
-library(readr)
-library(dplyr)
+suppressPackageStartupMessages({
+    library(readr)
+    library(dplyr)
+})
 
 rnaseq_file_path = commandArgs()[7]
 mutation_file_path = commandArgs()[8]

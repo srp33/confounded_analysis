@@ -1,6 +1,8 @@
-library(dplyr)
-library(ggplot2)
-library(readr)
+suppressPackageStartupMessages({
+    library(dplyr)
+    library(ggplot2)
+    library(readr)
+})
 
 args = commandArgs(trailingOnly = TRUE)
 

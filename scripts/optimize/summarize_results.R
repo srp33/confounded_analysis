@@ -1,6 +1,8 @@
-library(dplyr)
-library(readr)
-library(tidyr)
+suppressPackageStartupMessages({
+    library(dplyr)
+    library(readr)
+    library(tidyr)
+})
 
 results_file_path = commandArgs(trailingOnly = TRUE)[1]
 unadjusted_name = commandArgs(trailingOnly = TRUE)[2]

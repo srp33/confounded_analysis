@@ -1,10 +1,12 @@
-library(doParallel)
-library(dplyr)
-library(readr)
-library(readxl)
-library(SCAN.UPC)
-library(stringr)
-library(tibble)
+suppressPackageStartupMessages({
+    library(doParallel)
+    library(dplyr)
+    library(readr)
+    library(readxl)
+    library(SCAN.UPC)
+    library(stringr)
+    library(tibble)
+})
 
 registerDoParallel(cores=8)
 

@@ -1,5 +1,7 @@
-library(readr)
-library(dplyr)
+suppressPackageStartupMessages({
+  library(readr)
+  library(dplyr)
+})
 
 IN_FILE <- "/data/tcga/unadjusted.csv"
 OUT_DIR <- "/data"

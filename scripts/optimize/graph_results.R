@@ -1,7 +1,9 @@
-library(dplyr)
-library(ggplot2)
-library(readr)
-library(tidyr)
+suppressPackageStartupMessages({
+  library(dplyr)
+  library(ggplot2)
+  library(readr)
+  library(tidyr)
+})
 
 in_file_path = commandArgs(trailingOnly = TRUE)[1]
 out_file_path = commandArgs(trailingOnly = TRUE)[2]
