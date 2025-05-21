@@ -75,4 +75,11 @@ if (!dir.exists("/data/gse24080"))
 inner_join(eData, pData) %>%
     dplyr::select(-CEL_file) %>%
     dplyr::select(batch, Sample, cytogenetic_abnormality, age, race, efs_outcome_label, os_outcome_label, sex_label, random_label, matches("^\\d.+")) %>%
+    dplyr::mutate(across(where(is.character), ~na_if(., "NA"))) %>%  # Change character NA to true NA
+    {
+        before <- nrow(.)
+        after <- nrow(na.omit(.))
+        message("Rows dropped due to NA: ", before - after)
+        na.omit(.)
+    } %>%
     write_csv("/data/gse24080/unadjusted.csv")
