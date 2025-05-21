@@ -6,7 +6,7 @@ from pathlib import Path
 
 parser = argparse.ArgumentParser()
 parser.add_argument("-i", "--input-dir", type=Path, help="Input directory", required=True)
-parser.add_argument("-b", "--batch-col", type=Path, help="Batch column", required=True)
+parser.add_argument("-b", "--batch-col", help="Batch column", required=True)
 parser.add_argument("-o", "--output-path", type=Path, help="Path to output file", required=True)
 args = parser.parse_args()
 
@@ -50,15 +50,15 @@ if not os.path.exists(args.output_path):
         output_file.write("metric,adjuster,dataset,value\n")
 
 # Calculate metrics
-unadjusted_path = args.input_dir + "/unadjusted.csv"
+unadjusted_path = args.input_dir / "unadjusted.csv"
 unadj = cache.get_dataframe(unadjusted_path)
 dataset = os.path.basename(args.input_dir)
 
-for method in ["scaled", "combat", "confounded"]:
-    adjusted_path = args.input_dir + "/" + method + ".csv"
+for method in ["scaled", "combat"]:
+    adjusted_path = args.input_dir / f"{method}.csv"
     df = cache.get_dataframe(adjusted_path)
 
-    print("Calculating MMD for the {} method on the {} dataset".format(method, dataset), flush=True)
+    print(f"Calculating MMD for the {method} method on the {dataset} dataset", flush=True)
     value = calculate_mmd(df, args.batch_col)
 
     print(f"Saving output to {args.output_path}.")

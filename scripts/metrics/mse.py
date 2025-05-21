@@ -13,6 +13,13 @@ def calculate_mse(df1, df2):
     _, genes1 = split_discrete_continuous(df1)
     _, genes2 = split_discrete_continuous(df2)
 
+    if genes1.isnull().values.any() or genes2.isnull().values.any():
+        # Find which columns contain NaN values
+        nan_columns1 = df1.columns[df1.isnull().any()].tolist()
+        nan_columns2 = df2.columns[df2.isnull().any()].tolist()
+        print(f"NaN values found in columns: {nan_columns1} in df1 and {nan_columns2} in df2")
+        raise ValueError("NaN values found in the dataframes.")
+
     squared_error = (np.array(genes1) - np.array(genes2))**2
 
     return squared_error.mean()
@@ -29,7 +36,7 @@ unadjusted_path = args.input_dir / "unadjusted.csv"
 unadj = cache.get_dataframe(unadjusted_path)
 dataset = os.path.basename(args.input_dir)
 
-for method in ["scaled", "combat", "confounded"]:
+for method in ["scaled", "combat"]:
     adjusted_path = args.input_dir / f"{method}.csv"
     df = cache.get_dataframe(adjusted_path)
 
