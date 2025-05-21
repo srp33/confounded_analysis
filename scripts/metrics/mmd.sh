@@ -7,13 +7,10 @@ printf "\033[0;32mCalculating MMD\033[0m\n"
 out_path="/outputs/metrics/mmd.csv"
 pivot_path="/outputs/metrics/pivot_mmd.csv"
 
-# Save previous files to an archive
-if [ -f "${out_path}" ]; then
-  mkdir -p archive
-  mod_date=$(date -r "${out_path}" +%Y-%m-%d)
-  filename=$(basename -- "${out_path}")
-  mv "${out_path}" "outputs/metrics/archive/${mod_date}_${filename}"
-fi
+source /scripts/metrics/utils.sh
+
+# Save previous file to an archive
+archive_file "${out_path}"
 
 script_path="$(dirname $0)/mmd.py"
 
