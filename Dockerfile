@@ -1,4 +1,4 @@
-FROM ubuntu:18.04
+FROM bioconductor/bioconductor:RELEASE_3_19
 
 ####################################################################################
 # Set environment variables
@@ -10,20 +10,32 @@ ENV JAVA_HOME=/usr/lib/jvm/java-8-openjdk-amd64/jre
 ENV TZ=America/Denver
 
 ####################################################################################
+# Install Conda
+####################################################################################
+
+RUN wget --quiet https://repo.anaconda.com/miniconda/Miniconda3-4.6.14-Linux-x86_64.sh -O ~/miniconda.sh && \
+ /bin/bash ~/miniconda.sh -b -p /opt/conda && \
+ rm ~/miniconda.sh && \
+ #/opt/conda/bin/conda clean -tipsy && \
+ ln -s /opt/conda/etc/profile.d/conda.sh /etc/profile.d/conda.sh && \
+ echo ". /opt/conda/etc/profile.d/conda.sh" >> ~/.bashrc && \
+ echo "conda activate base" >> ~/.bashrc
+
+####################################################################################
 # Install dependencies
 ####################################################################################
 
-RUN apt-get update --fix-missing && \
-  apt-get install -y wget curl git parallel apt-transport-https software-properties-common && \
-  apt-get update && \
-  apt-key adv --keyserver keyserver.ubuntu.com --recv-keys E298A3A825C0D65DFD57CBB651716619E084DAB9 && \
-  add-apt-repository 'deb https://cloud.r-project.org/bin/linux/ubuntu bionic-cran40/' && \
-  apt-get update && \
-  ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone && \
-  apt-get -y --allow-unauthenticated install r-base r-base-dev libcurl4-openssl-dev libssl-dev libxml2-dev && \
-  apt-get -y autoremove && \
-  apt-get clean && \
-  rm -rf /var/lib/apt/lists/*
+# RUN apt-get update --fix-missing && \
+#  apt-get install -y wget curl git parallel apt-transport-https software-properties-common && \
+#  apt-get update && \
+#  apt-key adv --keyserver keyserver.ubuntu.com --recv-keys E298A3A825C0D65DFD57CBB651716619E084DAB9 && \
+#  add-apt-repository 'deb https://cloud.r-project.org/bin/linux/ubuntu bionic-cran40/' && \
+#  apt-get update && \
+#  ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone && \
+#  apt-get -y --allow-unauthenticated install r-base r-base-dev libcurl4-openssl-dev libssl-dev libxml2-dev && \
+#  apt-get -y autoremove && \
+#  apt-get clean && \
+#  rm -rf /var/lib/apt/lists/*
 
 ####################################################################################
 # Install R packages
@@ -32,31 +44,35 @@ RUN apt-get update --fix-missing && \
 COPY install_*.R /
 RUN Rscript /install_main_packages.R
 RUN Rscript /install_annotation_packages.R
+RUN Rscript /install_adjuster_specific_packages.R
 
 ####################################################################################
 # Install Python packages
 ####################################################################################
 
-RUN wget --quiet https://repo.anaconda.com/miniconda/Miniconda3-4.6.14-Linux-x86_64.sh -O ~/miniconda.sh && \
-  /bin/bash ~/miniconda.sh -b -p /opt/conda && \
-  rm ~/miniconda.sh && \
-  /opt/conda/bin/conda clean -tipsy && \
-  ln -s /opt/conda/etc/profile.d/conda.sh /etc/profile.d/conda.sh && \
-  echo ". /opt/conda/etc/profile.d/conda.sh" >> ~/.bashrc && \
-  echo "conda activate base" >> ~/.bashrc && \
-  conda install numpy scikit-learn pandas tensorflow=1.11.0
+RUN conda install numpy scikit-learn pandas tensorflow=1.11.0
+
+# RUN pip3 install numpy scikit-learn pandas 
+# tensorflow=1.11.0
+
+####################################################################################
+# Clone TAMPOR
+####################################################################################
+
+RUN git clone https://github.com/edammer/TAMPOR.git /opt/TAMPOR
 
 ####################################################################################
 # Install Confounded within the image
 ####################################################################################
 
-RUN cd /tmp && \
-    git clone https://github.com/jdayton3/Confounded.git && \
-    mkdir /confounded && \
-    mv /tmp/Confounded/confounded /confounded && \
-    mv /tmp/Confounded/data /confounded && \
-    rm -rf /tmp/Confounded && \
-    echo '#!/bin/bash\ncd /confounded\npython -m confounded "$@"' > /usr/bin/confounded && \
-    chmod +x /usr/bin/confounded && \
-    chmod 777 /confounded -R && \
-    echo "Done importing Confounded code"
+#RUN cd /tmp && \
+#    git clone https://github.com/jdayton3/Confounded.git && \
+#    mkdir /confounded && \
+#    mv /tmp/Confounded/confounded /confounded && \
+#    mv /tmp/Confounded/data /confounded && \
+#    rm -rf /tmp/Confounded && \
+#    echo '#!/bin/bash\ncd /confounded\npython -m confounded "$@"' > /usr/bin/confounded && \
+#    chmod +x /usr/bin/confounded && \
+#    chmod 777 /confounded -R && \
+#    echo "Done importing Confounded code"
+
