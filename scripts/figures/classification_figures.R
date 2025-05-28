@@ -88,7 +88,7 @@ for(x in 1:length(datasets)) {
       scale_y_continuous(name = "Accuracy", limits = c(0.0, 1.0)) +
       facet_wrap(vars(metric), strip.position = "top") + 
       scale_colour_manual(values=cbp2)
-    ggsave(paste(c(FIG_DIR, data, ".pdf"), collapse = ""), width = 11, height = 8.5, units = 'in')
+    ggsave(paste(c(FIG_DIR, title, ".pdf"), collapse = ""), width = 11, height = 8.5, units = 'in')
 
 }
 
