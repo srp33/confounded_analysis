@@ -24,16 +24,6 @@ args <- parser$parse_args()
 
 # Define functions ---------------------------------
 
-is.whole <- function(a, tol = 1e-7) { 
-  # Snatched from https://stat.ethz.ch/pipermail/r-help/2003-April/032471.html
-  is.eq <- function(x,y) { 
-    r <- all.equal(x,y, tol=tol)
-    is.logical(r) && r 
-  }
-  (is.numeric(a) && is.eq(a, floor(a))) ||
-    (is.complex(a) && {ri <- c(Re(a),Im(a)); is.eq(ri, floor(ri))})
-}
-
 ComBat_ignore_nonvariance <- function(matrix_, batch) {
   #' Run ComBat and ignore nonvarying features.
   #'
@@ -114,23 +104,27 @@ scale_adjust <- function(matrix_, batch) {
 }
 
 batch_adjust_tidy <- function(df, adjuster, batch_col = "Batch") {
+  message("Separating batch column from data frame.")
   orig_col_names = colnames(df)
-  batch = pull(df, batch_col)
-  df = select(df, -all_of(batch_col))
+  batch = df[[batch_col]]
+  df[[batch_col]] = NULL
+  
 
-  categorical <- df %>%
-    select_if(~!is.numeric(.) || is.whole(.))
-  quantitative <- df %>%
-    select_if(~is.numeric(.) && !is.whole(.))
+  message("Separating quantitative and categorical columns.")
+  # Check if the column is numeric and has no non-whole numbers
+  # Using vapply for speed, logical(1) is the return type
+  is_categorical <- vapply(df, function(col) !is.numeric(col) || is.whole(col), logical(1))
+  categorical <- df[, is_categorical, drop = FALSE]
+  quantitative <- df[, !is_categorical, drop = FALSE]
 
-  print(quantitative)
-
+  message("Adjusting using the '%s' adjuster", adjuster)
   if (adjuster == "combat") {
     adjusted = ComBat_ignore_nonvariance(as.matrix(quantitative), batch)
   } else {
     adjusted = scale_adjust(as.matrix(quantitative), batch)
   }
   
+  message("Combining adjusted and categorical columns.")
   adjusted = cbind(batch, categorical, adjusted)
   colnames(adjusted)[1] = batch_col
   adjusted[,orig_col_names]
@@ -138,7 +132,9 @@ batch_adjust_tidy <- function(df, adjuster, batch_col = "Batch") {
 
 message("Reading input file.")
 
-suppressMessages(df <- read_csv(args$input_file))
+suppressMessages(df <- vroom(args$input_file, show_col_types = FALSE))
+
+message(sprintf("Input file has %d rows and %d columns", nrow(df), ncol(df)))
 
 if (!(args$batch_col %in% names(df))) {
   discrete_col_names <- df %>%
@@ -153,7 +149,7 @@ if (!(args$batch_col %in% names(df))) {
   stop(error_message)
 }
 
-message(sprintf("Adjusting using the '%s' adjuster", args$adjuster))
+message(sprintf("Batch adjust tidy"))
 batch_adjust_tidy(
   df, 
   batch_col = args$batch_col,
