@@ -1,6 +1,9 @@
 #Debugging: 
 options(error=function() { traceback(4); if(!interactive()) quit("no", status = 1, runLast = FALSE) })
 
+# Load tampor package
+source("/opt/TAMPOR/TAMPOR.R")
+
 # Load dependencies --------------------------------
 suppressPackageStartupMessages({
   library(dplyr)
@@ -9,6 +12,12 @@ suppressPackageStartupMessages({
   library(stringr)
   library(argparse)
   library(sva)
+  library(doParallel)
+  library(ggplot2)
+  library(ggpubr)
+  library(vsn)
+  library(limma)
+  library(vroom)
 })
 
 # Parse command line args --------------------------
@@ -122,6 +131,72 @@ match_min_mean <- function(matrix_, batch) {
   )
 }
 
+adjust_tampor <- function(df_, batch) {
+  #' Adjusts using the tampor method.
+  #'
+  #' @param df_ The dataframe to batch adjust by scaling. Columns are
+  #' features, rows are samples.
+  #' @param batch The per-sample batch assignments.
+  #' 
+  #' @return The dataframe after batch adjustment.
+  #'
+  #' @examples
+  #' adjust_tampor(data, c(rep(1, 5000), rep(2, 5000)))
+
+
+  # From TAMPOR documentation:
+  # Input is two data frames:
+  # 1. (normalized or RAW) abundance. Columns are samples, rows are features.
+  # 2. traits (metadata).	Columns are traits, rows are samples
+  # Sample names (abundance columns, trait rows) must match exactly.
+
+  sample_names = paste0("Sample_", seq_len(nrow(df_)))
+
+  transposed = t(df_)
+  colnames(transposed) = sample_names
+
+  batch_as_df = data.frame(batch)
+  colnames(batch_as_df) = "Batch"
+  rownames(batch_as_df) = sample_names
+
+  num_batches = length(unique(batch_as_df$Batch))
+
+  # Looks to be mean 0 sd 1.
+  # Let's exponentiate to mimic the values that TAMPOR expects (non-negative)
+  # This transformation is used often in the TAMPOR algorithm.
+  transposed = 2^transposed
+
+  # Save current working directory
+  current_dir <- getwd()
+  cat("Current working directory:", current_dir, "\n")
+  # Cd into the output directory
+  output_dir <- "/outputs/figures"
+  setwd(output_dir)
+
+  # If batches contain 0s, increment by 1 to avoid Tampor bug
+  if (any(batch_as_df$Batch == 0)) {
+    message("Incrementing batch values by 1 to avoid Tampor bug with batch values of 0.")
+    batch_as_df$Batch <- batch_as_df$Batch + 1
+  }
+
+
+  output <- TAMPOR(
+    dat=transposed,
+    traits=batch_as_df,
+    noGIS = TRUE,
+    parallelThreads = num_batches,
+    path = output_dir,
+    iterations=500
+  )$cleanRelAbun
+
+  # Set back to the original working directory
+  setwd(current_dir)
+  # Transpose back to original format and return
+  t(output)
+}
+  
+
+
 is.whole <- function(a, tol = 1e-7) { 
   all(abs(a - floor(a)) <= tol)
 }
@@ -145,6 +220,8 @@ batch_adjust_tidy <- function(df, adjuster, batch_col = "Batch") {
     adjusted = ComBat_ignore_nonvariance(as.matrix(quantitative), batch)
   } else if (adjuster == "min_mean") {
     adjusted = match_min_mean(as.matrix(quantitative), batch)
+  } else if (adjuster == "tampor") {
+    adjusted = adjust_tampor(as.matrix(quantitative), batch)
   } else {
     stop(sprintf("Unknown adjuster '%s'", adjuster))
   }
