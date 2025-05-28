@@ -21,19 +21,14 @@ batchall <- read_csv(paste(c(IN_DIR, "batch_classification.csv"), collapse = "")
 trueall <- read_csv(paste(c(IN_DIR, "true_classification.csv"), collapse = ""))
 
 #---Function to determine what the random chance that the largest label would be chosen --- 
-random_accuracy <- function(data, label) { 
-  samples <- read_csv(paste(c(SAMPLE_DIR, "/", data, "/unadjusted.csv"), collapse = ""))
-  samples <- select(samples, label)
-  max = 0
-  total = 0
-  output <- table(samples)
-  for (sample in output) {
-    total = total + sample
-    if(max < sample) { 
-      max = sample
-    }
-  }
-  return(max / total)
+random_accuracy <- function(data, label) {
+  values <- paste(SAMPLE_DIR, data, "unadjusted.csv", sep = "/") %>%
+    read_csv() %>%
+    select(all_of(label)) %>%
+    pull()
+  
+  table(values) %>%
+    max() / length(values)
 }
 
 #                     dataset,    title,                            batch_label,  true_label
