@@ -1,5 +1,5 @@
 #Debugging: 
-options(error=function() { traceback(2); if(!interactive()) quit("no", status = 1, runLast = FALSE) })
+options(error=function() { traceback(4); if(!interactive()) quit("no", status = 1, runLast = FALSE) })
 
 # Load dependencies --------------------------------
 suppressPackageStartupMessages({
