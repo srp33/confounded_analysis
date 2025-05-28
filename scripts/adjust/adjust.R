@@ -17,7 +17,7 @@ parser <- ArgumentParser()
 
 parser$add_argument("input_file", help = "path to the input file")
 parser$add_argument("output_file", help = "path to the output file.")
-parser$add_argument("-a", "--adjuster", default = "combat", choices = c("combat", "scale"), help = "method to use for adjustment")
+parser$add_argument("-a", "--adjuster", default = "combat", choices = c("combat", "min_mean", "tampor"), help = "method to use for adjustment")
 parser$add_argument("-b", "--batch-col", default = "Batch", help = "title of batch column to adjust for")
 
 args <- parser$parse_args()
@@ -50,25 +50,25 @@ ComBat_ignore_nonvariance <- function(matrix_, batch) {
   t(matrix_)
 }
 
-scale_adjust <- function(matrix_, batch) {
-  #' Run ComBat and ignore nonvarying features.
+match_two_stats <- function(matrix_, batch, stat1, stat2) {
+  #' Matches batches by scaling so that two statistics are equal.
   #'
   #' @param matrix_ The matrix to batch adjust by scaling. Columns are
   #' features, rows are samples.
   #' @param batch The per-sample batch assignments.
-  #' 
+  #' @param stat1 The first statistic to match. (as a function, not a string)
+  #' @param stat2 The second statistic to match.
+  #'
   #' @return The matrix_ after batch adjustment.
   #'
   #' @examples
-  #' scale_adjust(data, c(rep(1, 5000), rep(2, 5000)))
-
+  #' match_two_stats(data, c(rep(1, 5000), rep(2, 5000)), "mean", "sd")
   column_names = colnames(matrix_)
-  
-  # Get columnwise mins & maxes
-  mins <- apply(matrix_, 2, min)
-  maxes <- apply(matrix_, 2, max)
+  # Get columnwise stats
+  overall_stat1 <- apply(matrix_, 2, stat1)
+  overall_stat2 <- apply(matrix_, 2, stat2)
 
-  # Scale each batch individually to [0, 1]
+  # Scale each batch individually so that stat1 is 0 and stat2 is 1
   for (b in levels(factor(batch))) {
     # drop=F makes it return a matrix when you only grab one row.
     batch_rows <- matrix_[batch == b, , drop = FALSE]
@@ -81,8 +81,9 @@ scale_adjust <- function(matrix_, batch) {
       if (all(x == 0))
         return(x)
 
-      numerator = x - min(x)
-      denominator = max(x) - min(x)
+      numerator = x - stat1(x) 
+      denominator = stat2(x) - stat1(x)
+      denominator[denominator == 0] <- 1
 
       return(numerator / denominator)
     })
@@ -90,17 +91,39 @@ scale_adjust <- function(matrix_, batch) {
     # Merge adjustment back in
     matrix_[batch == b] = adjusted
   }
-
-  ## Scale back up to [min, max]
+  ## Scale back up to match overall
   matrix_ = sapply(1:ncol(matrix_), function(i) {
     x = matrix_[,i]
-    pre_min = mins[i]
-    pre_max = maxes[i]
-    x * (pre_max - pre_min) + pre_min
+    pre_stat1 = overall_stat1[i]
+    pre_stat2 = overall_stat2[i]
+    x * (pre_stat2 - pre_stat1) + pre_stat1
   })
-
   colnames(matrix_) = column_names
   matrix_
+}
+
+match_min_mean <- function(matrix_, batch) {
+  #' Scales so the mins and means of each batch match
+  #'
+  #' @param matrix_ The matrix to batch adjust by scaling. Columns are
+  #' features, rows are samples.
+  #' @param batch The per-sample batch assignments.
+  #' 
+  #' @return The matrix_ after batch adjustment.
+  #'
+  #' @examples
+  #' scale_adjust(data, c(rep(1, 5000), rep(2, 5000)))
+
+  match_two_stats(
+    matrix_,
+    batch,
+    function(x) { min(x) },
+    function(x) { mean(x) }
+  )
+}
+
+is.whole <- function(a, tol = 1e-7) { 
+  all(abs(a - floor(a)) <= tol)
 }
 
 batch_adjust_tidy <- function(df, adjuster, batch_col = "Batch") {
@@ -120,8 +143,10 @@ batch_adjust_tidy <- function(df, adjuster, batch_col = "Batch") {
   message("Adjusting using the '%s' adjuster", adjuster)
   if (adjuster == "combat") {
     adjusted = ComBat_ignore_nonvariance(as.matrix(quantitative), batch)
+  } else if (adjuster == "min_mean") {
+    adjusted = match_min_mean(as.matrix(quantitative), batch)
   } else {
-    adjusted = scale_adjust(as.matrix(quantitative), batch)
+    stop(sprintf("Unknown adjuster '%s'", adjuster))
   }
   
   message("Combining adjusted and categorical columns.")
