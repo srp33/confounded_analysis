@@ -1,10 +1,8 @@
 import argparse
 import os
-from sklearn.svm import SVC
-from sklearn.linear_model import SGDClassifier
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.neighbors import KNeighborsClassifier
-from sklearn.linear_model import LogisticRegression
+from sklearn.neural_network import MLPClassifier
 
 import os.path
 from os import path
@@ -24,11 +22,10 @@ args = parser.parse_args()
 
 cache = DataFrameCache()
 
-#TODO: Move random_state later
 LEARNERS = [
-    (RandomForestClassifier, {"n_estimators": 100, "random_state": 0}),
-    (SVC, {"gamma": "auto", "random_state": 0, "kernel": "rbf"}),
-    (KNeighborsClassifier, {})
+    (RandomForestClassifier, {"n_estimators": 100, "random_state": 0}), # Random state is updated within cross_validate
+    (MLPClassifier, {"alpha": 0.01, "max_iter": 1000, "random_state": 0}),
+    (KNeighborsClassifier, {"n_neighbors": 7, "weights": "distance", "metric": "cosine"}),
 ]
 
 if not os.path.exists(args.output_path):
