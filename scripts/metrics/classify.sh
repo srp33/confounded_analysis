@@ -30,7 +30,7 @@ python "${script_path}" -i /data/gse24080 -o ${true_out_path} -c efs_outcome_lab
 python "${script_path}" -i /data/gse24080 -o ${true_out_path} -c os_outcome_label
 
 python "${script_path}" -i /data/gse49711 -o ${batch_out_path} -c Class
-
-# Unfortunately the classifier only does binary classification
-# We could dichotimize the INSS_Stage class
-# python "${script_path}" -i /data/gse49711 -o ${true_out_path} -c INSS_Stage
+# The classifier only does binary classification, so I split the classes multiple ways
+python "${script_path}" -i /data/gse49711 -o ${true_out_path} -c INSS_Stage --class0 1 2 3 --class1 4 4S
+python "${script_path}" -i /data/gse49711 -o ${true_out_path} -c INSS_Stage --class0 1 2 --class1 3 4 4S
+python "${script_path}" -i /data/gse49711 -o ${true_out_path} -c INSS_Stage --class0 1 --class1 2 3 4 4S
