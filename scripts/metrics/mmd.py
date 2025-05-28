@@ -54,7 +54,7 @@ unadjusted_path = args.input_dir / "unadjusted.csv"
 unadj = cache.get_dataframe(unadjusted_path)
 dataset = os.path.basename(args.input_dir)
 
-for method in ["scaled", "combat"]:
+for method in ["unadjusted", "min_mean", "combat", "tampor"]:
     adjusted_path = args.input_dir / f"{method}.csv"
     df = cache.get_dataframe(adjusted_path)
 

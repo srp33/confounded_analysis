@@ -38,7 +38,7 @@ random.seed()
 
 dataset = os.path.basename(args.input_dir)
 
-for method in ["unadjusted", "scaled", "combat"]:
+for method in ["unadjusted", "min_mean", "combat", "tampor"]:
     df = cache.get_dataframe(args.input_dir + "/" + method + ".csv")
 
     for learner in LEARNERS:
