@@ -2,7 +2,8 @@ import argparse
 import os
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.neighbors import KNeighborsClassifier
-from sklearn.neural_network import MLPClassifier
+from sklearn.neighbors import NeighborhoodComponentsAnalysis
+from sklearn.ensemble import HistGradientBoostingClassifier
 
 import os.path
 from os import path
@@ -22,10 +23,12 @@ args = parser.parse_args()
 
 cache = DataFrameCache()
 
-LEARNERS = [
-    (RandomForestClassifier, {"n_estimators": 100, "random_state": 0}), # Random state is updated within cross_validate
-    (MLPClassifier, {"alpha": 0.01, "max_iter": 1000, "random_state": 0}),
-    (KNeighborsClassifier, {"n_neighbors": 7, "weights": "distance", "metric": "cosine"}),
+nca = NeighborhoodComponentsAnalysis(n_components=100, random_state=42)
+
+LEARNERS = [  # Random state is updated within cross_validate
+    {"algorithm": RandomForestClassifier, "transform": nca, "fit_params": {"n_estimators": 100, "random_state": 0}}, 
+    {"algorithm": HistGradientBoostingClassifier, "fit_params": {"random_state": 0}},
+    {"algorithm": KNeighborsClassifier, "fit_params": {"n_neighbors": 7, "weights": "distance", "metric": "cosine"}}
 ]
 
 if not os.path.exists(args.output_path):

@@ -124,12 +124,16 @@ def cross_validate(df, predict_column, learner, iterations, folds, n_jobs, scale
 
     scores = []
     for i in range(iterations):
-        fit_params = learner[1]
+        fit_params = learner["fit_params"] if "fit_params" in learner else {}
 
         if "random_state" in fit_params:
             fit_params["random_state"] = i
 
-        estimator = learner[0](**fit_params)
+        estimator = learner["algorithm"](**fit_params)
+
+        if "transform" in learner:
+            learner["transform"].fit(X, y)
+            X = learner["transform"].transform(X)
 
         kfold = StratifiedKFold(n_splits=folds, shuffle=True, random_state=i)
         iter_scores = list(cross_val_score(estimator, X, y, scoring=scoring_metric, cv=kfold, n_jobs=n_jobs))
