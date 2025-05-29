@@ -26,7 +26,7 @@ parser <- ArgumentParser()
 
 parser$add_argument("input_file", help = "path to the input file")
 parser$add_argument("output_file", help = "path to the output file.")
-parser$add_argument("-a", "--adjuster", default = "combat", choices = c("combat", "min_mean", "tampor"), help = "method to use for adjustment")
+parser$add_argument("-a", "--adjuster", default = "combat", choices = c("combat", "min_mean", "tampor", "limma"), help = "method to use for adjustment")
 parser$add_argument("-b", "--batch-col", default = "Batch", help = "title of batch column to adjust for")
 
 args <- parser$parse_args()
@@ -196,7 +196,50 @@ adjust_tampor <- function(df_, batch) {
   # Transpose back to original format and return
   t(output)
 }
+
+
+adjust_limma <- function(x, batch, categorical) {
+  #' Adjusts using the limma method.
+  #'
+  #' @param df_ The dataframe to batch adjust by scaling.
+  #' @param batch The per-sample batch assignments, as a vector.
+  #' @param categorical The categorical biologically relevant information to preserve.
+  #'
+  #' @return The dataframe after batch adjustment.
+
+  # Remove any columns with NA values in the design matrix
+  columns_with_na <- colnames(categorical)[colSums(is.na(categorical)) > 0]
+  if (length(columns_with_na) > 0) {
+    message(sprintf("The following columns in the categorical data contain NA values: %s", paste(columns_with_na, collapse = ", ")))
+    message("Removing these columns from the categorical data.")
+    categorical <- categorical[, !colnames(categorical) %in% columns_with_na, drop = FALSE]
+  }
+
+  # Create a design matrix for the categorical variables, creating dummy variables
+  # to make it numeric.
+  design <- model.matrix(~ ., data = categorical)
+  # Clean up the column names
+  colnames(design) <- gsub("categorical", "", colnames(design))
+
+  # Ensure the batch variable is a factor
+  batch <- as.factor(batch)
   
+  # Number of rows in batch and design should match.
+  if (length(batch) != nrow(design)) {
+    message("Batch and design matrix lengths do not match.")
+    message(sprintf("Batch length: %d, Design rows: %d Original rows: %d", length(batch), nrow(design), nrow(x)))
+    stop(sprintf("Batch length: %d, Design matrix rows: %d", length(batch), nrow(design)))
+  }
+
+  # Transpose the data frame to have samples as columns and probes as rows
+  x <- t(x)
+
+  # Remove batch effects using limma's removeBatchEffect function
+  x2 = limma::removeBatchEffect(x, batch = batch, design = design)
+
+  # Transpose back to the original format
+  t(x2)
+}
 
 
 is.whole <- function(a, tol = 1e-7) { 
@@ -217,13 +260,17 @@ batch_adjust_tidy <- function(df, adjuster, batch_col = "Batch") {
   categorical <- df[, is_categorical, drop = FALSE]
   quantitative <- df[, !is_categorical, drop = FALSE]
 
-  message("Adjusting using the '%s' adjuster", adjuster)
+  quantitative <- as.matrix(quantitative)
+
+  message(sprintf("Adjusting %d quantitative columns with %s method.", ncol(quantitative), adjuster))
   if (adjuster == "combat") {
-    adjusted = ComBat_ignore_nonvariance(as.matrix(quantitative), batch)
+    adjusted = ComBat_ignore_nonvariance(quantitative, batch)
   } else if (adjuster == "min_mean") {
-    adjusted = match_min_mean(as.matrix(quantitative), batch)
+    adjusted = match_min_mean(quantitative, batch)
   } else if (adjuster == "tampor") {
-    adjusted = adjust_tampor(as.matrix(quantitative), batch)
+    adjusted = adjust_tampor(quantitative, batch)
+  } else if (adjuster == "limma") {
+    adjusted = adjust_limma(quantitative, batch, categorical)
   } else {
     stop(sprintf("Unknown adjuster '%s'", adjuster))
   }
