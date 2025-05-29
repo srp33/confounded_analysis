@@ -32,6 +32,14 @@ parser$add_argument("-b", "--batch-col", default = "Batch", help = "title of bat
 args <- parser$parse_args()
 
 # Define functions ---------------------------------
+message_structure <- function(df, pretext = "Structure of data frame") {
+  message(
+    paste0(
+      pretext, ": ",
+      paste(utils::capture.output(str(df)), collapse = "\n")
+    )
+  )
+}
 
 ComBat_ignore_nonvariance <- function(matrix_, batch) {
   #' Run ComBat and ignore nonvarying features.
