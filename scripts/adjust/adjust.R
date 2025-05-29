@@ -253,6 +253,10 @@ if (!(args$batch_col %in% names(df))) {
   stop(error_message)
 }
 
+# Make sure to only keep 6 decimal places for floating point numbers
+df <- df %>%
+  mutate(across(where(is.numeric), ~round(., 6)))
+
 message(sprintf("Batch adjust tidy"))
 batch_adjust_tidy(
   df, 
