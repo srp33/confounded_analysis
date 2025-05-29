@@ -161,10 +161,12 @@ adjust_tampor <- function(df_, batch) {
 
   num_batches = length(unique(batch_as_df$Batch))
 
-  # Looks to be mean 0 sd 1.
-  # Let's exponentiate to mimic the values that TAMPOR expects (non-negative)
-  # This transformation is used often in the TAMPOR algorithm.
-  transposed = 2^transposed
+
+  if (any(transposed < 0)) {
+    # If there are negative values, we need to exponentiate
+    message("Data contains negative values, exponentiating to make all values non-negative.")
+    transposed = 2^transposed
+  }
 
   # Save current working directory
   current_dir <- getwd()
