@@ -3,7 +3,7 @@ import os
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.neighbors import KNeighborsClassifier
 from sklearn.neighbors import NeighborhoodComponentsAnalysis
-from sklearn.ensemble import HistGradientBoostingClassifier
+from sklearn.ensemble import GradientBoostingClassifier
 
 import os.path
 from os import path
@@ -26,8 +26,9 @@ cache = DataFrameCache()
 nca = NeighborhoodComponentsAnalysis(n_components=100, random_state=42)
 
 LEARNERS = [  # Random state is updated within cross_validate
-    {"algorithm": RandomForestClassifier, "transform": nca, "fit_params": {"n_estimators": 100, "random_state": 0}}, 
-    {"algorithm": HistGradientBoostingClassifier, "fit_params": {"random_state": 0}},
+    {"algorithm": RandomForestClassifier, "fit_params": {"n_estimators": 100, "random_state": 0}, 
+     "transform": NeighborhoodComponentsAnalysis, "transform_params": {"n_components": 100}},
+    {"algorithm": GradientBoostingClassifier, "fit_params": {"random_state": 0}},
     {"algorithm": KNeighborsClassifier, "fit_params": {"n_neighbors": 7, "weights": "distance", "metric": "cosine"}}
 ]
 
@@ -57,7 +58,7 @@ for method in ["unadjusted", "min_mean", "combat", "tampor"]:
         ).dropna()  # Remove rows with unmapped classes
 
     for learner in LEARNERS:
-        classifier_name = str(learner[0]).split("'")[1].split(".")[-1].replace("Classifier", "")
+        classifier_name = str(learner["algorithm"]).split("'")[1].split(".")[-1].replace("Classifier", "")
 
         print("Performing classification for {}, {}, {}, and {}.".format(dataset, method, args.column, classifier_name), flush=True)
         for score in cross_validate(df, args.column, learner, iterations=10, folds=3, n_jobs=12):
