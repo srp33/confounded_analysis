@@ -207,30 +207,34 @@ adjust_tampor <- function(df_, batch) {
 
 
 adjust_limma <- function(x, batch, categorical) {
-  #' Adjusts using the limma method.
-  #'
-  #' @param df_ The dataframe to batch adjust by scaling.
-  #' @param batch The per-sample batch assignments, as a vector.
-  #' @param categorical The categorical biologically relevant information to preserve.
-  #'
-  #' @return The dataframe after batch adjustment.
+  message_structure(categorical, "DEBUG: adjust_limma - Initial categorical data frame")
 
-  # Remove any columns with NA values in the design matrix
-  columns_with_na <- colnames(categorical)[colSums(is.na(categorical)) > 0]
-  if (length(columns_with_na) > 0) {
-    message(sprintf("The following columns in the categorical data contain NA values: %s", paste(columns_with_na, collapse = ", ")))
-    message("Removing these columns from the categorical data.")
-    categorical <- categorical[, !colnames(categorical) %in% columns_with_na, drop = FALSE]
+  # Remove any columns with NA values in the categorical data
+  na_col_mask <- colSums(is.na(categorical)) > 0
+  if (any(na_col_mask)) {
+    columns_with_na = colnames(categorical)[na_col_mask]
+    message(sprintf("The following columns in the categorical data contain NA values. Removing these columns: %s", paste(columns_with_na, collapse = ", ")))
+    categorical <- categorical[, !na_col_mask, drop = FALSE]
+    message_structure(categorical, "DEBUG: adjust_limma - Structure of 'categorical' after removing NA columns")
   }
 
-  # Create a design matrix for the categorical variables, creating dummy variables
-  # to make it numeric.
+  # Remove columns with more than 10 unique values (e.g. the column with sample names)
+  columns_more_than_10 <- sapply(categorical, function(col) {length(unique(col)) > 10})
+  if (any(columns_more_than_10)) {
+    message(sprintf("Removing columns with more than 10 unique values: %s", paste(colnames(categorical)[columns_more_than_10], collapse = ", ")))
+    categorical <- categorical[, !columns_more_than_10, drop = FALSE]
+    message_structure(categorical, "DEBUG: adjust_limma - Structure of 'categorical' after removing columns with more than 10 unique values")
+  }
+
+  # Create a design matrix
   design <- model.matrix(~ ., data = categorical)
-  # Clean up the column names
+  # Cleanup column names
   colnames(design) <- gsub("categorical", "", colnames(design))
+  message_structure(design, "DEBUG: adjust_limma - New design matrix structure")
 
   # Ensure the batch variable is a factor
   batch <- as.factor(batch)
+  message_structure(batch, "DEBUG: adjust_limma - 'batch' vector details:")
   
   # Number of rows in batch and design should match.
   if (length(batch) != nrow(design)) {
@@ -245,7 +249,7 @@ adjust_limma <- function(x, batch, categorical) {
   # Remove batch effects using limma's removeBatchEffect function
   x2 = limma::removeBatchEffect(x, batch = batch, design = design)
 
-  # Transpose back to the original format
+  # Transpose back
   t(x2)
 }
 
@@ -259,14 +263,13 @@ batch_adjust_tidy <- function(df, adjuster, batch_col = "Batch") {
   orig_col_names = colnames(df)
   batch = df[[batch_col]]
   df[[batch_col]] = NULL
-  
 
   message("Separating quantitative and categorical columns.")
-  # Check if the column is numeric and has no non-whole numbers
-  # Using vapply for speed, logical(1) is the return type
   is_categorical <- vapply(df, function(col) !is.numeric(col) || is.whole(col), logical(1))
   categorical <- df[, is_categorical, drop = FALSE]
   quantitative <- df[, !is_categorical, drop = FALSE]
+
+  message_structure(categorical, "DEBUG: batch_adjust_tidy - Categorical data frame")
 
   quantitative <- as.matrix(quantitative)
 
@@ -290,9 +293,7 @@ batch_adjust_tidy <- function(df, adjuster, batch_col = "Batch") {
 }
 
 message("Reading input file.")
-
 suppressMessages(df <- vroom(args$input_file, show_col_types = FALSE))
-
 message(sprintf("Input file has %d rows and %d columns", nrow(df), ncol(df)))
 
 if (!(args$batch_col %in% names(df))) {
