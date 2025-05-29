@@ -41,7 +41,7 @@ message_structure <- function(df, pretext = "Structure of data frame") {
   )
 }
 
-ComBat_ignore_nonvariance <- function(matrix_, batch) {
+ComBat_ignore_nonvariance <- function(matrix_, batch, design) {
   #' Run ComBat and ignore nonvarying features.
   #'
   #' ComBat requires that all features have some variance (and probably assumes
@@ -62,7 +62,7 @@ ComBat_ignore_nonvariance <- function(matrix_, batch) {
 
   varying_row_mask <- apply(matrix_, 1, function(x) { length(unique(x)) > 1 })
 
-  matrix_[varying_row_mask,] <- ComBat(matrix_[varying_row_mask,], batch)
+  matrix_[varying_row_mask,] <- ComBat(matrix_[varying_row_mask,], batch, mod=design, prior.plots=FALSE)
 
   t(matrix_)
 }
@@ -206,8 +206,15 @@ adjust_tampor <- function(df_, batch) {
 }
 
 
-adjust_limma <- function(x, batch, categorical) {
-  message_structure(categorical, "DEBUG: adjust_limma - Initial categorical data frame")
+create_design_matrix <- function(categorical) {
+  #' Creates a design matrix from categorical data.
+  #' @param categorical The data frame containing categorical variables.
+  #' @return A design matrix suitable for use in batch adjustment.
+  message_structure(categorical, "DEBUG: create_design_matrix - Initial categorical data frame")
+
+  if (ncol(categorical) == 0) {
+    stop("No categorical variables provided to create a design matrix.")
+  }
 
   # Remove any columns with NA values in the categorical data
   na_col_mask <- colSums(is.na(categorical)) > 0
@@ -215,23 +222,24 @@ adjust_limma <- function(x, batch, categorical) {
     columns_with_na = colnames(categorical)[na_col_mask]
     message(sprintf("The following columns in the categorical data contain NA values. Removing these columns: %s", paste(columns_with_na, collapse = ", ")))
     categorical <- categorical[, !na_col_mask, drop = FALSE]
-    message_structure(categorical, "DEBUG: adjust_limma - Structure of 'categorical' after removing NA columns")
+    message_structure(categorical, "DEBUG: create_design_matrix - Structure of 'categorical' after removing NA columns")
   }
-
   # Remove columns with more than 10 unique values (e.g. the column with sample names)
   columns_more_than_10 <- sapply(categorical, function(col) {length(unique(col)) > 10})
   if (any(columns_more_than_10)) {
     message(sprintf("Removing columns with more than 10 unique values: %s", paste(colnames(categorical)[columns_more_than_10], collapse = ", ")))
     categorical <- categorical[, !columns_more_than_10, drop = FALSE]
-    message_structure(categorical, "DEBUG: adjust_limma - Structure of 'categorical' after removing columns with more than 10 unique values")
+    message_structure(categorical, "DEBUG: create_design_matrix - Structure of 'categorical' after removing columns with more than 10 unique values")
   }
 
-  # Create a design matrix
   design <- model.matrix(~ ., data = categorical)
-  # Cleanup column names
   colnames(design) <- gsub("categorical", "", colnames(design))
-  message_structure(design, "DEBUG: adjust_limma - New design matrix structure")
+  message_structure(design, "DEBUG: create_design_matrix - New design matrix structure")
 
+  return(design)
+}
+
+adjust_limma <- function(x, batch, design) {
   # Ensure the batch variable is a factor
   batch <- as.factor(batch)
   message_structure(batch, "DEBUG: adjust_limma - 'batch' vector details:")
@@ -270,18 +278,19 @@ batch_adjust_tidy <- function(df, adjuster, batch_col = "Batch") {
   quantitative <- df[, !is_categorical, drop = FALSE]
 
   message_structure(categorical, "DEBUG: batch_adjust_tidy - Categorical data frame")
+  design <- create_design_matrix(categorical)
 
   quantitative <- as.matrix(quantitative)
 
   message(sprintf("Adjusting %d quantitative columns with %s method.", ncol(quantitative), adjuster))
   if (adjuster == "combat") {
-    adjusted = ComBat_ignore_nonvariance(quantitative, batch)
+    adjusted = ComBat_ignore_nonvariance(quantitative, batch, design)
   } else if (adjuster == "min_mean") {
     adjusted = match_min_mean(quantitative, batch)
   } else if (adjuster == "tampor") {
     adjusted = adjust_tampor(quantitative, batch)
   } else if (adjuster == "limma") {
-    adjusted = adjust_limma(quantitative, batch, categorical)
+    adjusted = adjust_limma(quantitative, batch, design)
   } else {
     stop(sprintf("Unknown adjuster '%s'", adjuster))
   }
