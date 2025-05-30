@@ -57,7 +57,7 @@ titles       <- sapply(all_info, function(x) x[2])
 batch_labels <- sapply(all_info, function(x) x[3])
 true_labels  <- sapply(all_info, function(x) x[4])
 
-order <- c("unadjusted", "min_mean", "combat", "tampor")
+order <- c("unadjusted", "min_mean", "combat", "tampor", "limma")
 
 pdf(NULL)
 

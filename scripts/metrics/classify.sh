@@ -16,10 +16,6 @@ rm -f ${batch_out_path} ${true_out_path}
 
 script_path="$(dirname $0)/classify.py"
 
-python "${script_path}" -i /data/simulated_expression -o ${batch_out_path} -c Batch 
-python "${script_path}" -i /data/simulated_expression -o ${true_out_path} -c Class
-
-
 python "${script_path}" -i /data/gse20194 -o ${batch_out_path} -c batch
 python "${script_path}" -i /data/gse20194 -o ${true_out_path} -c er_status
 python "${script_path}" -i /data/gse20194 -o ${true_out_path} -c her2_status

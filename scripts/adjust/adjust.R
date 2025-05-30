@@ -28,7 +28,8 @@ parser$add_argument("input_file", help = "path to the input file")
 parser$add_argument("output_file", help = "path to the output file.")
 parser$add_argument("-a", "--adjuster", default = "combat", choices = c("combat", "min_mean", "tampor", "limma"), help = "method to use for adjustment")
 parser$add_argument("-b", "--batch-col", default = "Batch", help = "title of batch column to adjust for")
-
+parser$add_argument("-c", "--column", nargs="+", default = NULL, help = "Predictive columns. If specified, batch correction will attempt to preserve predictive power for these columns.")
+parser$add_argument("-f", "--full-design-matrix", action = "store_true", help = "If set, the design matrix will include all categorical variables")
 args <- parser$parse_args()
 
 # Define functions ---------------------------------
@@ -62,7 +63,14 @@ ComBat_ignore_nonvariance <- function(matrix_, batch, design) {
 
   varying_row_mask <- apply(matrix_, 1, function(x) { length(unique(x)) > 1 })
 
-  matrix_[varying_row_mask,] <- ComBat(matrix_[varying_row_mask,], batch, mod=design, prior.plots=FALSE)
+  # Use Combat or ComBat_seq depending on the presence of negative values
+  if (any(matrix_[varying_row_mask, ] < 0)) {
+    message("Data contains negative values, using ComBat")
+    matrix_[varying_row_mask,] <- ComBat(matrix_[varying_row_mask,], batch, mod=design, prior.plots=FALSE)
+  } else {
+    message("Data does not contain negative values, using ComBat_seq.")
+    matrix_[varying_row_mask,] <- ComBat_seq(matrix_[varying_row_mask,], batch, mod=design, prior.plots=FALSE)
+  }
 
   t(matrix_)
 }
@@ -278,19 +286,35 @@ batch_adjust_tidy <- function(df, adjuster, batch_col = "Batch") {
   quantitative <- df[, !is_categorical, drop = FALSE]
 
   message_structure(categorical, "DEBUG: batch_adjust_tidy - Categorical data frame")
-  design <- create_design_matrix(categorical)
+
+  if (args$full_design_matrix) {
+    message("Creating full design matrix with all categorical variables.")
+    design <- create_design_matrix(categorical)
+  } else if (!is.null(args$column)) {
+    message(sprintf("Creating design matrix with specified columns: %s", paste(args$column, collapse = ", ")))
+    if (all(args$column %in% colnames(categorical))) {
+      design <- model.matrix(~ ., data = categorical[, args$column, drop = FALSE])
+      colnames(design) <- gsub("categorical", "", colnames(design))
+    } else {
+      stop(sprintf("Specified columns '%s' not found in categorical data.", paste(args$column, collapse = ", ")))
+    }
+  } else {
+    message("Creating design matrix with intercept only.")
+    design <- matrix(1, nrow = nrow(df), ncol = 1)
+    colnames(design) <- "Intercept"
+  }
 
   quantitative <- as.matrix(quantitative)
 
   message(sprintf("Adjusting %d quantitative columns with %s method.", ncol(quantitative), adjuster))
   if (adjuster == "combat") {
-    adjusted = ComBat_ignore_nonvariance(quantitative, batch, design)
+    adjusted = ComBat_ignore_nonvariance(quantitative, batch, design, args$column)
   } else if (adjuster == "min_mean") {
     adjusted = match_min_mean(quantitative, batch)
   } else if (adjuster == "tampor") {
     adjusted = adjust_tampor(quantitative, batch)
   } else if (adjuster == "limma") {
-    adjusted = adjust_limma(quantitative, batch, design)
+    adjusted = adjust_limma(quantitative, batch, design, args$column)
   } else {
     stop(sprintf("Unknown adjuster '%s'", adjuster))
   }

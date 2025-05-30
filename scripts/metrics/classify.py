@@ -4,6 +4,8 @@ from sklearn.ensemble import RandomForestClassifier
 from sklearn.neighbors import KNeighborsClassifier
 from sklearn.neighbors import NeighborhoodComponentsAnalysis
 from sklearn.ensemble import GradientBoostingClassifier
+from sklearn.ensemble import HistGradientBoostingClassifier
+
 
 import os.path
 from os import path
@@ -27,9 +29,10 @@ nca = NeighborhoodComponentsAnalysis(n_components=100, random_state=42)
 
 LEARNERS = [  # Random state is updated within cross_validate
     {"algorithm": RandomForestClassifier, "fit_params": {"n_estimators": 100, "random_state": 0}, 
-     "transform": NeighborhoodComponentsAnalysis, "transform_params": {"n_components": 100}},
-    {"algorithm": GradientBoostingClassifier, "fit_params": {"random_state": 0}},
-    {"algorithm": KNeighborsClassifier, "fit_params": {"n_neighbors": 7, "weights": "distance", "metric": "cosine"}}
+     "transform": NeighborhoodComponentsAnalysis, "transform_params": {"n_components": 50}},
+    {"algorithm": GradientBoostingClassifier, "fit_params": {"n_estimators": 50, "random_state": 0}},
+    {"algorithm": HistGradientBoostingClassifier, "fit_params": {"max_iter": 50, "random_state": 0}},
+    {"algorithm": KNeighborsClassifier, "fit_params": {"n_neighbors": 5, "metric": "cosine"}}
 ]
 
 if not os.path.exists(args.output_path):

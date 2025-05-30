@@ -36,7 +36,7 @@ unadjusted_path = args.input_dir / "unadjusted.csv"
 unadj = cache.get_dataframe(unadjusted_path)
 dataset = os.path.basename(args.input_dir)
 
-for method in ["unadjusted", "min_mean", "combat", "tampor"]:
+for method in ["unadjusted", "min_mean", "combat", "tampor", "limma"]:
     adjusted_path = args.input_dir / f"{method}.csv"
     df = cache.get_dataframe(adjusted_path)
 
@@ -46,3 +46,5 @@ for method in ["unadjusted", "min_mean", "combat", "tampor"]:
     print(f"Saving output to {args.output_path}.")
     with open(args.output_path, "a") as output_file:
         output_file.write("{},{},{},{}\n".format("MSE", method, dataset, value))
+
+# Look at mnn and scanvi next

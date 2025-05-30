@@ -50,7 +50,7 @@ RUN Rscript /install_adjuster_specific_packages.R
 # Install Python packages
 ####################################################################################
 
-RUN conda install numpy scikit-learn pandas tensorflow=1.11.0
+RUN conda install -y -c conda-forge numpy 'scikit-learn>=1.4' pandas
 
 # RUN pip3 install numpy scikit-learn pandas 
 # tensorflow=1.11.0

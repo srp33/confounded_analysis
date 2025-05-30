@@ -8,6 +8,7 @@ from sklearn.preprocessing import label_binarize
 from sklearn.model_selection import StratifiedKFold
 from sklearn.model_selection import GridSearchCV
 from pathlib import Path
+from joblib import Parallel, delayed
 
 def __sort_by_length(strings):
     return sorted(strings, key=len)
@@ -83,12 +84,20 @@ class DataFrameCache(object):
     def __init__(self):
         self.dataframes = {} # path: dataframe
 
-    def get_dataframe(self, path):
-        try:
-            return self.dataframes[path]
-        except KeyError:
-            self.dataframes[path] = pd.read_csv(path)
-            return self.dataframes[path]
+    def get_dataframe(self, file_path):
+        if file_path in self.dataframes:
+            return self.dataframes[file_path]
+        else:
+            try:
+                df = pd.read_csv(file_path)
+                self.dataframes[file_path] = df
+                return df
+            except FileNotFoundError:
+                print(f"Process {os.getpid()}: ERROR - File not found: {file_path}", flush=True)
+                return pd.DataFrame()
+            except Exception as e:
+                print(f"Process {os.getpid()}: ERROR - Could not read file {file_path} due to: {e}", flush=True)
+                return pd.DataFrame()
 
 def no_extension(path):
     filename = os.path.split(path)[-1]
@@ -105,39 +114,48 @@ def split_into_batches(df, batch_col):
     batches = set(df[batch_col])
     return tuple((continuous[df[batch_col] == batch] for batch in batches))
 
+
+
+def _run_single_iteration(iteration_idx, X_processed, y_processed, learner_config, num_folds, metric):
+    # Make a copy of params, so we can modify random_state locally
+    fit_params = learner_config.get("fit_params", {}).copy()
+    if "random_state" in fit_params:
+        fit_params["random_state"] = iteration_idx
+
+    estimator = learner_config["algorithm"](**fit_params)
+    kfold = StratifiedKFold(n_splits=num_folds, shuffle=True, random_state=iteration_idx)
+
+    # n_jobs = 3 works here, currently running on 30 threads and averaging ~20 cpus of usage
+    iter_scores = cross_val_score(estimator, X_processed, y_processed, scoring=metric, cv=kfold, n_jobs=3)
+
+    if len(iter_scores) > 0:
+        return sum(iter_scores) / len(iter_scores)
+    return 0.0 # Return 0.0 if no scores are produced
+
+
 def cross_validate(df, predict_column, learner, iterations, folds, n_jobs, scale_numerics=False):
-    meta_cols = list(df.select_dtypes(include=['object', 'int']).columns)
+    if df.empty:
+        return []
 
-    X = df.drop(meta_cols, axis="columns")
-    y = df[predict_column]
+    # Target variable
+    y = df[predict_column].copy()
 
-    if scale_numerics == True:
-        X = robust_scale(X)
-
-    #classes = []
-    #for element in y:
-    #    if (element not in classes) :
-    #        classes.append(element)
-    #y = label_binarize(y, classes = classes)
+    # Remove target and other categorical columns
+    X = df.drop(columns=[predict_column]).select_dtypes(exclude=['object', 'int']).copy()
 
     scoring_metric = "roc_auc"
 
-    scores = []
-    for i in range(iterations):
-        fit_params = learner["fit_params"] if "fit_params" in learner else {}
+    # Apply transformation if specified
+    if "transform" in learner:
+        transform_params = learner.get("transform_params", {})
+        transformer = learner["transform"](**transform_params)
+        transformer.fit(X, y) # Fit transformer
+        X = transformer.transform(X) # Transform X
 
-        if "random_state" in fit_params:
-            fit_params["random_state"] = i
-
-        estimator = learner["algorithm"](**fit_params)
-
-        if "transform" in learner:
-            learner["transform"].fit(X, y)
-            X = learner["transform"].transform(X)
-
-        kfold = StratifiedKFold(n_splits=folds, shuffle=True, random_state=i)
-        iter_scores = list(cross_val_score(estimator, X, y, scoring=scoring_metric, cv=kfold, n_jobs=n_jobs))
-
-        scores.append(sum(iter_scores) / len(iter_scores))
+    # n_jobs for Parallel controls how many iterations run at once.
+    scores = Parallel(n_jobs=n_jobs)(
+        delayed(_run_single_iteration)(i, X, y, learner, folds, scoring_metric)
+        for i in range(iterations)
+    )
 
     return scores
