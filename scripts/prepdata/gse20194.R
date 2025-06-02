@@ -25,20 +25,20 @@ gunzip("/tmp/gse20194_meta.xls.gz", overwrite = TRUE)
 pData = read_excel("/tmp/gse20194_meta.xls") %>%
     filter(description != "MAQC_Distribution_Status: MDA_R -- Not used") %>%
     filter(description != "MAQC_Distribution_Status: MAQC_Q -- Not used") %>%
-    dplyr::rename(Sample = `Sample name`) %>%
-    dplyr::rename(CEL_file = `CEL file`) %>%
-    dplyr::rename(batch = description) %>%
-    dplyr::mutate(batch = str_replace_all(batch, "MAQC_Distribution_Status: MAQC_T -- Training", "1")) %>%
-    dplyr::mutate(batch = str_replace_all(batch, "MAQC_Distribution_Status: MAQC_V -- Validation", "2")) %>%
-    dplyr::rename(treatment_response = `characteristics: pCR_vs_RD`) %>%
-    dplyr::rename(age = `characteristics: age`) %>%
-    dplyr::rename(race = `characteristics: race`) %>%
-    dplyr::rename(er_status = `characteristics: ER_status`) %>%
-    dplyr::rename(pr_status = `characteristics: PR_status`) %>%
-    dplyr::rename(her2_status = `HER2 Status`) %>%
-    dplyr::rename(histology = `Histology`) %>%
-    dplyr::rename(treatment_code = `Treatment Code`) %>%
-    dplyr::rename(bmn_grade = `BMNgrd`) %>%
+    dplyr::rename(meta_Sample = `Sample name`) %>%
+    dplyr::rename(meta_CEL_file = `CEL file`) %>%
+    dplyr::rename(meta_batch = description) %>%
+    dplyr::mutate(meta_batch = str_replace_all(meta_batch, "MAQC_Distribution_Status: MAQC_T -- Training", "1")) %>%
+    dplyr::mutate(meta_batch = str_replace_all(meta_batch, "MAQC_Distribution_Status: MAQC_V -- Validation", "2")) %>%
+    dplyr::rename(meta_treatment_response = `characteristics: pCR_vs_RD`) %>%
+    dplyr::rename(meta_age = `characteristics: age`) %>%
+    dplyr::rename(meta_race = `characteristics: race`) %>%
+    dplyr::rename(meta_er_status = `characteristics: ER_status`) %>%
+    dplyr::rename(meta_pr_status = `characteristics: PR_status`) %>%
+    dplyr::rename(meta_her2_status = `HER2 Status`) %>%
+    dplyr::rename(meta_histology = `Histology`) %>%
+    dplyr::rename(meta_treatment_code = `Treatment Code`) %>%
+    dplyr::rename(meta_bmn_grade = `BMNgrd`) %>%
     dplyr::select(-`title`, -`source name`, -`organism`, -`molecule`, -`label`, -`platform`, -`Additional information`, -`Tbefore`, -`Nbefore`, -`ER`, -`Her2 IHC`, -`Her2 FISH`, -`Treatments Comments`)
 
 if (!dir.exists("/data/gse20194"))

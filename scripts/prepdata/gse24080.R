@@ -55,19 +55,19 @@ gunzip("/tmp/gse24080_meta.xls.gz", overwrite = TRUE)
 # The multiple myeloma (MM) data set (endpoints F, G, H and I) was contributed by the Myeloma Institute for Research and Therapy at the University of Arkansas for Medical Sciences. Gene expression profiling of highly purified bone marrow plasma cells was performed in newly diagnosed patients with MM57,58,59. The training set consisted of 340 cases enrolled in total therapy 2 (TT2) and the validation set comprised 214 patients enrolled in total therapy 3 (TT3)59.  https://www.nature.com/articles/nbt.1665
 pData = read_excel("/tmp/gse24080_meta.xls") %>%
     filter(`MAQC_Distribution_Status` %in% c("Training", "Validation")) %>%
-    dplyr::rename(batch = `MAQC_Distribution_Status`) %>%
-    dplyr::mutate(batch = str_replace_all(batch, "Training", "1")) %>%
-    dplyr::mutate(batch = str_replace_all(batch, "Validation", "2")) %>%
-    dplyr::rename(Sample = PATID) %>%
-    dplyr::rename(CEL_file = `CELfilename`) %>%
-    dplyr::rename(cytogenetic_abnormality = `Cyto Abn`) %>%
-    dplyr::rename(age = `AGE`) %>%
-    dplyr::rename(race = `RACE`) %>%
-    dplyr::rename(efs_outcome_label = `EFS_MO JUN2008`) %>%
-    dplyr::rename(os_outcome_label = `OS_MO JUN2008`) %>%
-    dplyr::rename(sex_label = `CPS1`) %>%
-    dplyr::rename(random_label = `CPR1`) %>%
-    dplyr::select(batch, Sample, CEL_file, cytogenetic_abnormality, age, race, efs_outcome_label, os_outcome_label, sex_label, random_label)
+    dplyr::rename(meta_batch = `MAQC_Distribution_Status`) %>%
+    dplyr::mutate(meta_batch = str_replace_all(meta_batch, "Training", "1")) %>%
+    dplyr::mutate(meta_batch = str_replace_all(meta_batch, "Validation", "2")) %>%
+    dplyr::rename(meta_Sample = PATID) %>%
+    dplyr::rename(meta_CEL_file = `CELfilename`) %>%
+    dplyr::rename(meta_cytogenetic_abnormality = `Cyto Abn`) %>%
+    dplyr::rename(meta_age = `AGE`) %>%
+    dplyr::rename(meta_race = `RACE`) %>%
+    dplyr::rename(meta_efs_outcome_label = `EFS_MO JUN2008`) %>%
+    dplyr::rename(meta_os_outcome_label = `OS_MO JUN2008`) %>%
+    dplyr::rename(meta_sex_label = `CPS1`) %>%
+    dplyr::rename(meta_random_label = `CPR1`) %>%
+    dplyr::select(meta_batch, meta_Sample, meta_CEL_file, meta_cytogenetic_abnormality, meta_age, meta_race, meta_efs_outcome_label, meta_os_outcome_label, meta_sex_label, meta_random_label)
 
 if (!dir.exists("/data/gse24080"))
     dir.create("/data/gse24080")

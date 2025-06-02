@@ -2,7 +2,7 @@ import os
 import glob
 import numpy as np
 import pandas as pd
-from sklearn.model_selection import cross_val_score
+from sklearn.model_selection import cross_validate
 from sklearn.preprocessing import robust_scale
 from sklearn.preprocessing import label_binarize
 from sklearn.model_selection import StratifiedKFold
@@ -103,37 +103,41 @@ def no_extension(path):
     filename = os.path.split(path)[-1]
     return os.path.splitext(filename)[0]
 
-def split_discrete_continuous(df):
-    discrete_types = ["int", "object"]
-    discrete = df.select_dtypes(include=discrete_types)
-    continuous = df.select_dtypes(exclude=discrete_types)
-    return discrete, continuous
+
+def split_metadata_genes(df):
+    # Combat-seq returns genes as integers, so splitting by type is not enough.
+    # Other methods return genes as floats, so I need to split by metadata.
+    # I prepended "meta_" to all metadata columns, so I can split by that.
+    metadata_cols = [col for col in df.columns if col.startswith("meta_")]
+    genes = df.drop(columns=metadata_cols)
+    metadata = df[metadata_cols]
+    return metadata, genes
+
 
 def split_into_batches(df, batch_col):
-    discrete, continuous = split_discrete_continuous(df)
+    _, genes = split_metadata_genes(df)
     batches = set(df[batch_col])
-    return tuple((continuous[df[batch_col] == batch] for batch in batches))
+    return tuple((genes[df[batch_col] == batch] for batch in batches))
 
 
 
-def _run_single_iteration(iteration_idx, X_processed, y_processed, learner_config, num_folds, metric):
+def _run_single_iteration(iteration_idx, X, y, learner_config, n_folds, metrics):
     # Make a copy of params, so we can modify random_state locally
     fit_params = learner_config.get("fit_params", {}).copy()
     if "random_state" in fit_params:
         fit_params["random_state"] = iteration_idx
 
     estimator = learner_config["algorithm"](**fit_params)
-    kfold = StratifiedKFold(n_splits=num_folds, shuffle=True, random_state=iteration_idx)
+    kfold = StratifiedKFold(n_splits=n_folds, shuffle=True, random_state=iteration_idx)
 
-    # n_jobs = 3 works here, currently running on 30 threads and averaging ~20 cpus of usage
-    iter_scores = cross_val_score(estimator, X_processed, y_processed, scoring=metric, cv=kfold, n_jobs=3)
+    scores = cross_validate(estimator, X, y, scoring=metrics, cv=kfold, n_jobs=3)
 
-    if len(iter_scores) > 0:
-        return sum(iter_scores) / len(iter_scores)
-    return 0.0 # Return 0.0 if no scores are produced
+    test_names = {metric: "test" + "_" + metric for metric in metrics}
+    average_scores = {metric: np.mean(scores[test]) for metric, test in test_names.items()}
+    return average_scores
 
 
-def cross_validate(df, predict_column, learner, iterations, folds, n_jobs, scale_numerics=False):
+def repeated_cross_val(df, predict_column, learner, iterations, n_folds, n_jobs, metrics, scale_numerics=False):
     if df.empty:
         return []
 
@@ -143,8 +147,6 @@ def cross_validate(df, predict_column, learner, iterations, folds, n_jobs, scale
     # Remove target and other categorical columns
     X = df.drop(columns=[predict_column]).select_dtypes(exclude=['object', 'int']).copy()
 
-    scoring_metric = "roc_auc"
-
     # Apply transformation if specified
     if "transform" in learner:
         transform_params = learner.get("transform_params", {})
@@ -152,9 +154,9 @@ def cross_validate(df, predict_column, learner, iterations, folds, n_jobs, scale
         transformer.fit(X, y) # Fit transformer
         X = transformer.transform(X) # Transform X
 
-    # n_jobs for Parallel controls how many iterations run at once.
+    # Parallel n_jobs controls how many iterations run at once.
     scores = Parallel(n_jobs=n_jobs)(
-        delayed(_run_single_iteration)(i, X, y, learner, folds, scoring_metric)
+        delayed(_run_single_iteration)(i, X, y, learner, n_folds, metrics)
         for i in range(iterations)
     )
 

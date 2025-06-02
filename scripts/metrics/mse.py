@@ -10,8 +10,8 @@ parser.add_argument("-o", "--output-path", type=Path, help="Path to output file"
 args = parser.parse_args()
 
 def calculate_mse(df1, df2):
-    _, genes1 = split_discrete_continuous(df1)
-    _, genes2 = split_discrete_continuous(df2)
+    _, genes1 = split_metadata_genes(df1)
+    _, genes2 = split_metadata_genes(df2)
 
     if genes1.isnull().values.any() or genes2.isnull().values.any():
         # Find which columns contain NaN values
@@ -36,7 +36,7 @@ unadjusted_path = args.input_dir / "unadjusted.csv"
 unadj = cache.get_dataframe(unadjusted_path)
 dataset = os.path.basename(args.input_dir)
 
-for method in ["unadjusted", "min_mean", "combat", "tampor", "limma"]:
+for method in ["combat", "combat_target", "unadjusted", "min_mean", "tampor", "limma", "limma_target"]:
     adjusted_path = args.input_dir / f"{method}.csv"
     df = cache.get_dataframe(adjusted_path)
 

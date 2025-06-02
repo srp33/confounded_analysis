@@ -14,8 +14,8 @@ archive_file "${out_path}"
 
 script_path="$(dirname $0)/mmd.py"
 
-python "${script_path}" -i /data/gse20194 -b batch -o "$out_path"
-python "${script_path}" -i /data/gse24080 -b batch -o "$out_path"
-python "${script_path}" -i /data/gse49711 -b Class -o "$out_path"
+python "${script_path}" -i /data/gse49711 -b meta_Class -o "$out_path"
+python "${script_path}" -i /data/gse20194 -b meta_batch -o "$out_path"
+python "${script_path}" -i /data/gse24080 -b meta_batch -o "$out_path"
 
 python "$(dirname $0)/pivot_metics.py" -i "$out_path" -o "$pivot_path"

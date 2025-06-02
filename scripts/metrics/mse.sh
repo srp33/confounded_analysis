@@ -14,8 +14,8 @@ archive_file "${out_path}"
 
 script_path="$(dirname $0)/mse.py"
 
+python "${script_path}" -i /data/gse49711 -o "$out_path"
 python "${script_path}" -i /data/gse20194 -o "$out_path"
 python "${script_path}" -i /data/gse24080 -o "$out_path"
-python "${script_path}" -i /data/gse49711 -o "$out_path"
 
 python "$(dirname $0)/pivot_metics.py" -i "$out_path" -o "$pivot_path"
