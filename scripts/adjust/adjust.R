@@ -60,8 +60,10 @@ ComBat_ignore_nonvariance <- function(matrix_, batch, design) {
   #' @examples
   #' ComBat_ignore_nonvariance(data, c(rep(1, 5000), rep(2, 5000)))
   matrix_ <- t(matrix_)
+  message(sprintf("Transposed matrix_ has %d rows and %d columns", nrow(matrix_), ncol(matrix_)))
 
   varying_row_mask <- apply(matrix_, 1, function(x) { length(unique(x)) > 1 })
+  message("Varying rows: ", sum(varying_row_mask), " out of ", nrow(matrix_))
 
   # Use Combat or ComBat_seq depending on the presence of negative values
   if (any(matrix_[varying_row_mask, ] < 0)) {
@@ -69,8 +71,10 @@ ComBat_ignore_nonvariance <- function(matrix_, batch, design) {
     matrix_[varying_row_mask,] <- ComBat(matrix_[varying_row_mask,], batch, mod=design, prior.plots=FALSE)
   } else {
     message("Data does not contain negative values, using ComBat_seq.")
-    matrix_[varying_row_mask,] <- ComBat_seq(matrix_[varying_row_mask,], batch, mod=design, prior.plots=FALSE)
+    matrix_[varying_row_mask,] <- ComBat_seq(matrix_[varying_row_mask,], batch, covar_mod=design)
   }
+
+  message(sprintf("Adjusted matrix_ has %d rows and %d columns", nrow(matrix_), ncol(matrix_)))
 
   t(matrix_)
 }
@@ -300,7 +304,7 @@ batch_adjust_tidy <- function(df, adjuster, batch_col = "Batch") {
     }
   } else {
     message("Creating design matrix with intercept only.")
-    design <- matrix(1, nrow = nrow(df), ncol = 1)
+    design <- matrix(1, nrow = nrow(categorical), ncol = 1)
     colnames(design) <- "Intercept"
   }
 
@@ -308,16 +312,18 @@ batch_adjust_tidy <- function(df, adjuster, batch_col = "Batch") {
 
   message(sprintf("Adjusting %d quantitative columns with %s method.", ncol(quantitative), adjuster))
   if (adjuster == "combat") {
-    adjusted = ComBat_ignore_nonvariance(quantitative, batch, design, args$column)
+    adjusted = ComBat_ignore_nonvariance(quantitative, batch, design)
   } else if (adjuster == "min_mean") {
     adjusted = match_min_mean(quantitative, batch)
   } else if (adjuster == "tampor") {
     adjusted = adjust_tampor(quantitative, batch)
   } else if (adjuster == "limma") {
-    adjusted = adjust_limma(quantitative, batch, design, args$column)
+    adjusted = adjust_limma(quantitative, batch, design)
   } else {
     stop(sprintf("Unknown adjuster '%s'", adjuster))
   }
+  message(sprintf("Adjusted columns: %d, rows: %d", ncol(adjusted), nrow(adjusted)))
+  message_structure(adjusted, "DEBUG: batch_adjust_tidy - Adjusted quantitative data frame")
   
   message("Combining adjusted and categorical columns.")
   adjusted = cbind(batch, categorical, adjusted)
@@ -325,7 +331,10 @@ batch_adjust_tidy <- function(df, adjuster, batch_col = "Batch") {
   adjusted[,orig_col_names]
 }
 
-message("Reading input file.")
+
+# Main execution --------------------------------
+
+message(sprintf("\nReading input file '%s'", args$input_file))
 suppressMessages(df <- vroom(args$input_file, show_col_types = FALSE))
 message(sprintf("Input file has %d rows and %d columns", nrow(df), ncol(df)))
 
