@@ -5,6 +5,8 @@ suppressPackageStartupMessages({
   library(readr)
   library(tidyr)
   library(stringr)
+  library(vroom)
+  library(tibble) 
 })
 
 
@@ -16,80 +18,140 @@ SAMPLE_DIR = "/../data/"
 cbp2 <- c("#E69F00", "#56B4E9","#009E73","#F0E442", 
           "#0072B2", "#D55E00", "#CC79A7", "#999999")
 
+all_info_df <- tribble(
+  ~dataset,    ~title,                            ~batch_label,      ~true_label,
+  "gse20194", "GSE 20194 ER",                   "meta_batch",      "meta_er_status",
+  "gse20194", "GSE 20194 HER2",                 "meta_batch",      "meta_her2_status",
+  "gse20194", "GSE 20194 PR",                   "meta_batch",      "meta_pr_status",
+  "gse24080",  "GSE 24080 Eventfree Survival",  "meta_batch",      "meta_efs_outcome_label",
+  "gse24080",  "GSE 24080 Overall Survival",    "meta_batch",      "meta_os_outcome_label",
+  "gse49711",  "GSE 49711 Stage",               "meta_Class",      "meta_INSS_Stage"
+)
 
-batchall <- read_csv(paste(c(IN_DIR, "batch_classification.csv"), collapse = ""))
-trueall <- read_csv(paste(c(IN_DIR, "true_classification.csv"), collapse = ""))
+order <- c("unadjusted", "min_mean", "limma", "limma_target", "combat", "combat_target", "tampor")
+
+score_functions <- c("roc_auc_score", "mutual_info_score", "accuracy_score")
+
 
 #---Function to determine what the random chance that the largest label would be chosen --- 
-random_accuracy <- function(data, label) {
-  values <- paste(SAMPLE_DIR, data, "unadjusted.csv", sep = "/") %>%
-    read_csv() %>%
-    select(all_of(label)) %>%
-    pull()
-  
+calculate_random_accuracy <- function(df, column_name) {
+  values <- df[[column_name]]
   table(values) %>%
     max() / length(values)
 }
 
-#                     dataset,    title,                            batch_label,  true_label
-gse20194_er_info =  c("gse20194", "GSE 20194 ER",                   "batch",      "er_status")
-gse20194_her2_info =c("gse20194", "GSE 20194 HER2",                 "batch",      "her2_status")
-gse20194_pr_info =  c("gse20194", "GSE 20194 PR",                   "batch",      "pr_status")
 
-gse24080_efs_info = c("gse24080",  "GSE 24080 Eventfree Survival",  "batch",      "efs_outcome_label")
-gse24080_os_info =  c("gse24080",  "GSE 24080 Overall Survival",    "batch",      "os_outcome_label")
+#---Function to calculate the baseline for a given column and score function---
+baseline_for_column <- function(df, column_name, score_function) {
+  if (score_function == "accuracy_score") {
+    # For accuracy score, we can use the random accuracy as the baseline
+    return(calculate_random_accuracy(df, column_name))
+  } else if (score_function == "roc_auc_score") {
+    # For ROC AUC score, we use 50% as the baseline
+    return(0.5)
+  } else if (score_function == "mutual_info_score") {
+    # For mutual information score, we use 0 as the baseline
+    return(0)
+  } else {
+    stop("Unknown score function: ", score_function)
+  }
+}
 
-gse49711_stage_info=c("gse49711",  "GSE 49711 Stage",               "Class",      "INSS_Stage")
+#---Function to get random accuracy for a given dataset and column name, given a cache of accuracies---
+get_baseline <- function(file_cache, dataset_name, column_name, accuracy_cache, score_function = "accuracy_score") {
+  key <- paste(dataset_name, column_name, score_function, sep = "_")
+  if (!key %in% names(accuracy_cache)) {
+    message(paste("Calculating random accuracy for dataset:", dataset_name, "and column:", column_name))
+    value <- baseline_for_column(file_cache[[dataset_name]], column_name, score_function)
+    accuracy_cache[[key]] <- value
+  }
+  return(accuracy_cache[[key]])
+}
 
-# Combine into a list
-all_info <- list(
-  gse20194_er_info,
-  gse20194_her2_info,
-  gse20194_pr_info,
-  gse24080_efs_info,
-  gse24080_os_info,
-  gse49711_stage_info
-)
+#---Function for debugging, prints whether a column exists, its unique values, and whether certain values appear---
+check_column <- function(data, column_name, values_to_check) {
+  if (!column_name %in% colnames(data)) {
+    stop("Column '", column_name, "' does not exist in the data.")
+  }
+  unique_values <- unique(data[[column_name]])
+  message("Unique values in '", column_name, "' column: ", paste(unique_values, collapse = ", "))
+  if (length(values_to_check) == 0) {
+    message("No values to check provided.")
+    return()
+  }
+  message("Checking for values: ", paste(values_to_check, collapse = ", "))
+  values_missing <- values_to_check[!values_to_check %in% unique_values]
+  if (length(values_missing) > 0) {
+    message("The following values are missing in '", column_name, "': ", paste(values_missing, collapse = ", "))
+  }
+  # For each value to check, print how many times it appears
+  for (value in values_to_check) {
+    count <- sum(data[[column_name]] == value, na.rm = TRUE)
+    message("Value '", value, "' appears ", count, " times in '", column_name, "'.")
+  }
+}
 
-# Extract components into separate vectors
-datasets     <- sapply(all_info, function(x) x[1])
-titles       <- sapply(all_info, function(x) x[2])
-batch_labels <- sapply(all_info, function(x) x[3])
-true_labels  <- sapply(all_info, function(x) x[4])
+batchall <- vroom(file.path(IN_DIR, "batch_classification.csv"))
+trueall  <- vroom(file.path(IN_DIR, "true_classification.csv"))
+problems(batchall)
+problems(trueall)
 
-order <- c("unadjusted", "min_mean", "combat", "tampor", "limma")
+# Debugging checks
+check_column(batchall, "dataset", dataset_name)
+check_column(trueall, "dataset", dataset_name)
 
-pdf(NULL)
+file_cache <- list() # Key: dataset_name, Value: the loaded data frame/tibble
+random_accuracies_cache <- list() # Key: "{dataset_name}_{column_name}_{score_function}", Value: the random accuracy value
 
-for(x in 1:length(datasets)) {
-    batchall <- batchall %>% mutate(valType = batch_labels[x])
-    trueall <- trueall %>% mutate(valType = true_labels[x])
-    data = datasets[x]
-    title = titles[x]
-    ran_batch <- random_accuracy(data, batch_labels[x])
-    ran_true <- random_accuracy(data, true_labels[x])
+pdf(NULL) # Suppress Rplots.pdf generation
 
-    batchs <- filter(batchall, dataset == data)
-    trues <- filter(trueall, dataset == data)
-    together <- rbind(batchs, trues)
+for (i in seq_len(nrow(all_info_df))) {
+  dataset_name  <- all_info_df$dataset[i]
+  title <- all_info_df$title[i]
+  batch_col_name <- all_info_df$batch_label[i]
+  true_col_name  <- all_info_df$true_label[i]
 
-    # This is a workaround for a ggplot2 bug.
-    pdf(NULL)
+  if (!dataset_name %in% names(file_cache)) {
+    message(paste("Loading data for dataset:", dataset_name))
+    current_data <- vroom(file.path(SAMPLE_DIR, dataset_name, "unadjusted.csv"))
+    file_cache[[dataset_name]] <- current_data
+  }
+  current_data <- file_cache[[dataset_name]]
+
+  check_column(trueall, "column", true_col_name)
+
+  batch <- batchall %>% 
+    filter(dataset == dataset_name)
+  true <- trueall %>% 
+    filter(dataset == dataset_name) %>%
+    filter(column == true_col_name)
+
+  together <- rbind(batch, true)
+  check_column(together, "metric", c())
+  check_column(together, "score", score_functions)
+
+  for(score_function in score_functions) {
+    message(paste("Creating figure for dataset:", dataset_name, "with score function:", score_function))
+    together_score <- filter(together, score == score_function)
+
+    ran_true <- get_baseline(file_cache, dataset_name, true_col_name, random_accuracies_cache, score_function)
+    ran_batch <- get_baseline(file_cache, dataset_name, batch_col_name, random_accuracies_cache, score_function)
 
     # Save figures ------------------
 
     ggplot() +
-      geom_boxplot(data = together, mapping = aes(x = factor(adjuster, order), y = value, color = valType)) + 
-      geom_jitter(data = together, mapping = aes(x = factor(adjuster, order), y = value, color = valType), position=position_jitterdodge()) +
+      geom_boxplot(data = together_score, mapping = aes(x = factor(adjuster, order), y = value, color = column)) + 
+      geom_jitter(data = together_score, mapping = aes(x = factor(adjuster, order), y = value, color = column), position=position_jitterdodge()) +
       geom_hline(yintercept = ran_true, color = "#56B4E9") + 
       geom_hline(yintercept = ran_batch, color = "#E69F00") + 
       ggtitle(title) +
       theme_bw(base_size = 18) + theme(axis.title.x=element_blank(), legend.title=element_blank(), axis.text.x = element_text(angle = 90)) + 
-      scale_y_continuous(name = "Accuracy", limits = c(0.0, 1.0)) +
+      scale_y_continuous(name = score_function, limits = c(0.0, 1.0)) +
       facet_wrap(vars(metric), strip.position = "top") + 
       scale_colour_manual(values=cbp2)
-    ggsave(paste(c(FIG_DIR, title, ".pdf"), collapse = ""), width = 11, height = 8.5, units = 'in')
-
+    filename_for_plot <- paste(c(FIG_DIR, title, "_", score_function, ".pdf"), collapse = "")
+    ggsave(file.path(FIG_DIR, filename_for_plot), width = 11, height = 8.5, units = 'in')
+  }
 }
 
 print(batchall)
