@@ -18,6 +18,8 @@ suppressPackageStartupMessages({
   library(vsn)
   library(limma)
   library(vroom)
+  library(Seurat)
+  library(patchwork)
 })
 
 # Parse command line args --------------------------
@@ -274,6 +276,71 @@ adjust_limma <- function(x, batch, design) {
   # Remove batch effects using limma's removeBatchEffect function
   limma::removeBatchEffect(x, batch = batch, design = design)
 }
+
+prep_seurat <- function(df_, batch, data_are_counts) {
+  #' Prepares a Seurat object from a dataframe.
+  #'
+  #' @param df_ The dataframe to convert to a Seurat object. Columns are
+  #' samples, rows are features.
+  #' @param batch The per-sample batch assignments.
+  #'
+  #' @return A Seurat object ready for further processing.
+
+  seurat_obj <- CreateSeuratObject(counts = df_, meta.data = data.frame(Batch = batch))
+  
+  if (data_are_counts) {
+    # If the data are counts, we need to normalize it
+    message("Data is not normalized. Normalizing using Seurat's NormalizeData function.")
+    seurat_obj <- NormalizeData(seurat_obj, normalization.method = "LogNormalize", scale.factor = 10000)
+  } 
+  
+  # Find variable features
+  seurat_obj <- FindVariableFeatures(seurat_obj)
+  
+  return(seurat_obj)
+}
+
+
+adjust_seurat <- function(df_, batch, data_are_counts) {
+  #' Adjusts using the Seurat method.
+  #'
+  #' @param df_ The dataframe to batch adjust by scaling. Columns are
+  #' samples, rows are features.
+  #' @param batch The per-sample batch assignments.
+  #' 
+  #' @return The dataframe after batch adjustment.
+  #' 
+  #' @examples
+  #' adjust_seurat(data, c(rep(1, 5000), rep(2, 5000)))
+
+  seurat_obj <- prep_seurat(df_, batch, data_are_counts)
+  
+  # Scale the data
+  seurat_obj <- ScaleData(seurat_obj, vars.to.regress = "Batch")
+  
+  # Return the scaled data
+  GetAssayData(seurat_obj, slot = "data")
+}
+
+adjust_harmony <- function(df_, batch, design, data_are_counts) {
+  #' Adjusts using the Harmony method.
+  #'
+  #' @param df_ The dataframe to batch adjust by scaling. Columns are
+  #' samples, rows are features.
+  #' @param batch The per-sample batch assignments.
+  #' @param design The design matrix to use for adjustment.
+  #'
+  #' @return The dataframe after batch adjustment.
+  #' 
+  #' @examples
+  #' adjust_harmony(data, c(rep(1, 5000), rep(2, 5000)), design)
+  seurat_obj <- prep_seurat(df_, batch, data_are_counts)  
+  
+  # Run Harmony
+  seurat_obj <- RunHarmony(seurat_obj, group.by.vars = "Batch", assay.use = "RNA", reduction = "pca", project.dim = FALSE)
+  
+  # Return the adjusted data
+  GetAssayData(seurat_obj, slot = "data")
 }
 
 
@@ -327,7 +394,12 @@ batch_adjust_tidy <- function(df, adjuster, batch_col = "Batch") {
     adjusted = adjust_tampor(quantitative, batch)
   } else if (adjuster == "limma") {
     adjusted = adjust_limma(quantitative, batch, design)
-  } else {
+  } else if (adjuster == "seurat") {
+    adjusted = adjust_seurat(quantitative, batch, data_are_counts)
+  } else if (adjuster == "harmony") {
+    adjusted = adjust_harmony(quantitative, batch, design, data_are_counts)
+  }
+  else {
     stop(sprintf("Unknown adjuster '%s'", adjuster))
   }
   adjusted = t(adjusted)  # Transpose back to columns as features and rows as samples
