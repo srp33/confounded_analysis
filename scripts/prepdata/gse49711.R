@@ -29,22 +29,25 @@ expr_data = expr_data[-which(num_zero > (ncol(expr_data) / 2)),]
 
 expr_data = t(expr_data) %>%
     as.data.frame() %>%
-    rownames_to_column(var = "Sample_ID")
+    rownames_to_column(var = "meta_Sample_ID")
 
 metadata = as_tibble(as.data.frame(getGEO("GSE49711"))) %>%
-    dplyr::rename(Sample_ID = `GSE49711_series_matrix.txt.gz.title`) %>%
-    dplyr::rename(Class = `GSE49711_series_matrix.txt.gz.class.label.ch1`) %>%
-    #dplyr::rename(Age_at_Diagnosis = `GSE49711_series_matrix.txt.gz.age.at.diagnosis.ch1`) %>%
-    #dplyr::rename(Death_from_Disease = `GSE49711_series_matrix.txt.gz.death.from.disease.ch1`) %>%
-    #dplyr::rename(High_Risk = `GSE49711_series_matrix.txt.gz.high.risk.ch1`) %>%
-    dplyr::rename(INSS_Stage = `GSE49711_series_matrix.txt.gz.inss.stage.ch1`) %>%
-    #dplyr::rename(MYCN_Status = `GSE49711_series_matrix.txt.gz.mycn.status.ch1`) %>%
-    #dplyr::rename(Progression = `GSE49711_series_matrix.txt.gz.progression.ch1`) %>%
-    dplyr::rename(Sex = `GSE49711_series_matrix.txt.gz.Sex.ch1`) %>%
+    dplyr::rename(meta_Sample_ID = `GSE49711_series_matrix.txt.gz.title`) %>%
+    dplyr::rename(meta_Class = `GSE49711_series_matrix.txt.gz.class.label.ch1`) %>%
+    dplyr::rename(meta_Age_at_Diagnosis = `GSE49711_series_matrix.txt.gz.age.at.diagnosis.ch1`) %>%
+    dplyr::rename(meta_Death_from_Disease = `GSE49711_series_matrix.txt.gz.death.from.disease.ch1`) %>%
+    dplyr::rename(meta_High_Risk = `GSE49711_series_matrix.txt.gz.high.risk.ch1`) %>%
+    dplyr::rename(meta_INSS_Stage = `GSE49711_series_matrix.txt.gz.inss.stage.ch1`) %>%
+    dplyr::mutate(meta_INSS_Stage_Split_1_2 = ifelse(meta_INSS_Stage %in% c("1", "2"), "1", "2")) %>%
+    dplyr::mutate(meta_INSS_Stage_Split_2_3 = ifelse(meta_INSS_Stage %in% c("1", "2", "3"), "1", "2")) %>%
+    dplyr::mutate(meta_INSS_Stage_Split_3_4 = ifelse(meta_INSS_Stage %in% c("1", "2", "3", "4"), "1", "2")) %>%
+    dplyr::rename(meta_MYCN_Status = `GSE49711_series_matrix.txt.gz.mycn.status.ch1`) %>%
+    dplyr::rename(meta_Progression = `GSE49711_series_matrix.txt.gz.progression.ch1`) %>%
+    dplyr::rename(meta_Sex = `GSE49711_series_matrix.txt.gz.Sex.ch1`) %>%
     select(!starts_with("GSE49711_")) %>%
-    filter(Class %in% c("0", "1"))
+    filter(meta_Class %in% c("0", "1"))
 
-data = inner_join(metadata, expr_data, by="Sample_ID")
+data = inner_join(metadata, expr_data, by="meta_Sample_ID")
 
 #print(table(data$Sex))
 #print(table(data$MYCN_Status))
