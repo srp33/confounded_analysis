@@ -149,7 +149,7 @@ for (i in seq_len(nrow(all_info_df))) {
       scale_y_continuous(name = score_function, limits = c(0.0, 1.0)) +
       facet_wrap(vars(metric), strip.position = "top") + 
       scale_colour_manual(values=cbp2)
-    filename_for_plot <- paste(c(FIG_DIR, title, "_", score_function, ".pdf"), collapse = "")
+    filename_for_plot <- paste(c(title, "_", score_function, ".pdf"), collapse = "")
     ggsave(file.path(FIG_DIR, filename_for_plot), width = 11, height = 8.5, units = 'in')
   }
 }
