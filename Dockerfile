@@ -38,25 +38,35 @@ RUN wget --quiet https://repo.anaconda.com/miniconda/Miniconda3-4.6.14-Linux-x86
 #  rm -rf /var/lib/apt/lists/*
 
 ####################################################################################
+# Install basic Python packages
+####################################################################################
+
+RUN conda install -y -c conda-forge numpy 'scikit-learn>=1.4' pandas
+
+####################################################################################
 # Install R packages
 ####################################################################################
 
 COPY install_*.R /
 RUN Rscript /install_main_packages.R
 RUN Rscript /install_annotation_packages.R
-RUN Rscript /install_adjuster_specific_packages.R
 
 ####################################################################################
 # Install Python packages
 ####################################################################################
-
-RUN conda install -y -c conda-forge numpy 'scikit-learn>=1.4' pandas
-
+RUN conda install -y -c conda-forge 'tensorflow>=2.0'
+RUN conda install -y -c conda-forge tabulate matplotlib
 # RUN pip3 install numpy scikit-learn pandas 
 # tensorflow=1.11.0
 
 ####################################################################################
-# Clone TAMPOR
+# Install additional R packages
+####################################################################################
+
+RUN Rscript /install_adjuster_specific_packages.R
+
+####################################################################################
+# Clone libraries
 ####################################################################################
 
 RUN git clone https://github.com/edammer/TAMPOR.git /opt/TAMPOR
