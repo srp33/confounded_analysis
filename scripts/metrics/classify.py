@@ -1,12 +1,9 @@
 import argparse
 import os
 from sklearn.ensemble import RandomForestClassifier
-from sklearn.neighbors import KNeighborsClassifier
-from sklearn.neighbors import NeighborhoodComponentsAnalysis
-from sklearn.ensemble import GradientBoostingClassifier
-from sklearn.ensemble import HistGradientBoostingClassifier
-from sklearn.metrics import make_scorer
-from sklearn.metrics import roc_auc_score
+from sklearn.neighbors import KNeighborsClassifier, NeighborhoodComponentsAnalysis
+from sklearn.ensemble import GradientBoostingClassifier, HistGradientBoostingClassifier
+from sklearn.metrics import make_scorer, roc_auc_score, accuracy_score, log_loss, mutual_info_score
 from sklearn.model_selection import cross_val_score
 
 
@@ -31,16 +28,13 @@ cache = DataFrameCache()
 nca = NeighborhoodComponentsAnalysis(n_components=100, random_state=42)
 
 LEARNERS = [  # Random state is updated within repeated_cross_val
-    {"algorithm": RandomForestClassifier, "fit_params": {"n_estimators": 200, "random_state": 0}, 
-     "transform": NeighborhoodComponentsAnalysis, "transform_params": {"n_components": 50}},
-    {"algorithm": GradientBoostingClassifier, "fit_params": {"n_estimators": 50, "random_state": 0}},
+    {"algorithm": RandomForestClassifier, "fit_params": {"n_estimators": 200, "random_state": 0}},
     {"algorithm": HistGradientBoostingClassifier, "fit_params": {"max_iter": 50, "random_state": 0}},
-    {"algorithm": KNeighborsClassifier, "fit_params": {"n_neighbors": 5, "metric": "cosine"}}
 ]
 
 if not os.path.exists(args.output_path):
     with open(args.output_path, "w") as output_file:
-        output_file.write("metric,adjuster,dataset,column,value\n")
+        output_file.write("metric,adjuster,dataset,column,score,value\n")
 
 results = []
 random.seed()
@@ -54,11 +48,30 @@ def mutual_info_shannons(y_true, y_pred):
     return mutual_info_score(y_true, y_pred) / np.log(2)
 
 
+def mutual_info_proba_shannons(y_true, y_pred_proba):
+    """
+    Calculate mutual information between true classes (categorical)
+    and predicted probabilities (continuous) in shannons (bits).
+    """
+    # For binary classification, y_pred_proba is usually a 2D array: [[prob_class_0, prob_class_1], ...]
+    # We can use either column as our continuous variable.
+    continuous_output = y_pred_proba[:, 0]
 
-metrics = [
-    make_scorer(roc_auc_score, needs_proba=True, multi_class='ovr', average='macro'),
-    make_scorer(mutual_info_shannons, needs_proba=False)
-]
+    # mutual_info_classif expects X to be 2D, even for a single feature.
+    # So, reshape continuous_output.
+    mi_value = mutual_info_classif(continuous_output.reshape(-1, 1), y_true, random_state=42)[0]
+
+    # Convert nats (default for mutual_info_classif) to shannons (bits)
+    # 1 nat = 1 / log(2) bits
+    return mi_value / np.log(2)
+
+
+metrics = {
+    "roc_auc_score": make_scorer(roc_auc_score, response_method=["decision_function", "predict_proba"]),
+    "mutual_info_score": make_scorer(mutual_info_shannons),
+    "accuracy_score": make_scorer(accuracy_score),
+    "log_loss": make_scorer(log_loss, response_method=["predict_proba"], greater_is_better=False)
+}
 
 
 
@@ -83,6 +96,7 @@ for method in ["combat", "combat_target", "limma_target", "unadjusted", "min_mea
 
         print("Performing classification for {}, {}, {}, and {}.".format(dataset, method, args.column, classifier_name), flush=True)
         for score in repeated_cross_val(df, args.column, learner, iterations=10, n_folds=3, n_jobs=12, metrics=metrics):
+            print(f"Score: {score}", flush=True)
             for metric in metrics:
                 score_for_metric = score[metric]
 
