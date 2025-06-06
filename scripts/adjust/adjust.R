@@ -42,6 +42,26 @@ message_structure <- function(df, pretext = "Structure of data frame") {
   )
 }
 
+adjust_combat <- function(matrix_, batch, design, data_are_counts = FALSE) {
+  #' Adjusts a matrix using ComBat.
+  #'
+  #' @param matrix_ The matrix to batch adjust with ComBat. Columns are samples,
+  #' rows are features.
+  #' @param batch The per-sample batch assignments. 
+  #' @param design The design matrix to use for adjustment.
+  #' @param data_are_counts If TRUE, use ComBat_seq.
+  #'
+  #' @return The matrix_ after batch adjustment.
+  
+  if (data_are_counts) {
+    message("Using ComBat_seq for count data.")
+    return(ComBat_seq(matrix_, batch, covar_mod=design))
+  } else {
+    message("Using ComBat for continuous data.")
+    return(ComBat_ignore_nonvariance(matrix_, batch, design))
+  }
+}
+
 ComBat_ignore_nonvariance <- function(matrix_, batch, design) {
   #' Run ComBat and ignore nonvarying features.
   #'
@@ -50,63 +70,38 @@ ComBat_ignore_nonvariance <- function(matrix_, batch, design) {
   #' vary across samples, this function ignores nonvarying features before
   #' running ComBat.
   #'
-  #' @param matrix_ The matrix to batch adjust with ComBat. Columns are features,
-  #' rows are samples.
-  #' @param batch The per-sample batch assignments. See the ComBat function for
-  #' more information.
-  #' 
-  #' @return The matrix_ after batch adjustment.
-  #'
-  #' @examples
-  #' ComBat_ignore_nonvariance(data, c(rep(1, 5000), rep(2, 5000)))
-  matrix_ <- t(matrix_)
-  message(sprintf("Transposed matrix_ has %d rows and %d columns", nrow(matrix_), ncol(matrix_)))
-
   varying_row_mask <- apply(matrix_, 1, function(x) { length(unique(x)) > 1 })
   message("Varying rows: ", sum(varying_row_mask), " out of ", nrow(matrix_))
-
-  # Use Combat or ComBat_seq depending on the presence of negative values
-  if (any(matrix_[varying_row_mask, ] < 0)) {
-    message("Data contains negative values, using ComBat")
-    matrix_[varying_row_mask,] <- ComBat(matrix_[varying_row_mask,], batch, mod=design, prior.plots=FALSE)
-  } else {
-    message("Data does not contain negative values, using ComBat_seq.")
-    matrix_[varying_row_mask,] <- ComBat_seq(matrix_[varying_row_mask,], batch, covar_mod=design)
-  }
-
-  message(sprintf("Adjusted matrix_ has %d rows and %d columns", nrow(matrix_), ncol(matrix_)))
-
-  t(matrix_)
+  matrix_[varying_row_mask,] <- ComBat(matrix_[varying_row_mask,], batch, mod=design, prior.plots=FALSE)
+  matrix_
 }
 
 match_two_stats <- function(matrix_, batch, stat1, stat2) {
   #' Matches batches by scaling so that two statistics are equal.
   #'
   #' @param matrix_ The matrix to batch adjust by scaling. Columns are
-  #' features, rows are samples.
+  #' samples, rows are features.
   #' @param batch The per-sample batch assignments.
   #' @param stat1 The first statistic to match. (as a function, not a string)
   #' @param stat2 The second statistic to match.
   #'
   #' @return The matrix_ after batch adjustment.
-  #'
-  #' @examples
-  #' match_two_stats(data, c(rep(1, 5000), rep(2, 5000)), "mean", "sd")
-  column_names = colnames(matrix_)
-  # Get columnwise stats
-  overall_stat1 <- apply(matrix_, 2, stat1)
-  overall_stat2 <- apply(matrix_, 2, stat2)
+  row_names = rownames(matrix_)
+  # Get rowwise stats
+  overall_stat1 <- apply(matrix_, 1, stat1)
+  overall_stat2 <- apply(matrix_, 1, stat2)
 
   # Scale each batch individually so that stat1 is 0 and stat2 is 1
   for (b in levels(factor(batch))) {
-    # drop=F makes it return a matrix when you only grab one row.
-    batch_rows <- matrix_[batch == b, , drop = FALSE]
+    # Get columns for this batch
+    # drop=F makes it return a matrix when you only grab one column
+    batch_cols <- matrix_[, batch == b, drop = FALSE]
 
-    if (nrow(batch_rows) <= 1) {
-      stop(sprintf("Can't scale columns: batch '%s' has <= 1 sample.", b))
+    if (ncol(batch_cols) == 0) {
+      stop(sprintf("Can't scale rows: batch '%s' has <= 1 sample.", b))
     }
 
-    adjusted = apply(batch_rows, 2, function(x) {
+    adjusted = apply(batch_cols, 1, function(x) {
       if (all(x == 0))
         return(x)
 
@@ -118,16 +113,16 @@ match_two_stats <- function(matrix_, batch, stat1, stat2) {
     })
 
     # Merge adjustment back in
-    matrix_[batch == b] = adjusted
+    matrix_[, batch == b] <- adjusted
   }
   ## Scale back up to match overall
-  matrix_ = sapply(1:ncol(matrix_), function(i) {
-    x = matrix_[,i]
+  matrix_ = sapply(1:row(matrix_), function(i) {
+    x = matrix_[i]
     pre_stat1 = overall_stat1[i]
     pre_stat2 = overall_stat2[i]
     x * (pre_stat2 - pre_stat1) + pre_stat1
   })
-  colnames(matrix_) = column_names
+  row_names(matrix_) = row_names
   matrix_
 }
 
@@ -135,7 +130,7 @@ match_min_mean <- function(matrix_, batch) {
   #' Scales so the mins and means of each batch match
   #'
   #' @param matrix_ The matrix to batch adjust by scaling. Columns are
-  #' features, rows are samples.
+  #' samples, rows are features.
   #' @param batch The per-sample batch assignments.
   #' 
   #' @return The matrix_ after batch adjustment.
@@ -155,13 +150,10 @@ adjust_tampor <- function(df_, batch) {
   #' Adjusts using the tampor method.
   #'
   #' @param df_ The dataframe to batch adjust by scaling. Columns are
-  #' features, rows are samples.
+  #' samples, rows are features.
   #' @param batch The per-sample batch assignments.
   #' 
   #' @return The dataframe after batch adjustment.
-  #'
-  #' @examples
-  #' adjust_tampor(data, c(rep(1, 5000), rep(2, 5000)))
 
 
   # From TAMPOR documentation:
@@ -170,23 +162,15 @@ adjust_tampor <- function(df_, batch) {
   # 2. traits (metadata).	Columns are traits, rows are samples
   # Sample names (abundance columns, trait rows) must match exactly.
 
-  sample_names = paste0("Sample_", seq_len(nrow(df_)))
+  sample_names = paste0("Sample_", seq_len(ncol(df_)))
 
-  transposed = t(df_)
-  colnames(transposed) = sample_names
+  colnames(df_) = sample_names
 
   batch_as_df = data.frame(batch)
   colnames(batch_as_df) = "Batch"
   rownames(batch_as_df) = sample_names
 
   num_batches = length(unique(batch_as_df$Batch))
-
-
-  if (any(transposed < 0)) {
-    # If there are negative values, we need to exponentiate
-    message("Data contains negative values, exponentiating to make all values non-negative.")
-    transposed = 2^transposed
-  }
 
   # Save current working directory
   current_dir <- getwd()
@@ -201,9 +185,20 @@ adjust_tampor <- function(df_, batch) {
     batch_as_df$Batch <- batch_as_df$Batch + 1
   }
 
+  # Print the number of negative values
+  num_negatives <- sum(df_ < 0)
+  message(sprintf("Number of negative values in data pre-exponentiation: %d", num_negatives))
+  if (any(df_ < 0)) {
+    # If there are negative values, we need to exponentiate
+    message("Data contains negative values, exponentiating to make all values non-negative.")
+    df_ = 2^df_
+  }
+  # Print the number of negative values
+  num_negatives <- sum(df_ < 0)
+  message(sprintf("Number of negative values in data post-exponentiation: %d", num_negatives))
 
   output <- TAMPOR(
-    dat=transposed,
+    dat=df_,
     traits=batch_as_df,
     noGIS = TRUE,
     parallelThreads = num_batches,
@@ -211,12 +206,23 @@ adjust_tampor <- function(df_, batch) {
     iterations=500
   )$cleanRelAbun
 
+  # Add back removed samples or features
+  if (nrow(output) < nrow(df_)) {
+    message(sprintf("Output has fewer rows (%d) than input (%d). Adding back removed samples.", nrow(output), nrow(df_)))
+    missing_samples <- setdiff(rownames(df_), rownames(output))
+    output <- rbind(output, df_[missing_samples, , drop = FALSE])
+  }
+  if (ncol(output) < ncol(df_)) {
+    message(sprintf("Output has fewer columns (%d) than input (%d). Adding back removed features.", ncol(output), ncol(df_)))
+    missing_features <- setdiff(colnames(df_), colnames(output))
+    output <- cbind(output, df_[, missing_features, drop = FALSE])
+  }
+
   # Set back to the original working directory
   setwd(current_dir)
-  # Transpose back to original format and return
-  t(output)
+  message(sprintf("Output has %d rows and %d columns", nrow(output), ncol(output)))
+  output
 }
-
 
 create_design_matrix <- function(categorical) {
   #' Creates a design matrix from categorical data.
@@ -252,6 +258,8 @@ create_design_matrix <- function(categorical) {
 }
 
 adjust_limma <- function(x, batch, design) {
+  # x is a data frame with samples as columns and probes as rows
+
   # Ensure the batch variable is a factor
   batch <- as.factor(batch)
   message_structure(batch, "DEBUG: adjust_limma - 'batch' vector details:")
@@ -259,18 +267,13 @@ adjust_limma <- function(x, batch, design) {
   # Number of rows in batch and design should match.
   if (length(batch) != nrow(design)) {
     message("Batch and design matrix lengths do not match.")
-    message(sprintf("Batch length: %d, Design rows: %d Original rows: %d", length(batch), nrow(design), nrow(x)))
+    message(sprintf("Batch length: %d, Design rows: %d Original rows: %d", length(batch), nrow(design), ncol(x)))
     stop(sprintf("Batch length: %d, Design matrix rows: %d", length(batch), nrow(design)))
   }
 
-  # Transpose the data frame to have samples as columns and probes as rows
-  x <- t(x)
-
   # Remove batch effects using limma's removeBatchEffect function
-  x2 = limma::removeBatchEffect(x, batch = batch, design = design)
-
-  # Transpose back
-  t(x2)
+  limma::removeBatchEffect(x, batch = batch, design = design)
+}
 }
 
 
@@ -309,6 +312,11 @@ batch_adjust_tidy <- function(df, adjuster, batch_col = "Batch") {
   }
 
   quantitative <- as.matrix(quantitative)
+  quantitative <- t(quantitative)  # Transpose to have samples as columns and features as rows
+  message(sprintf("Quantitative data frame transposed: %d rows, %d columns", nrow(quantitative), ncol(quantitative)))
+
+  # Determine if data are counts or continuous
+  data_are_counts = any(quantitative < 0)
 
   message(sprintf("Adjusting %d quantitative columns with %s method.", ncol(quantitative), adjuster))
   if (adjuster == "combat") {
@@ -322,6 +330,7 @@ batch_adjust_tidy <- function(df, adjuster, batch_col = "Batch") {
   } else {
     stop(sprintf("Unknown adjuster '%s'", adjuster))
   }
+  adjusted = t(adjusted)  # Transpose back to columns as features and rows as samples
   message(sprintf("Adjusted columns: %d, rows: %d", ncol(adjusted), nrow(adjusted)))
   message_structure(adjusted, "DEBUG: batch_adjust_tidy - Adjusted quantitative data frame")
   
@@ -351,15 +360,14 @@ if (!(args$batch_col %in% names(df))) {
   stop(error_message)
 }
 
-# Make sure to only keep 6 decimal places for floating point numbers
-df <- df %>%
-  mutate(across(where(is.numeric), ~round(., 6)))
-
 message(sprintf("Batch adjust tidy"))
 batch_adjust_tidy(
   df, 
   batch_col = args$batch_col,
   adjuster = args$adjuster
-) %>% write_csv(args$output_file)
+) %>% 
+  # Make sure to only keep 6 decimal places for floating point numbers
+  mutate(across(where(is.numeric), ~round(., 6))) %>%
+  write_csv(args$output_file)
 
 message(sprintf("Saved output to '%s'", args$output_file))
