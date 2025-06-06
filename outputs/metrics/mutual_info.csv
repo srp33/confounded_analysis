@@ -1,0 +1,9 @@
+metric,adjuster,dataset,column,value
+mutual_info_score,Any,gse20194,meta_er_status,0.00013220120919380486
+mutual_info_score,Any,gse20194,meta_her2_status,0.044416944057659474
+mutual_info_score,Any,gse20194,meta_pr_status,0.007501360432666492
+mutual_info_score,Any,gse24080,meta_efs_outcome_label,0.007804093121838339
+mutual_info_score,Any,gse24080,meta_os_outcome_label,0.0008423541774111395
+mutual_info_score,Any,gse49711,meta_INSS_Stage,0.2760135564009787
+mutual_info_score,Any,gse49711,meta_INSS_Stage,0.40445024047479267
+mutual_info_score,Any,gse49711,meta_INSS_Stage,0.26234037896076823

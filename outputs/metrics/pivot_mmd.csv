@@ -1,4 +1,4 @@
-dataset,combat,limma,min_mean,tampor,unadjusted
-gse20194,0.033,0.03,0.019,0.132,0.138
-gse24080,0.011,0.013,0.013,0.087,0.097
-gse49711,0.131,0.134,0.13,0.128,0.137
+dataset,combat,combat_target,limma,limma_target,min_mean,tampor,unadjusted
+gse20194,0.02,0.03,0.015,0.027,0.019,0.132,0.138
+gse24080,0.01,0.01,0.011,0.012,0.013,0.065,0.095
+gse49711,0.135,0.135,0.132,0.134,0.13,0.128,0.137
