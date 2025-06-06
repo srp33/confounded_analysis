@@ -50,8 +50,8 @@ baseline_for_column <- function(df, column_name, score_function) {
     # For ROC AUC score, we use 50% as the baseline
     return(0.5)
   } else if (score_function == "mutual_info_score") {
-    # For mutual information score, we use 0 as the baseline
-    return(0)
+    # For mutual information score, 0 is the baseline, but the maximum is the entropy of the column
+    return(calculate_entropy(df, column_name))
   } else {
     stop("Unknown score function: ", score_function)
   }
@@ -97,8 +97,8 @@ problems(batchall)
 problems(trueall)
 
 # Debugging checks
-check_column(batchall, "dataset", dataset_name)
-check_column(trueall, "dataset", dataset_name)
+check_column(batchall, "dataset", all_info_df$dataset)
+check_column(trueall, "dataset", all_info_df$dataset)
 
 file_cache <- list() # Key: dataset_name, Value: the loaded data frame/tibble
 random_accuracies_cache <- list() # Key: "{dataset_name}_{column_name}_{score_function}", Value: the random accuracy value
