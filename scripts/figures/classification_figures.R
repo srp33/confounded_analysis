@@ -40,6 +40,15 @@ calculate_random_accuracy <- function(df, column_name) {
     max() / length(values)
 }
 
+#---Function to calculate the entropy of a column in a data frame ---
+calculate_entropy <- function(df, column_name) {
+  values <- df[[column_name]]
+  value_counts <- table(values)
+  probabilities <- value_counts / sum(value_counts)
+  entropy <- -sum(probabilities * log2(probabilities + 1e-10)) # Adding a small constant to avoid log(0)
+  return(entropy)
+}
+
 
 #---Function to calculate the baseline for a given column and score function---
 baseline_for_column <- function(df, column_name, score_function) {
@@ -61,7 +70,6 @@ baseline_for_column <- function(df, column_name, score_function) {
 get_baseline <- function(file_cache, dataset_name, column_name, accuracy_cache, score_function = "accuracy_score") {
   key <- paste(dataset_name, column_name, score_function, sep = "_")
   if (!key %in% names(accuracy_cache)) {
-    message(paste("Calculating random accuracy for dataset:", dataset_name, "and column:", column_name))
     value <- baseline_for_column(file_cache[[dataset_name]], column_name, score_function)
     accuracy_cache[[key]] <- value
   }
