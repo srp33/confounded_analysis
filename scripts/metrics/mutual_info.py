@@ -77,18 +77,50 @@ def calculate_counts(df, batch_col, predict_column):
     return counts
 
 counts = calculate_counts(df, args.batch_col, args.column)
-
 print(counts)
 print()
 
+def product_of_marginals(counts):
+    """
+    Calculate the product of marginals for the given counts DataFrame.
+    """
+    row_sums = counts.sum(axis=1)
+    col_sums = counts.sum(axis=0)
+    total_sum = counts.values.sum()
+    
+    product = np.outer(row_sums, col_sums) / total_sum
+    return pd.DataFrame(product, index=counts.index, columns=counts.columns)
+
+product_counts = product_of_marginals(counts)
+print("Product of Marginals:")
+print(product_counts)
+print()
+
+def side_by_side_markdown(df1, df2, num_tabs=3):
+    """
+    Return two DataFrames as markdown side by side for comparison.
+    Assume the same number of rows in both DataFrames.
+    """
+    df1_lines = df1.to_markdown().split('\n')
+    df2_lines = df2.to_markdown().split('\n')
+    max_length = max(len(line) for line in df1_lines + df2_lines)
+    new_lines = []
+    for line1, line2 in zip(df1_lines, df2_lines):
+        line1 = line1.ljust(max_length)
+        line2 = line2.ljust(max_length)
+        new_lines.append(f"{line1}{' ' * num_tabs}{line2}")
+    return '\n'.join(new_lines)
+
+
+
 if args.confusion_path:
     with open(args.confusion_path, 'a') as conf_file:
-        conf_file.write(f"#### Confusion Matrix for Dataset: {dataset}\n\n")
+        conf_file.write(f"#### Counts for Dataset: {dataset}\n\n")
         conf_file.write(f"Batches (row): {args.batch_col}\t\tPredictive Var (column): {args.column}\n\n")
         conf_file.write(f"**Mutual Information Score:** {round(mutual_info, 5)}\n\n")
-        conf_file.write(counts.to_markdown(index=True))
+        conf_file.write("#### Counts:\t\t\t\t\tProduct of Marginals:\n\n")
+        conf_file.write(side_by_side_markdown(counts, product_counts))
         conf_file.write("\n\n---\n\n")
-
 
 line = [metric, "Any", dataset, args.column, str(mutual_info)]
 
