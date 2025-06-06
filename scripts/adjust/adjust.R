@@ -320,7 +320,7 @@ batch_adjust_tidy <- function(df, adjuster, batch_col = "Batch") {
 
   message(sprintf("Adjusting %d quantitative columns with %s method.", ncol(quantitative), adjuster))
   if (adjuster == "combat") {
-    adjusted = ComBat_ignore_nonvariance(quantitative, batch, design)
+    adjusted = adjust_combat(quantitative, batch, design, data_are_counts)
   } else if (adjuster == "min_mean") {
     adjusted = match_min_mean(quantitative, batch)
   } else if (adjuster == "tampor") {
