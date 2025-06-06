@@ -2,8 +2,11 @@
 
 set -e
 
-bash /scripts/adjust/limma.sh
-#bash /scripts/adjust/tampor.sh
-#bash /scripts/adjust/scale.sh
-bash /scripts/adjust/combat.sh
-#bash /scripts/adjust/confounded.sh
+# bash /scripts/adjust/autoclass.sh
+wait
+bash /scripts/adjust/tampor.sh
+wait
+# bash /scripts/adjust/scale.sh
+# bash /scripts/adjust/limma.sh
+# bash /scripts/adjust/combat.sh
+wait
