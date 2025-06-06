@@ -23,6 +23,6 @@ python "${script_path}" -i /data/gse24080 -o ${out_path} -c meta_efs_outcome_lab
 python "${script_path}" -i /data/gse24080 -o ${out_path} -c meta_os_outcome_label -b meta_batch -m ${confusion_path}
 
 # The classifier only does binary classification, so I split the classes multiple ways
-python "${script_path}" -i /data/gse49711 -o ${out_path} -c meta_INSS_Stage --class0 1 2 3 --class1 4 4S -b meta_Class -m ${confusion_path}
-python "${script_path}" -i /data/gse49711 -o ${out_path} -c meta_INSS_Stage --class0 1 2 --class1 3 4 4S -b meta_Class -m ${confusion_path}
-python "${script_path}" -i /data/gse49711 -o ${out_path} -c meta_INSS_Stage --class0 1 --class1 2 3 4 4S -b meta_Class -m ${confusion_path}
+python "${script_path}" -i /data/gse49711 -o ${out_path} -c meta_INSS_Stage_Split_1_2 -b meta_Class -m ${confusion_path}
+python "${script_path}" -i /data/gse49711 -o ${out_path} -c meta_INSS_Stage_Split_2_3 -b meta_Class -m ${confusion_path}
+python "${script_path}" -i /data/gse49711 -o ${out_path} -c meta_INSS_Stage_Split_3_4 -b meta_Class -m ${confusion_path}
