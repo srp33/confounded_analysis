@@ -39,16 +39,10 @@ class Decoder(nn.Module):
         return x_recon
 
 class VFAE(nn.Module):
-    def __init__(self, input_dim, s_dim_categorical, num_s_categories, latent_dim, hidden_dim_enc, hidden_dim_dec):
+    def __init__(self, input_dim, num_s_categories, latent_dim, hidden_dim_enc, hidden_dim_dec):
         super(VFAE, self).__init__()
         self.latent_dim = latent_dim
-        self.s_dim_categorical = s_dim_categorical # Dimension of s if it's already one-hot, or num categories
-        self.num_s_categories = num_s_categories # Number of categories for s
-
-        # Assuming s is categorical and needs one-hot encoding internally,
-        # or s_dim_categorical is the one-hot encoded dimension.
-        # For simplicity, let's assume num_s_categories is used for one-hot encoding if s is passed as indices.
-        # The effective dimension of s fed to encoder/decoder will be num_s_categories.
+        self.num_s_categories = num_s_categories
 
         self.encoder = Encoder(input_dim, num_s_categories, latent_dim, hidden_dim_enc)
         self.decoder = Decoder(latent_dim, num_s_categories, input_dim, hidden_dim_dec) # output_dim = input_dim for reconstruction
@@ -59,7 +53,7 @@ class VFAE(nn.Module):
         return mu + eps * std
 
     def forward(self, x, s_indices):
-        # Convert s_indices to one-hot encoding
+        # Assume s is categorical and needs one-hot encoding
         s_one_hot = F.one_hot(s_indices, num_classes=self.num_s_categories).float()
 
         mu, logvar = self.encoder(x, s_one_hot)
