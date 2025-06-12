@@ -5,6 +5,6 @@ archive_file() {
     mod_date=$(date -r "${file_path}" +%Y-%m-%d-%h)
     local filename
     filename=$(basename -- "${file_path}")
-    mv "${file_path}" "outputs/metrics/archive/${mod_date}_${filename}"
+    cp "${file_path}" "outputs/metrics/archive/${mod_date}_${filename}"
   fi
 }
