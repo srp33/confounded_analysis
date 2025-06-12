@@ -5,19 +5,19 @@ import torch.nn.functional as F
 import pandas as pd
 from torch.utils.data import DataLoader, TensorDataset
 import numpy as np
-from icvae import VFAE, AuxiliaryClassifier
+from icvae import ICVAE, AuxiliaryClassifier
 import sys
 import torch.optim as optim
 from jaxtyping import Float, Int
 from torch import Tensor
 from beartype import beartype
 
-parser = ArgumentParser(description="VFAE for learning fair representations using a Mutual Information penalty.")
+parser = ArgumentParser(description="ICVAE for learning fair representations using a Mutual Information penalty.")
 parser.add_argument("-i", "--input-file", help="Path to input CSV file.", required=True)
 parser.add_argument("-o", "--output-file", help="Path to output CSV file for fair reconstructions.", required=True)
 parser.add_argument("-b", "--batch-col", help="Column name for the sensitive attribute (batch).", required=True)
 parser.add_argument("-l", "--latent-dim", type=int, default=10, help="Dimensionality of the latent space.")
-parser.add_argument("-hd", "--hidden-dim", type=int, default=128, help="Dimensionality of hidden layers for VFAE.")
+parser.add_argument("-hd", "--hidden-dim", type=int, default=128, help="Dimensionality of hidden layers for ICVAE.")
 parser.add_argument("-hda", "--hidden-dim-aux", type=int, default=64, help="Dimensionality of hidden layers for Auxiliary Classifier.")
 parser.add_argument("-e", "--epochs", type=int, default=100, help="Number of training epochs.")
 parser.add_argument("-lr", "--learning-rate", type=float, default=1e-3, help="Learning rate for optimizers.")
@@ -70,10 +70,10 @@ train_loader = DataLoader(dataset, batch_size=args.batch_size, shuffle=True)
 
 # --- Model Initialization ---
 input_dim = len(feature_cols)
-vfae_model = VFAE(input_dim, num_batches, args.latent_dim, args.hidden_dim).to(device)
+icvae_model = ICVAE(input_dim, num_batches, args.latent_dim, args.hidden_dim).to(device)
 aux_classifier = AuxiliaryClassifier(args.latent_dim, num_batches, args.hidden_dim_aux).to(device)
 
-opt_vfae = optim.Adam(vfae_model.parameters(), lr=args.learning_rate)
+opt_icvae = optim.Adam(icvae_model.parameters(), lr=args.learning_rate)
 opt_aux = optim.Adam(aux_classifier.parameters(), lr=args.learning_rate)
 
 # --- Training Loop ---
@@ -85,8 +85,8 @@ for epoch in range(args.epochs):
         x_batch = x_batch.to(device)
         s_batch = s_batch.to(device)
 
-        # --- VFAE forward pass ---
-        x_recon, mu, logvar, z = vfae_model(x_batch, s_batch)
+        # --- ICVAE forward pass ---
+        x_recon, mu, logvar, z = icvae_model(x_batch, s_batch)
         
         # --- Update Auxiliary Classifier: q(s|z) ---
         # Train classifier to predict `s` from `z` (gradients do not flow to encoder)
@@ -96,7 +96,7 @@ for epoch in range(args.epochs):
         loss_aux.backward()
         opt_aux.step()
 
-        # --- Update VFAE (Encoder + Decoder) ---
+        # --- Update ICVAE (Encoder + Decoder) ---
         # 1. Reconstruction Loss (MSE), causes the model to learn to reconstruct the input data
         recon_loss = F.mse_loss(x_recon, x_batch, reduction='mean')
         # 2. KL Divergence, causes the model to learn a latent space that is close to a standard normal distribution
@@ -110,11 +110,10 @@ for epoch in range(args.epochs):
         s_batch_: Int[Tensor, "batch 1"] = s_batch.unsqueeze(1)
         mi_penalty: Float[Tensor, ""] = log_probs_s.gather(1, s_batch_).mean()
 
-
-        total_vfae_loss = recon_loss + args.w_kl * kl_loss + args.w_mi_penalty * mi_penalty
-        opt_vfae.zero_grad()
-        total_vfae_loss.backward()
-        opt_vfae.step()
+        total_icvae_loss = recon_loss + args.w_kl * kl_loss + args.w_mi_penalty * mi_penalty
+        opt_icvae.zero_grad()
+        total_icvae_loss.backward()
+        opt_icvae.step()
         
         # Accumulate losses for logging
         total_recon_loss += recon_loss.item()
@@ -135,7 +134,7 @@ print_now("\nTraining complete.")
 
 # --- Generate and Save Fair Reconstructions ---
 print_now(f"Generating fair reconstructions and saving to '{args.output_file}'...")
-vfae_model.eval()
+icvae_model.eval()
 with torch.no_grad():
     recon_all = []
     for batch_val in range(num_batches):
@@ -148,7 +147,7 @@ with torch.no_grad():
         )
 
         # Pass the raw indices to the model. The model will perform the one-hot encoding.
-        x_recon, _, _, _ = vfae_model(features_tensor.to(device), batch_indices)
+        x_recon, _, _, _ = icvae_model(features_tensor.to(device), batch_indices)
 
         recon_all.append(x_recon.cpu().numpy())
     
