@@ -12,9 +12,13 @@ source /scripts/metrics/utils.sh
 archive_file "${batch_out_path}"
 archive_file "${true_out_path}"
 
-rm -f ${batch_out_path} ${true_out_path}
-
 script_path="$(dirname $0)/classify.py"
+
+# python "${script_path}" -i /data/gse49711 -o ${batch_out_path} -c meta_Class
+# # The classifier only does binary classification, so I split the classes multiple ways
+# python "${script_path}" -i /data/gse49711 -o ${true_out_path} -c meta_INSS_Stage_Split_1_2  
+# python "${script_path}" -i /data/gse49711 -o ${true_out_path} -c meta_INSS_Stage_Split_2_3
+# python "${script_path}" -i /data/gse49711 -o ${true_out_path} -c meta_INSS_Stage_Split_3_4
 
 python "${script_path}" -i /data/gse20194 -o ${batch_out_path} -c meta_batch
 python "${script_path}" -i /data/gse20194 -o ${true_out_path} -c meta_er_status
@@ -24,9 +28,3 @@ python "${script_path}" -i /data/gse20194 -o ${true_out_path} -c meta_pr_status
 python "${script_path}" -i /data/gse24080 -o ${batch_out_path} -c meta_batch
 python "${script_path}" -i /data/gse24080 -o ${true_out_path} -c meta_efs_outcome_label
 python "${script_path}" -i /data/gse24080 -o ${true_out_path} -c meta_os_outcome_label
-
-python "${script_path}" -i /data/gse49711 -o ${batch_out_path} -c meta_Class
-# The classifier only does binary classification, so I split the classes multiple ways
-python "${script_path}" -i /data/gse49711 -o ${true_out_path} -c meta_INSS_Stage_Split_1_2  
-python "${script_path}" -i /data/gse49711 -o ${true_out_path} -c meta_INSS_Stage_Split_2_3
-python "${script_path}" -i /data/gse49711 -o ${true_out_path} -c meta_INSS_Stage_Split_3_4
