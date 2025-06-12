@@ -12,10 +12,13 @@ mkdir -p outputs/figures outputs/metrics outputs/optimizations outputs/tables ou
 #docker run -d --rm \
 docker run -i -t --rm \
   --user $(id -u):$(id -g) \
+  --env HOME=/ \
   -v $(pwd)/data:/data \
   -v $(pwd)/outputs:/outputs \
   -v $(pwd)/scripts:/scripts \
   -v $(pwd)/tmp:/tmp \
+  -v $(pwd)/tmp/matplotlib/config:/.config/matplotlib \
+  -v $(pwd)/tmp/matplotlib/cache:/.cache/matplotlib \
   $image \
   bash -c /scripts/all.sh
 
