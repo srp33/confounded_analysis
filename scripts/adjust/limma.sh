@@ -12,3 +12,5 @@ Rscript /scripts/adjust/adjust.R /data/gse49711/unadjusted.csv /data/gse49711/li
 Rscript /scripts/adjust/adjust.R /data/gse20194/unadjusted.csv /data/gse20194/limma.csv -a limma -b meta_batch &
 Rscript /scripts/adjust/adjust.R /data/gse24080/unadjusted.csv /data/gse24080/limma.csv -a limma -b meta_batch &
 
+wait
+
