@@ -92,19 +92,19 @@ class Treeish(nn.Module):
         # Final classification layer
         logits: Float[Tensor, "batch s_dim"] = self.final_layer(per_feature_sum)
 
-        return F.log_softmax(logits, dim=1)
+        return logits
 
 
 
-class AuxiliaryTreeClassifier(nn.Module):
+class AuxiliaryForestClassifier(nn.Module):
     """
-    Auxiliary Tree Classifier module: q(s|z)
+    Auxiliary Forest Classifier module: q(s|z)
     This network estimates the mutual information I(z;s).
     It takes a latent code `z` and tries to predict the sensitive attribute `s`.
     """
-    def __init__(self, latent_dim, s_dim, hidden_dim=128, num_trees=100, ratio_to_keep=0.3):
-        super(AuxiliaryClassifier, self).__init__()
-        # Mimic a random forest, though trees can help each other.
+    def __init__(self, latent_dim, s_dim, hidden_dim=128, num_trees=100, ratio_to_keep=0.1):
+        super(AuxiliaryForestClassifier, self).__init__()
+        # Mimic a random forest
         self.trees = nn.ModuleList([
             Treeish(latent_dim, s_dim, hidden_dim, ratio_to_keep) for _ in range(num_trees)
         ])
@@ -114,8 +114,64 @@ class AuxiliaryTreeClassifier(nn.Module):
 
     def forward(self, z):
         # Pass through each tree and average the outputs
-        tree_outputs = [tree(z) for tree in self.trees]
-        return sum(tree_outputs) / self.num_trees
+        tree_logits = [tree(z) for tree in self.trees]
+        tree_probs = [torch.softmax(logits, dim=1) for logits in tree_logits]
+
+        average_probs = sum(tree_probs) / self.num_trees
+        # Return log probabilities
+        log_probs = torch.log(average_probs + 1e-10)  # Add small value to avoid log(0)
+        return log_probs
+
+
+class AuxiliaryBoostedClassifier(nn.Module):
+    """
+    Auxiliary Boosted Classifier module: q(s|z)
+    This network estimates the mutual information I(z;s).
+    It takes a latent code `z` and tries to predict the sensitive attribute `s`.
+    """
+    def __init__(self, latent_dim, s_dim, hidden_dim=128, num_trees=100, ratio_to_keep=0.1):
+        super(AuxiliaryBoostedClassifier, self).__init__()
+        # Mimic a boosted tree ensemble
+        self.trees = nn.ModuleList([
+            Treeish(latent_dim, s_dim, hidden_dim, ratio_to_keep) for _ in range(num_trees)
+        ])
+        self.num_trees = num_trees
+        self.s_dim = s_dim
+        self.hidden_dim = hidden_dim
+
+    def forward(self, z):
+        # Pass through each tree and sum the outputs
+        tree_logits = [tree(z) for tree in self.trees]
+        tree_probs = [torch.softmax(logits, dim=1) for logits in tree_logits]
+        probs = sum(tree_probs)
+        # Return log probabilities
+        log_probs = torch.log(probs + 1e-10)  # Add small value to avoid log(0)
+        return log_probs
+
+
+class AuxiliaryBoostedLogitClassifier(nn.Module):
+    """
+    Auxiliary Boosted Logit Classifier module: q(s|z)
+    This network estimates the mutual information I(z;s).
+    It takes a latent code `z` and tries to predict the sensitive attribute `s`.
+    """
+    def __init__(self, latent_dim, s_dim, hidden_dim=128, num_trees=100, ratio_to_keep=0.1):
+        super(AuxiliaryBoostedLogitClassifier, self).__init__()
+        # Mimic a boosted tree ensemble
+        self.trees = nn.ModuleList([
+            Treeish(latent_dim, s_dim, hidden_dim, ratio_to_keep) for _ in range(num_trees)
+        ])
+        self.num_trees = num_trees
+        self.s_dim = s_dim
+        self.hidden_dim = hidden_dim
+
+    def forward(self, z):
+        # Pass through each tree and sum the outputs
+        tree_logits = [tree(z) for tree in self.trees]
+        sum_logits = sum(tree_logits)
+        # Apply softmax to the summed logits, and return log probabilities
+        return F.log_softmax(sum_logits, dim=1)
+
 
 
 class AuxiliaryClassifier(nn.Module):

@@ -5,7 +5,7 @@ import torch.nn.functional as F
 import pandas as pd
 from torch.utils.data import DataLoader, TensorDataset
 import numpy as np
-from icvae import ICVAE, AuxiliaryClassifier
+from icvae import ICVAE, AuxiliaryClassifier, AuxiliaryForestClassifier, AuxiliaryBoostedClassifier, AuxiliaryBoostedLogitClassifier
 import sys
 import torch.optim as optim
 from jaxtyping import Float, Int
@@ -71,15 +71,36 @@ train_loader = DataLoader(dataset, batch_size=args.batch_size, shuffle=True)
 # --- Model Initialization ---
 input_dim = len(feature_cols)
 icvae_model = ICVAE(input_dim, num_batches, args.latent_dim, args.hidden_dim).to(device)
-aux_classifier = AuxiliaryClassifier(args.latent_dim, num_batches, args.hidden_dim_aux).to(device)
+aux_classifier = AuxiliaryBoostedLogitClassifier(args.latent_dim, num_batches, args.hidden_dim_aux).to(device)
 
 opt_icvae = optim.Adam(icvae_model.parameters(), lr=args.learning_rate)
 opt_aux = optim.Adam(aux_classifier.parameters(), lr=args.learning_rate)
 
 # --- Training Loop ---
 print_now("\nStarting training...")
+
+first_quarter = args.epochs // 4
+second_quarter = args.epochs // 2
+
+def determinant_based_mutual_information(
+    prob_s: Float[Tensor, "batch num_batches"],
+    s_batch: Int[Tensor, "batch 1"],
+    num_batches: int
+) -> Float[Tensor, ""]:
+    s_batch_one_hot: Float[Tensor, "batch num_batches"] = F.one_hot(s_batch, num_classes=num_batches).float()
+
+    contingency_matrix = s_batch_one_hot.t() @ prob_s
+    normalized_contingency_matrix = contingency_matrix / contingency_matrix.sum()
+
+    det_mi = torch.abs(torch.det(normalized_contingency_matrix + torch.eye(num_batches, device=prob_s.device) * 1e-10))
+    return det_mi
+
+
+
 for epoch in range(args.epochs):
+    # Initialize accumulators for losses and accuracy
     total_recon_loss, total_kl_loss, total_mi_penalty, total_aux_loss = 0, 0, 0, 0
+    total_aux_correct = 0
 
     for x_batch, s_batch in train_loader:
         x_batch = x_batch.to(device)
@@ -90,26 +111,45 @@ for epoch in range(args.epochs):
         
         # --- Update Auxiliary Classifier: q(s|z) ---
         # Train classifier to predict `s` from `z` (gradients do not flow to encoder)
-        s_logits_aux = aux_classifier(z.detach())
-        loss_aux = F.cross_entropy(s_logits_aux, s_batch)
+        s_log_probs_aux = aux_classifier(z.detach())
+
+        # --- Calculate Auxiliary Accuracy ---
+        # Get the predicted class labels by finding the index of the max log-probability
+        pred_s_aux = torch.argmax(s_log_probs_aux, dim=1)
+        # Sum up the number of correct predictions in the batch
+        total_aux_correct += (pred_s_aux == s_batch).sum().item()
+        
+        det_mi = determinant_based_mutual_information(
+            prob_s=torch.exp(s_log_probs_aux),
+            s_batch=s_batch,
+            num_batches=num_batches
+        )
+        loss_aux = -torch.log(det_mi + 1e-30)  # Add small value to avoid log(0)
+        loss_aux += F.nll_loss(s_log_probs_aux, s_batch, reduction='mean')  # Add NLL loss for better training stability
         opt_aux.zero_grad()
         loss_aux.backward()
         opt_aux.step()
 
         # --- Update ICVAE (Encoder + Decoder) ---
-        # 1. Reconstruction Loss (MSE), causes the model to learn to reconstruct the input data
+        # 1. Reconstruction Loss (MSE)
         recon_loss = F.mse_loss(x_recon, x_batch, reduction='mean')
-        # 2. KL Divergence, causes the model to learn a latent space that is close to a standard normal distribution
+        # 2. KL Divergence
         kl_loss = -0.5 * torch.sum(1 + logvar - mu.pow(2) - logvar.exp())
 
         # 3. Mutual Information Penalty
-        # Train encoder to fool the classifier (gradients flow to encoder)
-        s_logits_mi: Float[Tensor, "batch num_batches"] = aux_classifier(z)
-        log_probs_s: Float[Tensor, "batch num_batches"] = F.log_softmax(s_logits_mi, dim=1)
+        log_probs_s: Float[Tensor, "batch num_batches"] = aux_classifier(z)
+        prob_s: Float[Tensor, "batch num_batches"] = torch.exp(log_probs_s)
 
-        s_batch_: Int[Tensor, "batch 1"] = s_batch.unsqueeze(1)
-        mi_penalty: Float[Tensor, ""] = log_probs_s.gather(1, s_batch_).mean()
+        det_mi = determinant_based_mutual_information(
+            prob_s=prob_s,
+            s_batch=s_batch,
+            num_batches=num_batches
+        )
+        mi_penalty = torch.log(det_mi + 1e-30)
 
+        if epoch < first_quarter:
+            mi_penalty = -mi_penalty
+            
         total_icvae_loss = recon_loss + args.w_kl * kl_loss + args.w_mi_penalty * mi_penalty
         opt_icvae.zero_grad()
         total_icvae_loss.backward()
@@ -126,9 +166,11 @@ for epoch in range(args.epochs):
     avg_recon = total_recon_loss / num_samples
     avg_kl = total_kl_loss / num_samples
     avg_mi = total_mi_penalty / len(train_loader)
-    avg_aux = total_aux_loss / len(train_loader)
+    avg_aux_loss = total_aux_loss / len(train_loader)
+    avg_aux_acc = total_aux_correct / num_samples
     
-    print_now(f"Epoch {epoch+1}/{args.epochs} | Recon: {avg_recon:.6f} | KL: {avg_kl:.6f} | MI Pen: {avg_mi:.4f} | Aux Loss: {avg_aux:.4f}")
+    # Print epoch statistics including auxiliary classifier accuracy
+    print_now(f"Epoch {epoch+1}/{args.epochs} | Recon: {avg_recon:.6f} | KL: {avg_kl:.6f} | MI Pen: {avg_mi:.4f} | Aux Loss: {avg_aux_loss:.4f} | Aux Acc: {avg_aux_acc:.4f}")
 
 print_now("\nTraining complete.")
 
@@ -137,7 +179,7 @@ print_now(f"Generating fair reconstructions and saving to '{args.output_file}'..
 icvae_model.eval()
 with torch.no_grad():
     recon_all = []
-    for batch_val in range(num_batches):
+    for batch_val in range(1): # Just replicate the first batch for now
         # Batch values here starts from 0, since we used pd.factorize
         batch_indices = torch.full(
             (len(features_tensor),),
