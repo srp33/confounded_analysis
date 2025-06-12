@@ -25,10 +25,12 @@ all_info_df <- tribble(
   "gse20194", "GSE 20194 PR",                   "meta_batch",      "meta_pr_status",
   "gse24080",  "GSE 24080 Eventfree Survival",  "meta_batch",      "meta_efs_outcome_label",
   "gse24080",  "GSE 24080 Overall Survival",    "meta_batch",      "meta_os_outcome_label",
-  "gse49711",  "GSE 49711 Stage",               "meta_Class",      "meta_INSS_Stage"
+  "gse49711",  "GSE 49711 Stage 1 2",           "meta_Class",      "meta_INSS_Stage_Split_1_2",
+  "gse49711",  "GSE 49711 Stage 2 3",           "meta_Class",      "meta_INSS_Stage_Split_2_3",
+  "gse49711",  "GSE 49711 Stage 3 4",           "meta_Class",      "meta_INSS_Stage_Split_3_4"
 )
 
-order <- c("unadjusted", "min_mean", "limma", "limma_target", "combat", "combat_target", "tampor")
+order <- c("unadjusted", "limma_target", "limma", "combat_target", "combat", "tampor", "quantile", "autoclass", "icvae", "vfae")
 
 score_functions <- c("roc_auc_score", "mutual_info_score", "accuracy_score")
 
@@ -62,7 +64,7 @@ baseline_for_column <- function(df, column_name, score_function) {
     # For mutual information score, 0 is the baseline, but the maximum is the entropy of the column
     return(calculate_entropy(df, column_name))
   } else {
-    stop("Unknown score function: ", score_function)
+    return(0)
   }
 }
 
@@ -135,12 +137,12 @@ for (i in seq_len(nrow(all_info_df))) {
     filter(column == true_col_name)
 
   together <- rbind(batch, true)
-  check_column(together, "metric", c())
-  check_column(together, "score", score_functions)
+  check_column(together, "classifier", c())
+  check_column(together, "metric", score_functions)
 
   for(score_function in score_functions) {
     message(paste("Creating figure for dataset:", dataset_name, "with score function:", score_function))
-    together_score <- filter(together, score == score_function)
+    together_score <- filter(together, metric == score_function)
 
     ran_true <- get_baseline(file_cache, dataset_name, true_col_name, random_accuracies_cache, score_function)
     ran_batch <- get_baseline(file_cache, dataset_name, batch_col_name, random_accuracies_cache, score_function)
@@ -155,7 +157,7 @@ for (i in seq_len(nrow(all_info_df))) {
       ggtitle(title) +
       theme_bw(base_size = 18) + theme(axis.title.x=element_blank(), legend.title=element_blank(), axis.text.x = element_text(angle = 90)) + 
       scale_y_continuous(name = score_function, limits = c(0.0, 1.0)) +
-      facet_wrap(vars(metric), strip.position = "top") + 
+      facet_wrap(vars(classifier), strip.position = "top") + 
       scale_colour_manual(values=cbp2)
     filename_for_plot <- paste(c(title, "_", score_function, ".pdf"), collapse = "")
     ggsave(file.path(FIG_DIR, filename_for_plot), width = 11, height = 8.5, units = 'in')
@@ -169,14 +171,14 @@ metriccomp <- read_csv(paste(c(IN_DIR, "singlemetriccomparison_minus.csv"), coll
 metricdata <- filter(metriccomp, dataset %in% datasets)
 
 score_averages = group_by(metricdata, adjuster, metric, dataset) %>%
-  summarize(ave=median(score), 
+  summarize(ave=median(value), 
 	    interact = interaction(adjuster, metric))
 score_averages <- group_by(score_averages, adjuster, metric)
 
 # Save figure --------------------
 ggplot() +
-  geom_jitter(data = metricdata, mapping = aes(x = factor(dataset, datasets), y = score,  color = adjuster), position=position_jitterdodge()) + 
-  geom_boxplot(data = metricdata, mapping = aes(x = factor(dataset, datasets), y = score, color = adjuster)) +
+  geom_jitter(data = metricdata, mapping = aes(x = factor(dataset, datasets), y = value,  color = adjuster), position=position_jitterdodge()) + 
+  geom_boxplot(data = metricdata, mapping = aes(x = factor(dataset, datasets), y = value, color = adjuster)) +
   
   ggtitle("Single Metric Comparison")+
   facet_wrap(vars(metric))+
