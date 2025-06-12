@@ -28,7 +28,8 @@ parser <- ArgumentParser()
 
 parser$add_argument("input_file", help = "path to the input file")
 parser$add_argument("output_file", help = "path to the output file.")
-parser$add_argument("-a", "--adjuster", default = "combat", choices = c("combat", "min_mean", "tampor", "limma"), help = "method to use for adjustment")
+parser$add_argument("-a", "--adjuster", default = "combat", choices = c("combat", "min_mean", "tampor", "limma", "seurat", "harmony", "quantile"),
+                    help = "Batch adjustment method to use. Options: combat, min_mean, tampor, limma, seurat, harmony, quantile.")
 parser$add_argument("-b", "--batch-col", default = "Batch", help = "title of batch column to adjust for")
 parser$add_argument("-c", "--column", nargs="+", default = NULL, help = "Predictive columns. If specified, batch correction will attempt to preserve predictive power for these columns.")
 parser$add_argument("-f", "--full-design-matrix", action = "store_true", help = "If set, the design matrix will include all categorical variables")
@@ -78,75 +79,6 @@ ComBat_ignore_nonvariance <- function(matrix_, batch, design) {
   matrix_
 }
 
-match_two_stats <- function(matrix_, batch, stat1, stat2) {
-  #' Matches batches by scaling so that two statistics are equal.
-  #'
-  #' @param matrix_ The matrix to batch adjust by scaling. Columns are
-  #' samples, rows are features.
-  #' @param batch The per-sample batch assignments.
-  #' @param stat1 The first statistic to match. (as a function, not a string)
-  #' @param stat2 The second statistic to match.
-  #'
-  #' @return The matrix_ after batch adjustment.
-  row_names = rownames(matrix_)
-  # Get rowwise stats
-  overall_stat1 <- apply(matrix_, 1, stat1)
-  overall_stat2 <- apply(matrix_, 1, stat2)
-
-  # Scale each batch individually so that stat1 is 0 and stat2 is 1
-  for (b in levels(factor(batch))) {
-    # Get columns for this batch
-    # drop=F makes it return a matrix when you only grab one column
-    batch_cols <- matrix_[, batch == b, drop = FALSE]
-
-    if (ncol(batch_cols) == 0) {
-      stop(sprintf("Can't scale rows: batch '%s' has <= 1 sample.", b))
-    }
-
-    adjusted = apply(batch_cols, 1, function(x) {
-      if (all(x == 0))
-        return(x)
-
-      numerator = x - stat1(x) 
-      denominator = stat2(x) - stat1(x)
-      denominator[denominator == 0] <- 1
-
-      return(numerator / denominator)
-    })
-
-    # Merge adjustment back in
-    matrix_[, batch == b] <- adjusted
-  }
-  ## Scale back up to match overall
-  matrix_ = sapply(1:row(matrix_), function(i) {
-    x = matrix_[i]
-    pre_stat1 = overall_stat1[i]
-    pre_stat2 = overall_stat2[i]
-    x * (pre_stat2 - pre_stat1) + pre_stat1
-  })
-  row_names(matrix_) = row_names
-  matrix_
-}
-
-match_min_mean <- function(matrix_, batch) {
-  #' Scales so the mins and means of each batch match
-  #'
-  #' @param matrix_ The matrix to batch adjust by scaling. Columns are
-  #' samples, rows are features.
-  #' @param batch The per-sample batch assignments.
-  #' 
-  #' @return The matrix_ after batch adjustment.
-  #'
-  #' @examples
-  #' scale_adjust(data, c(rep(1, 5000), rep(2, 5000)))
-
-  match_two_stats(
-    matrix_,
-    batch,
-    function(x) { min(x) },
-    function(x) { mean(x) }
-  )
-}
 
 adjust_tampor <- function(df_, batch) {
   #' Adjusts using the tampor method.
@@ -343,10 +275,21 @@ adjust_harmony <- function(df_, batch, design, data_are_counts) {
   GetAssayData(seurat_obj, slot = "data")
 }
 
+adjust_quantile <- function(df_) {
+  #' Adjusts using quantile normalization.
+  #'
+  #' @param df_ The dataframe to batch adjust by quantile normalization. Columns are
+  #' samples, rows are features.
+  #'
+  #' @return The dataframe after quantile normalization.
 
-is.whole <- function(a, tol = 1e-7) { 
-  all(abs(a - floor(a)) <= tol)
+  message("Adjusting using quantile normalization.")
+  # Unfortunately limma's normalizeQuantiles function needs the columns to be features.
+  df_ <- t(df_)
+  adjusted <- normalizeQuantiles(as.matrix(df_))
+  t(adjusted)
 }
+
 
 batch_adjust_tidy <- function(df, adjuster, batch_col = "Batch") {
   message("Separating batch column from data frame.")
@@ -354,10 +297,11 @@ batch_adjust_tidy <- function(df, adjuster, batch_col = "Batch") {
   batch = df[[batch_col]]
   df[[batch_col]] = NULL
 
-  message("Separating quantitative and categorical columns.")
-  is_categorical <- vapply(df, function(col) !is.numeric(col) || is.whole(col), logical(1))
-  categorical <- df[, is_categorical, drop = FALSE]
-  quantitative <- df[, !is_categorical, drop = FALSE]
+  message("Separating metadata and gene columns.")
+  # Meta data columns start with "meta_"
+  meta_cols = startsWith(colnames(df), "meta_")
+  categorical = df[, meta_cols, drop = FALSE]
+  quantitative = df[, !meta_cols, drop = FALSE]
 
   message_structure(categorical, "DEBUG: batch_adjust_tidy - Categorical data frame")
 
@@ -388,8 +332,8 @@ batch_adjust_tidy <- function(df, adjuster, batch_col = "Batch") {
   message(sprintf("Adjusting %d quantitative columns with %s method.", ncol(quantitative), adjuster))
   if (adjuster == "combat") {
     adjusted = adjust_combat(quantitative, batch, design, data_are_counts)
-  } else if (adjuster == "min_mean") {
-    adjusted = match_min_mean(quantitative, batch)
+  } else if (adjuster == "quantile") {
+    adjusted = adjust_quantile(quantitative)
   } else if (adjuster == "tampor") {
     adjusted = adjust_tampor(quantitative, batch)
   } else if (adjuster == "limma") {
@@ -443,3 +387,6 @@ batch_adjust_tidy(
   write_csv(args$output_file)
 
 message(sprintf("Saved output to '%s'", args$output_file))
+
+
+#Consider "sva", "mnn", "fastmnn", "scanorama", "bbknn", "harmony", "scvi")
