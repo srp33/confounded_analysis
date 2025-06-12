@@ -173,6 +173,26 @@ metrics = {
     "log_loss": make_scorer(one_minus_log_loss, response_method=["predict_proba"])
 }
 
+def binarize_column(df, column, class0, class1):
+    """
+    Binarize the specified column in the DataFrame.
+    Map class0 to 0, class1 to 1, and drop rows with unmapped classes.
+    """
+    valid_classes = set(class0 + class1)
+    df[column] = df[column].astype(str)
+
+    # Flag invalid entries
+    invalid = df[~df[column].isin(valid_classes)]
+    if not invalid.empty:
+        print(f"Unmapped classes found: {invalid[column].unique()}")
+
+    # Map classes
+    df[column] = df[column].apply(
+        lambda x: 0 if x in class0 else 1 if x in class1 else np.nan
+    ).dropna()  # Remove rows with unmapped classes
+
+    return df
+
 
 def display_metrics(scores_by_metric):
     for metric, values in scores_by_metric.items():
@@ -189,20 +209,7 @@ results = mine_previous_results(args.output_path)
 print(f"{len(results)} previous results found in {args.output_path}", flush=True)
 
 for method in ["combat", "combat_target", "limma", "limma_target", "unadjusted", "tampor", "quantile", "autoclass", "icvae"]:
-    df = cache.get_dataframe(args.input_dir + "/" + method + ".csv")
-
-    if args.class0 and args.class1:
-        # Map classes and flag invalid entries
-        valid_classes = set(args.class0 + args.class1)
-        df[args.column] = df[args.column].astype(str)
-
-        invalid = df[~df[args.column].isin(valid_classes)]
-        if not invalid.empty:
-            print(f"Unmapped classes found: {invalid[args.column].unique()}")
-        
-        df[args.column] = df[args.column].apply(
-            lambda x: 0 if x in args.class0 else 1 if x in args.class1 else np.nan
-        ).dropna()  # Remove rows with unmapped classes
+    df = None
     
     for learner in LEARNERS:
         classifier_name = str(learner["algorithm"]).split("'")[1].split(".")[-1].replace("Classifier", "")
@@ -212,6 +219,11 @@ for method in ["combat", "combat_target", "limma", "limma_target", "unadjusted",
             continue
         if key not in results:
             results[key] = {}
+
+        if df is None:
+            df = cache.get_dataframe(args.input_dir + "/" + method + ".csv")
+            if args.class0 and args.class1:
+                df = binarize_column(df, args.column, args.class0, args.class1)
 
         print(f"Performing classification using {classifier_name} for {method}, {dataset}, {args.column}", flush=True)
         scores = repeated_cross_val(df, args.column, learner, iterations=ITERATIONS, n_folds=3, n_jobs=12, metrics=metrics)
