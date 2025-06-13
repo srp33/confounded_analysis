@@ -6,14 +6,13 @@ from sklearn.decomposition import PCA
 from sklearn.manifold import TSNE
 from argparse import ArgumentParser
 
-import sys
-sys.path.append('/opt')
-from AutoClass.AutoClass.AutoClass import AutoClassImpute, take_norm
+from invert_autoclass import BatchCorrectImpute, take_norm
 
 # Parse command line args --------------------------
 parser = ArgumentParser(description="AutoClass Imputation Example")
 parser.add_argument("-i", "--input-file", help="Path to input CSV file", required=True)
 parser.add_argument("-o", "--output-file", help="Path to output CSV file", required=True)
+parser.add_argument("-b", "--batch-column", help="Column name for batch information", required=True)
 args = parser.parse_args()
 
 # Load the dataset --------------------------------
@@ -42,8 +41,9 @@ normalized = genes.min().min() < 0
 if not normalized:
     print("Data is not normalized. Normalizing and log1p-transforming the data.")
     X_norm = take_norm(genes)
-    
-res = AutoClassImpute(genes,cellwise_norm=False,log1p=False, num_cluster=[2, 3]) # num_cluster should be equal to the number of batches
+
+batches = df[args.batch_column].values
+res = BatchCorrectImpute(genes,batches,cellwise_norm=False,log1p=False,verbose=True)
 result = res['imp']
 
 # Convert the result to a DataFrame
