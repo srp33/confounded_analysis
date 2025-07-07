@@ -81,10 +81,36 @@ class Logger(object):
 
 
 class DataFrameCache(object):
-    def __init__(self):
-        self.dataframes = {} # path: dataframe
+    def __init__(self, folder:Path=None):
+        self.dataframes = {} # {path: dataframe}
+        self.folder = folder
 
-    def get_dataframe(self, file_path):
+    def __get_filepath__(self, file_name):
+        if self.folder is None:
+            raise ValueError("folder must be set to use file_name.")
+        return os.path.join(self.folder, file_name)
+
+    def __validate_file_path__(self, file_path, file_name):
+        if file_path is None and file_name is None:
+            raise ValueError("Either file_path or file_name must be provided.")
+        if file_name is not None:
+            file_path = self.__get_filepath__(file_name)
+        return file_path
+
+    def set_dataframe(self, df, file_path=None, file_name=None):
+        file_path = self.__validate_file_path__(file_path, file_name)
+        
+        if not isinstance(df, pd.DataFrame):
+            raise ValueError("df must be a pandas DataFrame.")
+        
+        self.dataframes[file_path] = df
+
+    def get_dataframe(self, file_path=None, file_name=None):
+        if file_name in self.dataframes:
+            return self.dataframes[file_name]
+            
+        file_path = self.__validate_file_path__(file_path, file_name)
+            
         if file_path in self.dataframes:
             return self.dataframes[file_path]
         else:
@@ -106,8 +132,8 @@ def no_extension(path):
 
 def split_metadata_genes(df):
     # Combat-seq returns genes as integers, so splitting by type is not enough.
-    # Other methods return genes as floats, so I need to split by metadata.
-    # I prepended "meta_" to all metadata columns, so I can split by that.
+    # Other methods return genes as floats, so we need to split by metadata.
+    # "meta_" has been prepended to all metadata columns, so we can split by that.
     metadata_cols = [col for col in df.columns if col.startswith("meta_")]
     genes = df.drop(columns=metadata_cols)
     metadata = df[metadata_cols]
