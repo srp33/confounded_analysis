@@ -16,7 +16,7 @@ import time
 from tensorflow.keras.callbacks import EarlyStopping, ReduceLROnPlateau
 import matplotlib.pyplot as plt
 
-# --- New Gradient Reversal Layer ---
+# --- Gradient Reversal Layer ---
 @tf.custom_gradient
 def grad_reverse(x):
     """

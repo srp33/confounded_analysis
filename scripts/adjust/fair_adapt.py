@@ -1,12 +1,7 @@
-import pandas as pd
 import numpy as np
-import matplotlib.pyplot as plt
-from sklearn.metrics import silhouette_score
-from sklearn.decomposition import PCA
-from sklearn.manifold import TSNE
+import pandas as pd
 from argparse import ArgumentParser
-
-from invert_autoclass import BatchCorrectImpute, take_norm
+from aif360.sklearn.preprocessing import FairAdapt
 
 # Parse command line args --------------------------
 parser = ArgumentParser(description="AutoClass Imputation Example")
@@ -33,33 +28,37 @@ meta_cols = [col for col in df.columns if col.startswith('meta_')]
 print(f"Found metadata columms: {meta_cols}")
 gene_cols = [col for col in df.columns if col not in meta_cols]
 
-genes = df[gene_cols]
-normalized = genes.min().min() < 0
-
-
-# Normalize and logp1-transform the data if necessary
-if not normalized:
-    print("Data is not normalized. Normalizing and log1p-transforming the data.")
-    X_norm = take_norm(genes)
-
 batches = df[args.batch_column].values
-res = BatchCorrectImpute(genes,batches,cellwise_norm=False,log1p=False,verbose=True,encoder_layer_size=[128],
-                         adversarial_weight=0.002,epochs=400,lr=15,reg=0.0001,dropout_rate=0.2)
-result = res['imp']
 
-# Convert the result to a DataFrame
-result = pd.DataFrame(result, columns=gene_cols)
 
-# Add the metadata columns back to the result
-if meta_cols:
-    result = pd.concat([df[meta_cols], result], axis=1)
+# construct an adjacency matrix
+adj_mat = pd.DataFrame(
+    np.zeros((len(df.columns), len(df.columns)), dtype=int),
+    index=df.columns.values,
+    columns=df.columns.values
+)
 
+# Construct the adjacency matrix of the causal graph
+# The metavariables cause the gene variables
+adj_mat.loc[meta_cols, gene_cols] = 1
+
+# Batch is the protected attribute
+FA = FairAdapt(prot_attr=args.batch_column, adj_mat=adj_mat)
+
+x = df[gene_cols + [args.batch_column]]
+meta_without_batch = [col for col in meta_cols if col != args.batch_column]
+y = df[meta_without_batch]
+# Get first row
+first_row = x.iloc[0, :]
+x, y, _ = FA.fit_transform(x, y, first_row)
+df =  pd.DataFrame(x, columns=gene_cols + [args.batch_column])
+# Add metadata columns back to the DataFrame
+df[meta_without_batch] = y
 
 # Save the imputed data to a CSV file --------------------
 output_file = args.output_file
 try:
-    result.to_csv(output_file, index=False)
+    df.to_csv(output_file, index=False)
     print(f"Imputed data saved to {output_file}")
 except Exception as e:
     raise ValueError(f"AutoClass Error saving the output file: {output_file}\n{e}")
-

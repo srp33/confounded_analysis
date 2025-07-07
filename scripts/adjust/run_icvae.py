@@ -23,7 +23,7 @@ parser.add_argument("-e", "--epochs", type=int, default=100, help="Number of tra
 parser.add_argument("-lr", "--learning-rate", type=float, default=1e-3, help="Learning rate for optimizers.")
 parser.add_argument("-bs", "--batch-size", type=int, default=64, help="Batch size for training.")
 parser.add_argument("--w-kl", type=float, default=1.0, help="Weight for the KL divergence loss term (beta).")
-parser.add_argument("--w-mi-penalty", type=float, default=10.0, help="Weight for the Mutual Information penalty term (gamma).")
+parser.add_argument("--w-mi-penalty", type=float, default=1.0, help="Weight for the Mutual Information penalty term (gamma).")
 args = parser.parse_args()
 
 def print_now(*args, **kwargs):
@@ -71,7 +71,12 @@ train_loader = DataLoader(dataset, batch_size=args.batch_size, shuffle=True)
 # --- Model Initialization ---
 input_dim = len(feature_cols)
 icvae_model = ICVAE(input_dim, num_batches, args.latent_dim, args.hidden_dim).to(device)
-aux_classifier = AuxiliaryBoostedLogitClassifier(args.latent_dim, num_batches, args.hidden_dim_aux).to(device)
+aux_classifier = AuxiliaryClassifier(args.latent_dim, num_batches, args.hidden_dim_aux).to(device)
+
+# 🔥 COMPILE THE MODELS! 🔥
+print_now("Compiling models for optimized performance...")
+icvae_model = torch.compile(icvae_model)
+aux_classifier = torch.compile(aux_classifier)
 
 opt_icvae = optim.Adam(icvae_model.parameters(), lr=args.learning_rate)
 opt_aux = optim.Adam(aux_classifier.parameters(), lr=args.learning_rate)
