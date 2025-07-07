@@ -34,6 +34,9 @@ parser$add_argument("-a", "--adjuster", default = "combat",
 parser$add_argument("-b", "--batch-col", default = "Batch", help = "Name of the column identifying the batch for each sample.")
 parser$add_argument("-c", "--column", nargs = "+", default = NULL, help = "Predictive columns to preserve. If specified, these are used to build the design matrix.")
 parser$add_argument("-f", "--full-design-matrix", action = "store_true", help = "If set, the design matrix will include all categorical metadata variables.")
+# Add a debug flag
+parser$add_argument("--debug", action = "store_true", help = "Enable verbose debugging messages.")
+
 
 args <- parser$parse_args()
 
@@ -178,7 +181,7 @@ restore_names <- function(matrix, prep_list) {
 
 # Adjustment Functions ---------------------------------
 
-adjust_combat <- function(matrix_, batch, design, data_are_counts) {
+adjust_combat <- function(matrix_, batch, design, data_are_counts, debug = FALSE) {
   #' Adjusts a matrix using ComBat or ComBat_seq.
   #' @param matrix_ The matrix to adjust (features x samples).
   #' @param batch The batch variable vector.
@@ -215,7 +218,7 @@ adjust_quantile <- function(matrix_, ...) {
   return(t(normalizeQuantiles(as.matrix(t(matrix_)))))
 }
 
-adjust_seurat_scaling <- function(df_, batch, data_are_counts, ...) {
+adjust_seurat_scaling <- function(df_, batch, data_are_counts, debug = FALSE) {
   #' Adjusts using Seurat's ScaleData regression method.
   #' @param df_ The data matrix (features x samples).
   #' @param batch The batch variable vector.
@@ -234,7 +237,7 @@ adjust_seurat_scaling <- function(df_, batch, data_are_counts, ...) {
   return(restore_names(scaled_matrix, prep_list))
 }
 
-adjust_seurat_integration <- function(df_, batch, data_are_counts, ...) {
+adjust_seurat_integration <- function(df_, batch, data_are_counts, debug = FALSE) {
   #' Adjusts using Seurat's anchor-based integration workflow.
   #'
   #' This version integrates the default set of variable features and then
@@ -258,7 +261,7 @@ adjust_seurat_integration <- function(df_, batch, data_are_counts, ...) {
       } else {
           # For pre-normalized data, statistical models like 'vst' or 'disp' can fail.
           # A more robust method is to rank by variance directly.
-          message(sprintf("Finding variable features for batch %d by variance ranking.", i))
+          if(debug) message(sprintf("Finding variable features for batch %d by variance ranking.", i))
           hvf_data <- GetAssayData(seurat_obj.list[[i]], layer="data")
           variances <- apply(hvf_data, 1, var, na.rm = TRUE)
           top_features <- names(sort(variances, decreasing = TRUE)[1:2000])
@@ -284,7 +287,7 @@ adjust_seurat_integration <- function(df_, batch, data_are_counts, ...) {
   }
   
   k_weight <- min(67, min_batch_size - 1)
-  message(sprintf("DEBUG: Setting k.weight to %d", k_weight))
+  if(debug) message(sprintf("Setting k.weight to %d", k_weight))
 
   seurat_obj.integrated <- IntegrateData(anchorset = anchors, k.weight = k_weight, verbose = FALSE)
   
@@ -307,7 +310,7 @@ adjust_seurat_integration <- function(df_, batch, data_are_counts, ...) {
   
   combined_matrix <- rbind(integrated_matrix_sanitized, original_non_integrated_data)
   
-  message(sprintf("DEBUG: Seurat integration - Combined matrix dimensions: %d rows, %d cols", nrow(combined_matrix), ncol(combined_matrix)))
+  if(debug) message(sprintf("Seurat integration - Combined matrix dimensions: %d rows, %d cols", nrow(combined_matrix), ncol(combined_matrix)))
   
   final_matrix <- combined_matrix[prep_list$orig_features, prep_list$orig_samples, drop = FALSE]
   
@@ -359,7 +362,7 @@ adjust_fairadapt <- function(quantitative_df, batch, design, ...) {
     return(t(as.matrix(adjusted_df)))
 }
 
-adjust_liger <- function(df_, batch, data_are_counts) {
+adjust_liger <- function(df_, batch, data_are_counts, debug = FALSE) {
   #' Adjusts using the LIGER method.
   message("Adjusting with LIGER.")
   prep_list <- prep_seurat_like(df_, batch, data_are_counts)
@@ -374,37 +377,35 @@ adjust_liger <- function(df_, batch, data_are_counts) {
   liger_obj <- runIntegration(liger_obj, k = 20, verbose = FALSE) 
   liger_obj <- quantileNorm(liger_obj, verbose = FALSE)
   
-  # DEBUG: Print the available slots in the liger object to find the correct one.
-  message("DEBUG: Available slots in liger object: ", paste(slotNames(liger_obj), collapse = ", "))
+  if (debug) message("DEBUG: Available slots in liger object: ", paste(slotNames(liger_obj), collapse = ", "))
   
   # The corrected data is in the 'H.norm' slot after quantileNorm.
   # This is a matrix of cell factor loadings (cells x k).
   # We reconstruct the expression matrix by multiplying with W (genes x k).
   corrected_matrix_sanitized <- liger_obj@W %*% t(liger_obj@H.norm)
   
-  message(sprintf("DEBUG: Liger - Reconstructed matrix dimensions: %d rows, %d cols", nrow(corrected_matrix_sanitized), ncol(corrected_matrix_sanitized)))
+  if (debug) message(sprintf("Liger - Reconstructed matrix dimensions: %d rows, %d cols", nrow(corrected_matrix_sanitized), ncol(corrected_matrix_sanitized)))
   
-  # Create a final matrix with the original data. We will overwrite the variable features.
-  final_matrix <- df_
-  
-  # Restore original names to the corrected matrix so we can match them
-  corrected_matrix_original_names <- restore_names(corrected_matrix_sanitized, prep_list)
+  # Start with a copy of the full, normalized data matrix from the Seurat object
+  final_matrix_sanitized <- as.matrix(GetAssayData(prep_list$obj, layer = "data"))
+  if (debug) message(sprintf("Liger - Original matrix dimensions: %d rows, %d cols", nrow(final_matrix_sanitized), ncol(final_matrix_sanitized)))
 
-  message(sprintf("DEBUG: Liger - Corrected matrix with original names dimensions: %d rows, %d cols", nrow(corrected_matrix_original_names), ncol(corrected_matrix_original_names)))
+  # Overwrite the variable features with the corrected values.
+  # This is robust because both matrices use the same sanitized names.
+  final_matrix_sanitized[rownames(corrected_matrix_sanitized), colnames(corrected_matrix_sanitized)] <- corrected_matrix_sanitized
+  if (debug) message(sprintf("Liger - Combined matrix dimensions before restoring names: %d rows, %d cols", nrow(final_matrix_sanitized), ncol(final_matrix_sanitized)))
   
-  # Overwrite the original data with the corrected data for the variable features
-  # This is robust to cases where LIGER may have dropped some features/cells
-  final_matrix[rownames(corrected_matrix_original_names), colnames(corrected_matrix_original_names)] <- corrected_matrix_original_names
+  # Now, restore the original names to the full, completed matrix.
+  final_matrix <- restore_names(final_matrix_sanitized, prep_list)
+  if (debug) message(sprintf("Liger - Final combined matrix dimensions: %d rows, %d cols", nrow(final_matrix), ncol(final_matrix)))
   
-  message(sprintf("DEBUG: Liger - Final combined matrix dimensions: %d rows, %d cols", nrow(final_matrix), ncol(final_matrix)))
-
   return(final_matrix)
 }
 
 
 # Main Orchestration Function --------------------------------
 
-batch_adjust_tidy <- function(df, adjuster, batch_col) {
+batch_adjust_tidy <- function(df, adjuster, batch_col, debug = FALSE) {
   #' Main function to orchestrate the batch adjustment process.
   #' @param df The input tidy data frame (samples x columns).
   #' @param adjuster The name of the adjustment method to use.
@@ -424,8 +425,21 @@ batch_adjust_tidy <- function(df, adjuster, batch_col) {
   message("2. Creating design matrix.")
   design <- create_design_matrix(metadata_cols, args$column, args$full_design_matrix)
 
-  message("3. Transposing quantitative data for adjustment (features x samples).")
-  mat_quantitative <- transpose_essential(quantitative)
+  # --- Caching logic for transposed data ---
+  # Create a unique filename for the cached transposed data based on the input file
+  transposed_cache_file <- sub("(\\.[^.]+)$", "_t\\1", args$input_file)
+  
+  if (file.exists(transposed_cache_file)) {
+    message(sprintf("Loading cached transposed data from '%s'", transposed_cache_file))
+    # Use read.csv with row.names=1 and check.names=FALSE to correctly read the matrix
+    mat_quantitative <- as.matrix(read.csv(transposed_cache_file, row.names = 1, check.names = FALSE))
+  } else {
+    message("3. Transposing quantitative data for adjustment (features x samples).")
+    mat_quantitative <- transpose_essential(quantitative)
+    message(sprintf("Caching transposed data to '%s'", transposed_cache_file))
+    # Use write.csv to preserve row names correctly
+    write.csv(mat_quantitative, transposed_cache_file, row.names = TRUE, quote = FALSE)
+  }
   
   data_are_counts <- !any(mat_quantitative < 0, na.rm = TRUE)
   
@@ -433,12 +447,12 @@ batch_adjust_tidy <- function(df, adjuster, batch_col) {
   
   adjusted_matrix <- switch(
     adjuster,
-    combat = adjust_combat(mat_quantitative, batch, design, data_are_counts),
-    limma = adjust_limma(mat_quantitative, batch, design),
-    quantile = adjust_quantile(mat_quantitative),
-    seurat_scaling = adjust_seurat_scaling(mat_quantitative, batch, data_are_counts),
-    seurat_integration = adjust_seurat_integration(mat_quantitative, batch, data_are_counts),
-    fairadapt = adjust_fairadapt(quantitative, batch, design),
+    combat = adjust_combat(mat_quantitative, batch, design, data_are_counts, debug = False),
+    limma = adjust_limma(mat_quantitative, batch, design, debug = False),
+    quantile = adjust_quantile(mat_quantitative, debug = False),
+    seurat_scaling = adjust_seurat_scaling(mat_quantitative, batch, data_are_counts, debug = True),
+    seurat_integration = adjust_seurat_integration(mat_quantitative, batch, data_are_counts, debug = Tue),
+    fairadapt = adjust_fairadapt(quantitative, batch, design, debug = False),
     fastMNN = {
         message("Adjusting with fastMNN.")
         prep_list <- prep_seurat_like(mat_quantitative, batch, data_are_counts)
@@ -456,11 +470,11 @@ batch_adjust_tidy <- function(df, adjuster, batch_col) {
         corrected_matrix <- as.matrix(assay(sce_corrected, "reconstructed"))
         restore_names(corrected_matrix, prep_list)
     },
-    liger = adjust_liger(mat_quantitative, batch, data_are_counts),
+    liger = adjust_liger(mat_quantitative, batch, data_are_counts, debug = True),
     stop(sprintf("Unknown adjuster '%s'", adjuster))
   )
   
-  message(sprintf("DEBUG: Dimensions of final adjusted matrix before transposing: %d rows, %d cols", nrow(adjusted_matrix), ncol(adjusted_matrix)))
+  if(debug) message(sprintf("Dimensions of final adjusted matrix before transposing: %d rows, %d cols", nrow(adjusted_matrix), ncol(adjusted_matrix)))
   
   message("5. Reconstructing the tidy data frame.")
   adjusted_df <- as.data.frame(t(adjusted_matrix))
@@ -490,7 +504,8 @@ message(sprintf("Starting batch adjustment with method: '%s'", args$adjuster))
 adjusted_data <- batch_adjust_tidy(
   df,
   adjuster = args$adjuster,
-  batch_col = args$batch_col
+  batch_col = args$batch_col,
+  debug = args$debug
 )
 
 adjusted_data %>%
