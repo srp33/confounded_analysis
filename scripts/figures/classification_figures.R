@@ -15,7 +15,7 @@ IN_DIR = "/outputs/metrics/"
 FIG_DIR = "/outputs/figures/"
 SAMPLE_DIR = "/../data/"
 
-cbp2 <- c("#E69F00", "#56B4E9","#009E73","#F0E442", 
+cbp2 <- c("#E69F00", "#56B4E9","#009E73","#F0E442",
           "#0072B2", "#D55E00", "#CC79A7", "#999999")
 
 all_info_df <- tribble(
@@ -30,7 +30,7 @@ all_info_df <- tribble(
   "gse49711",  "GSE 49711 Stage 3 4",           "meta_Class",      "meta_INSS_Stage_Split_3_4"
 )
 
-order <- c("unadjusted", "limma_target", "limma", "combat_target", "combat", "tampor", "quantile", "autoclass", "icvae", "vfae")
+order <- c("unadjusted", "limma_target", "limma", "combat_target", "combat", "tampor", "quantile", "autoclass", "wasserstein", "harmony", "seurat_scaling", "seurat_integration", "FastMNN") #, "icvae") #, "fair_adapt")
 
 score_functions <- c("roc_auc_score", "mutual_info_score", "accuracy_score")
 
