@@ -29,7 +29,7 @@ parser <- ArgumentParser(description = "A script to apply various batch correcti
 parser$add_argument("input_file", help = "Path to the input CSV file. Rows are samples, columns are features/metadata.")
 parser$add_argument("output_file", help = "Path for the output adjusted CSV file.")
 parser$add_argument("-a", "--adjuster", default = "combat",
-                    choices = c("combat", "limma", "seurat_scaling", "seurat_integration", "harmony", "quantile", "fairadapt", "scanorama", "liger", "fastMNN"),
+                    choices = c("combat", "limma", "seurat_scaling", "seurat_integration", "harmony", "quantile", "fairadapt", "liger", "fastMNN"),
                     help = "Batch adjustment method to use.")
 parser$add_argument("-b", "--batch-col", default = "Batch", help = "Name of the column identifying the batch for each sample.")
 parser$add_argument("-c", "--column", nargs = "+", default = NULL, help = "Predictive columns to preserve. If specified, these are used to build the design matrix.")
@@ -42,17 +42,17 @@ args <- parser$parse_args()
 
 # Helper Functions ---------------------------------
 
-transpose_essential <- function(quantitative_df) {
+transpose_essential <- function(gene_df) {
   #' Transposes a quantitative data frame robustly.
   #'
   #' This multi-step process ensures that sample names (row names) are
   #' correctly preserved during the conversion from a data frame to a
   #' transposed matrix (features x samples).
   #'
-  #' @param quantitative_df A data frame with samples as rows and features as columns.
+  #' @param gene_df A data frame with samples as rows and features as columns.
   #' @return A transposed matrix with features as rows and samples as columns.
   
-  df_version <- as.data.frame(quantitative_df)
+  df_version <- as.data.frame(gene_df)
   mat_untransposed <- as.matrix(df_version)
   rownames(mat_untransposed) <- rownames(df_version)
   mat_quantitative <- t(mat_untransposed)
@@ -317,10 +317,10 @@ adjust_seurat_integration <- function(df_, batch, data_are_counts, debug = FALSE
   return(final_matrix)
 }
 
-adjust_fairadapt <- function(quantitative_df, batch, design, ..., debug = FALSE) {
+adjust_fairadapt <- function(gene_df, batch, design, ..., debug = FALSE) {
     #' Adjusts data using the fairadapt method.
     #' Note: `fairadapt` requires a design matrix with exactly one variable to preserve.
-    #' @param quantitative_df The quantitative data (samples x features).
+    #' @param gene_df The quantitative data (samples x features).
     #' @param batch The batch variable vector.
     #' @param design The design matrix.
     #' @return The adjusted matrix (features x samples).
@@ -336,7 +336,7 @@ adjust_fairadapt <- function(quantitative_df, batch, design, ..., debug = FALSE)
         stop("Could not identify a unique column to preserve from the design matrix.")
     }
 
-    data_for_adj <- quantitative_df
+    data_for_adj <- gene_df
     data_for_adj$batch <- batch
     data_for_adj[[design_col_name]] <- design[, design_col_name]
 
@@ -357,7 +357,7 @@ adjust_fairadapt <- function(quantitative_df, batch, design, ..., debug = FALSE)
                      prot.attr = "batch",
                      adj.mat = adj.mat)
 
-    adjusted_df <- mod$adapt.train[, colnames(quantitative_df), drop = FALSE]
+    adjusted_df <- mod$adapt.train[, colnames(gene_df), drop = FALSE]
 
     return(t(as.matrix(adjusted_df)))
 }
@@ -369,8 +369,21 @@ adjust_liger <- function(df_, batch, data_are_counts, debug = FALSE) {
   
   liger_obj <- seuratToLiger(prep_list$obj)
 
-  liger_obj <- normalize(liger_obj)
-  liger_obj <- selectGenes(liger_obj)
+  # LIGER's default normalization and gene selection can fail on pre-normalized data.
+  # We will use a more robust method if the data is not raw counts.
+  if(data_are_counts){
+    liger_obj <- normalize(liger_obj)
+    liger_obj <- selectGenes(liger_obj)
+  } else {
+    message("Data is pre-normalized. Bypassing LIGER's normalize() and selectGenes().")
+    # Manually set the variable features using a robust method
+    hvf_data <- GetAssayData(prep_list$obj, layer="data")
+    variances <- apply(hvf_data, 1, var, na.rm = TRUE)
+    top_features <- names(sort(variances, decreasing = TRUE)[1:2000])
+    # The correct slot is 'varFeatures', not 'var.genes'
+    liger_obj@varFeatures <- top_features
+  }
+
   liger_obj <- scaleNotCenter(liger_obj)
 
   # Use the modern rliger functions
@@ -384,16 +397,14 @@ adjust_liger <- function(df_, batch, data_are_counts, debug = FALSE) {
   # We reconstruct the expression matrix by multiplying with W (genes x k).
   corrected_matrix_sanitized <- liger_obj@W %*% t(liger_obj@H.norm)
   
-  if (debug) message(sprintf("Liger - Reconstructed matrix dimensions: %d rows, %d cols", nrow(corrected_matrix_sanitized), ncol(corrected_matrix_sanitized)))
-  
   # Start with a copy of the full, normalized data matrix from the Seurat object. This is our target.
   final_matrix_sanitized <- as.matrix(GetAssayData(prep_list$obj, layer = "data"))
-  if (debug) message(sprintf("Liger - Full matrix (target) dimensions: %d rows, %d cols", nrow(final_matrix_sanitized), ncol(final_matrix_sanitized)))
-
-  # Pending, might fix the error.
-  # Overwrite the variable features in the full matrix with the corrected values.
-  # This is robust because both matrices use the same "sanitized" names.
-  final_matrix_sanitized[rownames(corrected_matrix_sanitized), colnames(corrected_matrix_sanitized)] <- corrected_matrix_sanitized
+  
+  # Find the common features to avoid subscript errors and overwrite them.
+  common_features <- intersect(rownames(corrected_matrix_sanitized), rownames(final_matrix_sanitized))
+  if (debug) message(sprintf("Liger - Found %d common features between corrected and target matrices.", length(common_features)))
+  
+  final_matrix_sanitized[common_features, ] <- corrected_matrix_sanitized[common_features, ]
   if (debug) message("Liger - Successfully overwrote variable features in the target matrix.")
   
   # Now, restore the original names to the full, completed matrix.
@@ -413,15 +424,15 @@ batch_adjust_tidy <- function(df, adjuster, batch_col, debug = FALSE) {
   #' @param batch_col The name of the batch column.
   #' @return A tidy data frame with adjusted values.
 
-  message("1. Separating metadata, batch, and quantitative data.")
+  message("1. Separating metadata, batch, and gene data.")
   original_colnames <- colnames(df)
   batch <- df[[batch_col]]
   
   df[[batch_col]] <- NULL
 
-  is_numeric_col <- sapply(df, is.numeric)
-  quantitative <- df[, is_numeric_col, drop = FALSE]
-  metadata_cols <- df[, !is_numeric_col, drop = FALSE]
+  # Metadata columns start with "_meta"
+  metadata_cols <- df[, startsWith(colnames(df), "_meta")]
+  genes <- df[, !startsWith(colnames(df), "_meta")]
   
   message("2. Creating design matrix.")
   design <- create_design_matrix(metadata_cols, args$column, args$full_design_matrix)
@@ -432,46 +443,38 @@ batch_adjust_tidy <- function(df, adjuster, batch_col, debug = FALSE) {
   
   if (file.exists(transposed_cache_file)) {
     message(sprintf("Loading cached transposed data from '%s'", transposed_cache_file))
-    # Use read.csv with row.names=1 and check.names=FALSE to correctly read the matrix
-    mat_quantitative <- as.matrix(read.csv(transposed_cache_file, row.names = 1, check.names = FALSE))
+    # Use read.csv with row.names=1 and check.names=FALSE to Ajut0ameni|
+    mat_genes <- as.matrix(read.csv(transposed_cache_file, row.names = 1, check.names = FALSE))
   } else {
-    message("3. Transposing quantitative data for adjustment (features x samples).")
-    mat_quantitative <- transpose_essential(quantitative)
+    message("3. Transposing gene data for adjustment (features x samples).")
+    mat_genes <- transpose_essential(genes)
     message(sprintf("Caching transposed data to '%s'", transposed_cache_file))
     # Use write.csv to preserve row names correctly
-    write.csv(mat_quantitative, transposed_cache_file, row.names = TRUE, quote = FALSE)
+    write.csv(mat_genes, transposed_cache_file, row.names = TRUE, quote = FALSE)
   }
-  
-  data_are_counts <- !any(mat_quantitative < 0, na.rm = TRUE)
-  
+
+  data_are_counts <- !any(mat_genes < 0, na.rm = TRUE)
+
   message(sprintf("4. Applying '%s' adjustment method.", adjuster))
   
   adjusted_matrix <- switch(
     adjuster,
-    combat = adjust_combat(mat_quantitative, batch, design, data_are_counts, debug = FALSE),
-    limma = adjust_limma(mat_quantitative, batch, design, debug = FALSE),
-    quantile = adjust_quantile(mat_quantitative, debug = FALSE),
-    seurat_scaling = adjust_seurat_scaling(mat_quantitative, batch, data_are_counts, debug = FALSE),
-    seurat_integration = adjust_seurat_integration(mat_quantitative, batch, data_are_counts, debug = FALSE),
-    fairadapt = adjust_fairadapt(quantitative, batch, design, debug = FALSE),
+    combat = adjust_combat(mat_genes, batch, design, data_are_counts, debug = FALSE),
+    limma = adjust_limma(mat_genes, batch, design, debug = FALSE),
+    quantile = adjust_quantile(mat_genes, debug = FALSE),
+    seurat_scaling = adjust_seurat_scaling(mat_genes, batch, data_are_counts, debug = FALSE),
+    seurat_integration = adjust_seurat_integration(mat_genes, batch, data_are_counts, debug = FALSE),
+    fairadapt = adjust_fairadapt(mat_genes, batch, design, debug = FALSE),
     fastMNN = {
         message("Adjusting with fastMNN.")
-        prep_list <- prep_seurat_like(mat_quantitative, batch, data_are_counts)
+        prep_list <- prep_seurat_like(mat_genes, batch, data_are_counts)
         sce_list <- lapply(unique(batch), function(b) as.SingleCellExperiment(prep_list$obj[, prep_list$obj$Batch == b]))
         # The 'scale.data is empty' warning is expected as fastMNN works on the logcounts layer.
-        sce_corrected <- do.call(fastMNN, c(sce_list, list(assay.type = "logcounts")))
+        sce_corrected <- do.call(batchelor::fastMNN, c(sce_list, list(assay.type = "logcounts")))
         corrected_matrix <- as.matrix(assay(sce_corrected, "reconstructed"))
         restore_names(corrected_matrix, prep_list)
     },
-    scanorama = {
-        message("Adjusting with Scanorama.")
-        prep_list <- prep_seurat_like(mat_quantitative, batch, data_are_counts)
-        sce_list <- lapply(unique(batch), function(b) as.SingleCellExperiment(prep_list$obj[, prep_list$obj$Batch == b]))
-        sce_corrected <- do.call(runScanorama, c(sce_list, list(assay.type = "logcounts")))
-        corrected_matrix <- as.matrix(assay(sce_corrected, "reconstructed"))
-        restore_names(corrected_matrix, prep_list)
-    },
-    liger = adjust_liger(mat_quantitative, batch, data_are_counts, debug = TRUE),
+    liger = adjust_liger(mat_genes, batch, data_are_counts, debug = TRUE),
     stop(sprintf("Unknown adjuster '%s'", adjuster))
   )
   
