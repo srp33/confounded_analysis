@@ -10,33 +10,44 @@ ENV JAVA_HOME=/usr/lib/jvm/java-8-openjdk-amd64/jre
 ENV TZ=America/Denver
 
 ####################################################################################
+# Env variables
+####################################################################################
+
+ENV TORCHINDUCTOR_CACHE_DIR=/tmp/torch_cache
+# Using ARG to make the Conda path reusable and clean
+ARG CONDA_DIR=/opt/conda
+ENV PATH $CONDA_DIR/bin:$PATH
+ENV CONDA_PREFIX=$CONDA_DIR
+
+####################################################################################
+# Install Miniforge3 FIRST to ensure Conda Python is primary
+####################################################################################
+
+RUN wget --quiet https://github.com/conda-forge/miniforge/releases/latest/download/Miniforge3-Linux-x86_64.sh -O ~/miniforge.sh && \
+    /bin/bash ~/miniforge.sh -b -p $CONDA_DIR && \
+    rm ~/miniforge.sh
+
+# Explicitly tell R's reticulate package which Python to use.
+ENV RETICULATE_PYTHON=$CONDA_DIR/bin/python
+
+####################################################################################
+# Create a user-writable directory for R packages and set ENV variable
+####################################################################################
+
+RUN mkdir -p /home/r_libs && \
+    chmod -R 777 /home/r_libs
+ENV R_LIBS_USER=/home/r_libs
+
+####################################################################################
 # Install R packages
 ####################################################################################
 
-COPY install_*.R /
+COPY install_main_packages.R /
 RUN Rscript /install_main_packages.R
-
-####################################################################################
-# Install Miniforge3 (which includes Mamba by default)
-####################################################################################
-RUN wget --quiet https://github.com/conda-forge/miniforge/releases/latest/download/Miniforge3-Linux-x86_64.sh -O ~/miniforge.sh && \
-    /bin/bash ~/miniforge.sh -b -p /opt/conda && \
-    rm ~/miniforge.sh && \
-    ln -s /opt/conda/etc/profile.d/conda.sh /etc/profile.d/conda.sh && \
-    echo ". /opt/conda/etc/profile.d/conda.sh" >> ~/.bashrc && \
-    echo "conda activate base" >> ~/.bashrc
-
-# RUN apt-get update --fix-missing && \
-#  apt-get install -y wget curl git parallel apt-transport-https software-properties-common && \
-#  apt-get update && \
-#  apt-key adv --keyserver keyserver.ubuntu.com --recv-keys E298A3A825C0D65DFD57CBB651716619E084DAB9 && \
-#  add-apt-repository 'deb https://cloud.r-project.org/bin/linux/ubuntu bionic-cran40/' && \
-#  apt-get update && \
-#  ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone && \
-#  apt-get -y --allow-unauthenticated install r-base r-base-dev libcurl4-openssl-dev libssl-dev libxml2-dev && \
-#  apt-get -y autoremove && \
-#  apt-get clean && \
-#  rm -rf /var/lib/apt/lists/*
+COPY install_annotation_packages.R /
+RUN Rscript /install_annotation_packages.R
+COPY install_adjuster_specific_packages.R /
+RUN Rscript /install_adjuster_specific_packages.R
 
 ####################################################################################
 # Install basic Python packages
@@ -48,16 +59,7 @@ RUN conda install -y -c conda-forge numpy 'scikit-learn>=1.4' pandas 'tensorflow
 # Install additional Python packages
 ####################################################################################
 
-RUN conda install -y -c conda-forge tabulate
-# RUN pip3 install numpy scikit-learn pandas 
-# tensorflow=1.11.0
-
-####################################################################################
-# Install additional R packages
-####################################################################################
-
-RUN Rscript /install_annotation_packages.R
-RUN Rscript /install_adjuster_specific_packages.R
+RUN conda install -y aif360 tabulate jaxtyping beartype aif360 pytables
 
 ####################################################################################
 # Clone libraries
@@ -65,6 +67,12 @@ RUN Rscript /install_adjuster_specific_packages.R
 
 RUN git clone https://github.com/edammer/TAMPOR.git /opt/TAMPOR
 RUN git clone https://github.com/datapplab/AutoClass.git /opt/AutoClass
+
+####################################################################################
+# Pip
+####################################################################################
+
+RUN pip install 'aif360[FairAdapt]'
 
 ####################################################################################
 # Install Confounded within the image

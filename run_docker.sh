@@ -6,7 +6,7 @@ image=srp33/confounded-paper:version1
 
 docker build -t $image .
 
-mkdir -p data/gse20194 data/gse24080 data/gse49711
+mkdir -p data/gse20194 data/gse24080 data/gse49711 data/r data/simple2d
 mkdir -p outputs/figures outputs/metrics outputs/optimizations outputs/tables outputs/metrics/archive
 
 #docker run -d --rm \
