@@ -12,7 +12,7 @@ set -e
 
 # https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE49711
 # https://pubmed.ncbi.nlm.nih.gov/25150839/
-bash /scripts/prepdata/gse49711.sh
+# bash /scripts/prepdata/gse49711.sh
 
 #Other possibilities:
 #bash /scripts/prepdata/bladderbatch.sh
@@ -24,3 +24,7 @@ bash /scripts/prepdata/gse49711.sh
 #https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE58979 (Affymetrix PrimeView)
 #https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE19750 (Affymetrix Human Genome U133 Plus 2.0)
 #bash /scripts/prepdata/tcga.sh
+
+
+# https://www.refine.bio/compendia/normalized
+bash /scripts/prepdata/refinebio.sh
