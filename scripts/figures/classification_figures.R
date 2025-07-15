@@ -12,7 +12,7 @@ suppressPackageStartupMessages({
 
 # Load data -------
 IN_DIR = "/outputs/metrics/"
-FIG_DIR = "/outputs/figures/"
+FIG_DIR = "/outputs/figures/classification/"
 SAMPLE_DIR = "/../data/"
 
 cbp2 <- c("#E69F00", "#56B4E9","#009E73","#F0E442",
@@ -30,7 +30,7 @@ all_info_df <- tribble(
   "gse49711",  "GSE 49711 Stage 3 4",           "meta_Class",      "meta_INSS_Stage_Split_3_4"
 )
 
-order <- c("unadjusted", "limma_target", "limma", "combat_target", "combat", "tampor", "quantile", "autoclass", "wasserstein", "harmony", "seurat_scaling", "seurat_integration", "FastMNN") #, "icvae") #, "fair_adapt")
+order <- c("unadjusted", "limma_target", "limma", "tampor", "quantile", "harmony", "liger", "seurat_scaling", "seurat_integration", "wasserstein", "autoclass", "fastMNN", "combat_target", "combat") #, "icvae") #, "fair_adapt")
 
 score_functions <- c("roc_auc_score", "mutual_info_score", "accuracy_score")
 
@@ -209,7 +209,7 @@ ggsave(paste(c(FIG_DIR, "singleMetricScoreAverages_minus.pdf"), collapse = ""), 
 #df <- df %>% filter(model != "MLPClassifier")
 #df <- df %>% filter(!str_detect(dataset, "pretrain"))
 
-#df %>% filter(col_type == "batch_col") %>%
+#df %>% filter(column == "batch_col") %>%
 #  ggplot(aes(x = model, y = accuracy, fill = model)) +
 #  geom_boxplot() +
 #  facet_grid(dataset ~ adjuster, scales = "free_y") +
@@ -219,7 +219,7 @@ ggsave(paste(c(FIG_DIR, "singleMetricScoreAverages_minus.pdf"), collapse = ""), 
 #  labs(y = "Batch Classification Accuracy")
 #ggsave(paste0(FIG_DIR, "/batch_accuracy.pdf"))
 
-#df %>% filter(col_type == "true_class_col") %>%
+#df %>% filter(column == "true_class_col") %>%
 #  ggplot(aes(x = model, y = accuracy, fill = model)) +
 #  geom_boxplot() +
 #  facet_grid(dataset ~ adjuster, scales = "free_y") +

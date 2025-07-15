@@ -3,6 +3,6 @@
 set -e
 
 bash scripts/figures/classification_figures.sh
-#bash loss.sh
-#bash tsne.sh
-#bash mse_mmd_classification.sh
+# bash scripts/figures/loss.sh
+# bash scripts/figures/tsne.sh
+bash scripts/figures/mse_mmd_classification.sh

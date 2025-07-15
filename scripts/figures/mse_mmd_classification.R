@@ -1,17 +1,17 @@
 # Setup ------
 if (!require("pacman")) install.packages("pacman"); library(pacman)
 p_load("tidyverse", "kableExtra")
-source("functions.R")
+# source("functions.R")
 
 # Load data -------
 IN_DIR = "/outputs/metrics/"
-FIG_DIR = "/outputs/figures"
+FIG_DIR = "/outputs/figures/mse_mmd/"
 TAB_DIR = "/outputs/tables/"
 
 mse <- read_csv(paste(c(IN_DIR, "/mse.csv"), collapse = ""))
 mmd <- read_csv(paste(c(IN_DIR, "/mmd.csv"), collapse = ""))
 
-order <- c("unadjusted", "scale", "combat", "confounded")
+order <- c("unadjusted", "limma_target", "limma", "quantile", "harmony", "liger", "seurat_scaling", "seurat_integration", "wasserstein", "autoclass", "fastMNN", "combat_target", "combat")
 
 metrics <- rbind(mse, mmd) %>%
     filter(!str_detect(adjuster, "pretrained")) %>%
@@ -70,62 +70,67 @@ metrics %>%
   metrics_table("MMD") %>%
   save_table(paste(c(TAB_DIR, "/mmd.tex"), collapse = ""))
 
-# Classification accuracy --------
-df <- read_csv(paste0(IN_DIR, "/classification.csv")) %>%
-    mutate(adjuster = factor(adjuster, levels = order))
+# # Classification accuracy --------
+# batch_df <- read_csv(paste0(IN_DIR, "batch_classification.csv")) %>%
+#     mutate(adjuster = factor(adjuster, levels = order))
+
+# true_class_df <- read_csv(paste0(IN_DIR, "true_classification.csv")) %>%
+#     mutate(adjuster = factor(adjuster, levels = order))
 
 
-df <- df %>% filter(model != "MLPClassifier")
-df <- df %>% filter(!str_detect(dataset, "pretrain"))
+# # df <- df %>% filter(model != "MLPClassifier")
+# # df <- df %>% filter(!str_detect(dataset, "pretrain"))
 
-df %>% filter(col_type == "batch_col") %>%
-  ggplot(aes(x = model, y = accuracy, fill = model)) +
-  geom_boxplot() +
-  facet_grid(dataset ~ adjuster, scales = "free_y") +
-  theme(axis.text.x = element_blank(),
-        axis.ticks.x = element_blank(),
-        axis.title.x = element_blank()) +
-  labs(y = "Batch Classification Accuracy")
-ggsave(paste0(FIG_DIR, "/batch_accuracy.pdf"))
+# batch_df %>%
+#   filter(metric == "roc_auc_score") %>%
+#   ggplot(aes(x = classifier, y = value, fill = classifier)) +
+#   geom_boxplot() +
+#   facet_grid(dataset ~ adjuster, scales = "free_y") +
+#   theme(axis.text.x = element_blank(),
+#         axis.ticks.x = element_blank(),
+#         axis.title.x = element_blank()) +
+#   labs(y = "Batch Classification Roc AUC Score") +
+# ggsave(paste0(FIG_DIR, "batch_accuracy.pdf"))
 
-df %>% filter(col_type == "true_class_col") %>%
-  ggplot(aes(x = model, y = accuracy, fill = model)) +
-  geom_boxplot() +
-  facet_grid(dataset ~ adjuster, scales = "free_y") +
-  labs(y = "True Class Classification Accuracy") +
-  theme_bw(base_size = 12) +
-  theme(axis.text.x = element_blank(),
-        axis.ticks.x = element_blank(),
-        axis.title.x = element_blank())
-ggsave(paste0(FIG_DIR, "/true_class_accuracy.pdf"))
+# true_class_df %>%
+#   filter(metric == "roc_auc_score") %>%
+#   ggplot(aes(x = classifier, y = value, fill = classifier)) +
+#   geom_boxplot() +
+#   facet_grid(dataset ~ adjuster, scales = "free_y") +
+#   labs(y = "True Class Classification Roc AUC Score") +
+#   theme_bw(base_size = 12) +
+#   theme(axis.text.x = element_blank(),
+#         axis.ticks.x = element_blank(),
+#         axis.title.x = element_blank())
+# ggsave(paste0(FIG_DIR, "true_class_accuracy.pdf"))
 
-# Make the table
+# # Make the table
 
-for (col in c("batch_col", "true_class_col")) {
-  my_table <- df %>%
-    mutate(model = str_replace_all(model, "Classifier", "")) %>%
-    group_by(adjuster, model, dataset, col_type) %>%
-    summarize(accuracy = round(mean(accuracy), 3), baseline = round(mean(baseline), 3)) %>%
-    filter(col_type == col) %>%
-    select(-col_type) %>%
-    spread(model, accuracy) %>%
-    arrange(dataset, adjuster) %>%
-    select(dataset, adjuster, baseline, everything()) %>%
-    rename(Dataset = dataset, Adjustment = adjuster, Baseline = baseline) %>%
-    kable("latex") %>%
-    kable_styling(latex_options = "striped") %>%
-    collapse_rows(columns = 1:3, valign = "top")
-#   my_table %>% print()
-  # We need to remove the first and last line for it to work in the latex file...
-  filename = paste(c(
-    TAB_DIR,
-    str_replace(col, "_col", ""),
-    ".tex"
-  ), collapse = "")
-  my_table %>%
-    as.character() %>%
-    str_split("\n") %>%
-    unlist() %>%
-    head(-1) %>% tail(-1) %>% paste(collapse = "\n") %>%
-    cat(file=filename, sep="")
-}
+# for (col in c("batch_col", "true_class_col")) {
+#   my_table <- df %>%
+#     mutate(model = str_replace_all(model, "Classifier", "")) %>%
+#     group_by(adjuster, model, dataset, column) %>%
+#     summarize(accuracy = round(mean(value), 3), baseline = round(mean(baseline), 3)) %>%
+#     filter(column == col) %>%
+#     select(-column) %>%
+#     spread(model, accuracy) %>%
+#     arrange(dataset, adjuster) %>%
+#     select(dataset, adjuster, baseline, everything()) %>%
+#     rename(Dataset = dataset, Adjustment = adjuster, Baseline = baseline) %>%
+#     kable("latex") %>%
+#     kable_styling(latex_options = "striped") %>%
+#     collapse_rows(columns = 1:3, valign = "top")
+# #   my_table %>% print()
+#   # We need to remove the first and last line for it to work in the latex file...
+#   filename = paste(c(
+#     TAB_DIR,
+#     str_replace(col, "_col", ""),
+#     ".tex"
+#   ), collapse = "")
+#   my_table %>%
+#     as.character() %>%
+#     str_split("\n") %>%
+#     unlist() %>%
+#     head(-1) %>% tail(-1) %>% paste(collapse = "\n") %>%
+#     cat(file=filename, sep="")
+# }

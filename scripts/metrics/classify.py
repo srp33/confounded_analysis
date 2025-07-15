@@ -208,7 +208,7 @@ if args.write_over or not path.exists(args.output_path):
 results = mine_previous_results(args.output_path)
 print(f"{len(results)} previous results found in {args.output_path}", flush=True)
 
-for method in ["combat", "combat_target", "limma", "limma_target", "unadjusted", "tampor", "quantile", "autoclass", "icvae"]:
+for method in ["combat", "combat_target", "limma", "limma_target", "unadjusted", "tampor", "quantile", "autoclass", "icvae", "seurat_scaling", "seurat_integration", "fastMNN", "liger", "wasserstein"]:
     df = None
     
     for learner in LEARNERS:

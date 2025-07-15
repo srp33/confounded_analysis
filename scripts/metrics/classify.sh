@@ -13,8 +13,8 @@ archive_file "${batch_out_path}"
 archive_file "${true_out_path}"
 
 # Remove lines pertaining to a particular adjuster and dataset
-# sed -i '/wasserstein,gse20194,/d' "${batch_out_path}"
-# sed -i '/wasserstein,gse20194,/d' "${true_out_path}"
+sed -i '/wasserstein,gse20194,/d' "${batch_out_path}"
+sed -i '/wasserstein,gse20194,/d' "${true_out_path}"
 
 script_path="$(dirname $0)/classify.py"
 

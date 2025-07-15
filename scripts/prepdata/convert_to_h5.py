@@ -68,13 +68,18 @@ def process_metadata(tsv_path, h5_store):
         df.columns = [sanitize_column_name(col) for col in df.columns]
         df.columns = make_unique_columns(df.columns.tolist())
         
-        # Use first column as dataframe index (typically sample/accession ID)
-        df.set_index(df.columns[0], inplace=True)
+        index_col_name = df.columns[0]
+        printnow(f"    Sanitizing index column '{index_col_name}' to match expression sample names...")
+        # ADDED: Sanitize index values. # Pending, might fix sample ID mismatch.
+        df[index_col_name] = df[index_col_name].apply(sanitize_column_name)
+        
+        # Use first column as dataframe index (now with sanitized values)
+        df.set_index(index_col_name, inplace=True)
 
         printnow(f"    Found {len(df)} samples with {len(df.columns)} metadata columns.")
 
         # Separate columns into those that need indexing and those that don't.
-        columns_to_index = [col for col in df.columns if col.startswith('refinebio')]
+        columns_to_index = [col for col in df.columns if col.startswith('refinebio') or col == 'experiment_accession_code']
         other_columns = [col for col in df.columns if col not in columns_to_index]
 
         # Store the indexable columns in 'table' format
@@ -91,7 +96,7 @@ def process_metadata(tsv_path, h5_store):
             )
             printnow(f"    ✓ Saved: {h5_key_indexed}")
 
-        # Store the remaining (majority of) columns in 'fixed' format to save memory
+        # # Store the remaining (majority of) columns in 'fixed' format to save memory
         # if other_columns:
         #     df_other = df[other_columns]
         #     h5_key_other = f"/metadata/{tsv_path.stem}_other_data"

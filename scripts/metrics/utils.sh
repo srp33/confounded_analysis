@@ -8,3 +8,10 @@ archive_file() {
     cp "${file_path}" "outputs/metrics/archive/${mod_date}_${filename}"
   fi
 }
+
+conditional_rm() {
+  local file_path="$1"
+  if [ -f "${file_path}" ]; then
+    rm "${file_path}"
+  fi
+}

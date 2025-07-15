@@ -13,16 +13,21 @@ DATA_DIR="/data"
 ADJUSTERS_PARALLEL=(
     # "combat"
     # "quantile"
+    # "seurat_scaling"
+    # "seurat_integration"
+    "npn"
 )
 
 # Define adjusters to run SEQUENTIALLY (one dataset job at a time for each adjuster)
 ADJUSTERS_SEQUENTIAL=(
-    # "seurat_scaling"
-    # "seurat_integration"
     # "fastMNN"
-    "liger"
-    "scanorama"
-    "scvi"
+    # "liger"
+)
+
+ADJUSTERS_TARGET=(
+    # "combat"
+    "fairadapt"
+    # "limma"
 )
 
 # Define datasets to be processed by all adjusters
@@ -74,14 +79,6 @@ run_adjust() {
 
 # --- Main Execution ---
 
-# Run adjusters that use specific target columns (Combat, FairAdapt, and Limma) in parallel.
-printf "\n\033[0;32mAdjusting data while preserving target columns (Combat, FairAdapt & Limma)\033[0m\n"
-# for dataset in "${DATASETS[@]}"; do
-#     run_adjust "combat" "$dataset" "${TARGET_COLS[$dataset]}" &
-#     run_adjust "fairadapt" "$dataset" "${TARGET_COLS[$dataset]}" &
-#     run_adjust "limma" "$dataset" "${TARGET_COLS[$dataset]}" &
-# done
-# wait
 
 # Run adjusters in the PARALLEL list.
 for adjuster in "${ADJUSTERS_PARALLEL[@]}"; do
@@ -96,8 +93,16 @@ done
 for adjuster in "${ADJUSTERS_SEQUENTIAL[@]}"; do
     printf "\n\033[0;32mAdjusting data with %s (sequentially)\033[0m\n" "$adjuster"
     for dataset in "${DATASETS[@]}"; do
-        # Run the job and wait for it to complete before starting the next one.
         run_adjust "$adjuster" "$dataset"
+    done
+done
+
+
+# Run adjusters that use specific target columns (Combat, FairAdapt, and Limma) in parallel.
+printf "\n\033[0;32mAdjusting data while preserving target columns (Combat, FairAdapt & Limma)\033[0m\n"
+for dataset in "${DATASETS[@]}"; do
+    for adjuster in "${ADJUSTERS_TARGET[@]}"; do
+        run_adjust "$adjuster" "$dataset" "${TARGET_COLS[$dataset]}"
     done
 done
 

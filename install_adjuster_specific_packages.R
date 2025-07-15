@@ -1,18 +1,25 @@
-if (!requireNamespace("BiocManager", quietly = TRUE))
+# Install BiocManager if it's not already present
+if (!requireNamespace("BiocManager", quietly = TRUE)) {
     install.packages("BiocManager")
+}
 
-tampor_packages = c("limma", "vsn", "doParallel", "ggplot2", "ggpubr")
+# --- Bioconductor Packages ---
+# A single, combined list of all Bioconductor packages to install
+bioc_packages <- c(
+    "limma", "vsn", "doParallel", "ggplot2", "ggpubr", 
+    "BatchQC", "batchelor" # rliger was removed from here
+)
+BiocManager::install(bioc_packages, update = FALSE, ask = FALSE)
 
-BiocManager::install(tampor_packages)
+# --- CRAN Packages ---
+# Install standard R packages from CRAN
+install.packages(c("ranger", "fairadapt"))
+install.packages("rliger") 
 
-BiocManager::install("BatchQC")
-
-BiocManager::install(c("batchelor", "rliger"))
-
-devtools::install_github("satijalab/seurat", "seurat5")
-devtools::install_github("satijalab/seurat-data", "seurat5")
-
-
-# Needed for FairAdapt
-install.packages("ranger")
-install.packages("fairadapt")
+# --- GitHub Packages ---
+# Install packages from GitHub using devtools
+if (!requireNamespace("devtools", quietly = TRUE)) {
+    install.packages("devtools")
+}
+devtools::install_github("satijalab/seurat", ref = "seurat5")
+devtools::install_github("satijalab/seurat-data", ref = "seurat5")

@@ -13,6 +13,7 @@ suppressPackageStartupMessages({
   library(rliger)
   library(fairadapt)
   library(future)
+  library(huge) # Added for NPN transformation
 })
 
 # Increase the maximum size for global variables in parallel processing
@@ -29,7 +30,7 @@ parser <- ArgumentParser(description = "A script to apply various batch correcti
 parser$add_argument("input_file", help = "Path to the input CSV file. Rows are samples, columns are features/metadata.")
 parser$add_argument("output_file", help = "Path for the output adjusted CSV file.")
 parser$add_argument("-a", "--adjuster", default = "combat",
-                    choices = c("combat", "limma", "seurat_scaling", "seurat_integration", "harmony", "quantile", "fairadapt", "liger", "fastMNN"),
+                    choices = c("combat", "limma", "seurat_scaling", "seurat_integration", "harmony", "quantile", "fairadapt", "liger", "fastMNN", "npn"), # Added 'npn' option
                     help = "Batch adjustment method to use.")
 parser$add_argument("-b", "--batch-col", default = "Batch", help = "Name of the column identifying the batch for each sample.")
 parser$add_argument("-c", "--column", nargs = "+", default = NULL, help = "Predictive columns to preserve. If specified, these are used to build the design matrix.")
@@ -217,6 +218,24 @@ adjust_quantile <- function(matrix_, ..., debug = FALSE) {
   message("Adjusting using quantile normalization.")
   return(t(normalizeQuantiles(as.matrix(t(matrix_)))))
 }
+
+adjust_npn <- function(matrix_, ..., debug = FALSE) {
+  #' Adjusts a matrix using Nonparanormal (NPN) transformation.
+  #' @param matrix_ The matrix to adjust (features x samples).
+  #' @return The adjusted matrix.
+  
+  message("Applying Nonparanormal (NPN) transformation.")
+  # The huge.npn function expects data in the format (samples x features).
+  # Our matrix is currently (features x samples), so we transpose it.
+  matrix_t <- t(matrix_)
+  
+  # Apply the NPN transformation. Default method is "shrinkage".
+  npn_transformed_t <- huge::huge.npn(matrix_t, verbose = FALSE)
+  
+  # Transpose the result back to (features x samples) format.
+  return(t(npn_transformed_t))
+}
+
 
 adjust_seurat_scaling <- function(df_, batch, data_are_counts, debug = FALSE) {
   #' Adjusts using Seurat's ScaleData regression method.
@@ -430,9 +449,9 @@ batch_adjust_tidy <- function(df, adjuster, batch_col, debug = FALSE) {
   
   df[[batch_col]] <- NULL
 
-  # Metadata columns start with "_meta"
-  metadata_cols <- df[, startsWith(colnames(df), "_meta")]
-  genes <- df[, !startsWith(colnames(df), "_meta")]
+  # Metadata columns start with "meta_"
+  metadata_cols <- df[, startsWith(colnames(df), "meta_")]
+  genes <- df[, !startsWith(colnames(df), "meta_")]
   
   message("2. Creating design matrix.")
   design <- create_design_matrix(metadata_cols, args$column, args$full_design_matrix)
@@ -443,7 +462,7 @@ batch_adjust_tidy <- function(df, adjuster, batch_col, debug = FALSE) {
   
   if (file.exists(transposed_cache_file)) {
     message(sprintf("Loading cached transposed data from '%s'", transposed_cache_file))
-    # Use read.csv with row.names=1 and check.names=FALSE to Ajut0ameni|
+    # Use read.csv with row.names=1 and check.names=FALSE
     mat_genes <- as.matrix(read.csv(transposed_cache_file, row.names = 1, check.names = FALSE))
   } else {
     message("3. Transposing gene data for adjustment (features x samples).")
@@ -462,6 +481,7 @@ batch_adjust_tidy <- function(df, adjuster, batch_col, debug = FALSE) {
     combat = adjust_combat(mat_genes, batch, design, data_are_counts, debug = FALSE),
     limma = adjust_limma(mat_genes, batch, design, debug = FALSE),
     quantile = adjust_quantile(mat_genes, debug = FALSE),
+    npn = adjust_npn(mat_genes, debug = FALSE), # Added npn case
     seurat_scaling = adjust_seurat_scaling(mat_genes, batch, data_are_counts, debug = FALSE),
     seurat_integration = adjust_seurat_integration(mat_genes, batch, data_are_counts, debug = FALSE),
     fairadapt = adjust_fairadapt(mat_genes, batch, design, debug = FALSE),

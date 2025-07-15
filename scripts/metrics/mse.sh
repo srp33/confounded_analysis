@@ -12,6 +12,9 @@ source /scripts/metrics/utils.sh
 # Save previous file to an archive
 archive_file "${out_path}"
 
+conditional_rm "${pivot_path}"
+conditional_rm "${out_path}"
+
 script_path="$(dirname $0)/mse.py"
 
 python "${script_path}" -i /data/gse49711 -o "$out_path"
