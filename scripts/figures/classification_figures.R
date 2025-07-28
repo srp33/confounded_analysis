@@ -7,30 +7,43 @@ suppressPackageStartupMessages({
   library(stringr)
   library(vroom)
   library(tibble) 
+  library(argparse)
 })
 
+parser <- ArgumentParser()
 
 # Load data -------
-IN_DIR = "/outputs/metrics/"
-FIG_DIR = "/outputs/figures/classification/"
-SAMPLE_DIR = "/../data/"
+parser$add_argument("-i", "--in_dir", type="character",
+              help="Directory containing input files")
+parser$add_argument("-f", "--fig_dir", type="character",
+              help="Directory where figures will be saved")
+parser$add_argument("-s", "--sample_dir", type="character", 
+              help="Directory containing sample data")
+parser$add_argument("-b", "--batch_filename", type="character",
+              help="Filename for batch data")
+parser$add_argument("-t", "--true_filename", type="character",
+              help="Filename for true labels data")
+                                        
+args <- parser$parse_args()
 
-cbp2 <- c("#E69F00", "#56B4E9","#009E73","#F0E442",
-          "#0072B2", "#D55E00", "#CC79A7", "#999999")
+IN_DIR <- args$in_dir
+FIG_DIR <- args$fig_dir
+SAMPLE_DIR <- args$sample_dir
+BATCH_FILENAME <- args$batch_filename
+TRUE_FILENAME <- args$true_filename
+
+cbp2 <- c("#E69F00", "#56B4E9", "#009E73", "#F0E442", "#0072B2", "#D55E00", "#CC79A7", "#999999")
 
 all_info_df <- tribble(
   ~dataset,    ~title,                            ~batch_label,      ~true_label,
   "gse20194", "GSE 20194 ER",                   "meta_batch",      "meta_er_status",
   "gse20194", "GSE 20194 HER2",                 "meta_batch",      "meta_her2_status",
   "gse20194", "GSE 20194 PR",                   "meta_batch",      "meta_pr_status",
-  "gse24080",  "GSE 24080 Eventfree Survival",  "meta_batch",      "meta_efs_outcome_label",
-  "gse24080",  "GSE 24080 Overall Survival",    "meta_batch",      "meta_os_outcome_label",
-  "gse49711",  "GSE 49711 Stage 1 2",           "meta_Class",      "meta_INSS_Stage_Split_1_2",
-  "gse49711",  "GSE 49711 Stage 2 3",           "meta_Class",      "meta_INSS_Stage_Split_2_3",
+  "gse24080",  "GSE 24080 Cytogenetic Abnormality",    "meta_batch",      "meta_cytogenetic_abnormality",
   "gse49711",  "GSE 49711 Stage 3 4",           "meta_Class",      "meta_INSS_Stage_Split_3_4"
 )
 
-order <- c("unadjusted", "limma_target", "limma", "tampor", "quantile", "harmony", "liger", "seurat_scaling", "seurat_integration", "wasserstein", "autoclass", "fastMNN", "combat_target", "combat") #, "icvae") #, "fair_adapt")
+order <- c("unadjusted", "seurat_scaling", "liger", "seurat_integration", "monotonic", "non_monotonic", "wasserstein", "autoclass", "min_mean", "combat_target", "fastMNN", "combat", "quantile", "npn") #, "icvae", "fair_adapt", "limma_target", "limma", "tampor", "harmony", 
 
 score_functions <- c("roc_auc_score", "mutual_info_score", "accuracy_score")
 
@@ -101,8 +114,8 @@ check_column <- function(data, column_name, values_to_check) {
   }
 }
 
-batchall <- vroom(file.path(IN_DIR, "batch_classification.csv"))
-trueall  <- vroom(file.path(IN_DIR, "true_classification.csv"))
+batchall <- vroom(file.path(IN_DIR, BATCH_FILENAME))
+trueall  <- vroom(file.path(IN_DIR, TRUE_FILENAME))
 problems(batchall)
 problems(trueall)
 
@@ -128,13 +141,15 @@ for (i in seq_len(nrow(all_info_df))) {
   }
   current_data <- file_cache[[dataset_name]]
 
-  check_column(trueall, "column", true_col_name)
+  check_column(trueall, "p_column", true_col_name)
 
   batch <- batchall %>% 
-    filter(dataset == dataset_name)
+    filter(dataset == dataset_name) %>%
+    filter(adjuster %in% order)
   true <- trueall %>% 
     filter(dataset == dataset_name) %>%
-    filter(column == true_col_name)
+    filter(p_column == true_col_name) %>%
+    filter(adjuster %in% order)
 
   together <- rbind(batch, true)
   check_column(together, "classifier", c())
@@ -150,8 +165,8 @@ for (i in seq_len(nrow(all_info_df))) {
     # Save figures ------------------
 
     ggplot() +
-      geom_boxplot(data = together_score, mapping = aes(x = factor(adjuster, order), y = value, color = column)) + 
-      geom_jitter(data = together_score, mapping = aes(x = factor(adjuster, order), y = value, color = column), position=position_jitterdodge()) +
+      geom_boxplot(data = together_score, mapping = aes(x = factor(adjuster, order), y = value, color = p_column, shape=c_value)) + 
+      geom_jitter(data = together_score, mapping = aes(x = factor(adjuster, order), y = value, color = p_column, shape=c_value), position=position_jitterdodge()) +
       geom_hline(yintercept = ran_true, color = "#56B4E9") + 
       geom_hline(yintercept = ran_batch, color = "#E69F00") + 
       ggtitle(title) +
