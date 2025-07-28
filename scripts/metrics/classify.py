@@ -6,6 +6,8 @@ from sklearn.ensemble import GradientBoostingClassifier, HistGradientBoostingCla
 from sklearn.metrics import make_scorer, roc_auc_score, accuracy_score, log_loss, mutual_info_score
 from sklearn.model_selection import cross_val_score
 from sklearn.feature_selection import mutual_info_classif
+from pathlib import Path
+from collections import defaultdict
 
 
 import os.path
@@ -16,30 +18,24 @@ import time
 import random
 from util import *
 
-parser = argparse.ArgumentParser()
-parser.add_argument("-i", "--input-dir", help="Input directory", required=True)
-parser.add_argument("-o", "--output-path", help="Path to output file", required=True)
-parser.add_argument("-c", "--column", help="Prediction column", required=True)
-parser.add_argument('--class0', nargs='+', required=False, help='Values to map to class 0')
-parser.add_argument('--class1', nargs='+', required=False, help='Values to map to class 1')
-parser.add_argument("-w", "--write-over", action="store_true", help="Redo computations even if done before, writing over the previous results")
-args = parser.parse_args()
 
-cache = DataFrameCache()
-
-nca = NeighborhoodComponentsAnalysis(n_components=100, random_state=42)
-
-LEARNERS = [  # Random state is updated within repeated_cross_val
+def setup_learners():
+    return [  # Random state is updated within repeated_cross_val
     {"algorithm": RandomForestClassifier, "fit_params": {"n_estimators": 200, "random_state": 0}},
     {"algorithm": HistGradientBoostingClassifier, "fit_params": {"max_iter": 50, "random_state": 0}},
 ]
 
-ITERATIONS = 10
 
-results = []
-random.seed()
-
-dataset = os.path.basename(args.input_dir)
+def setup_metrics():
+    return {
+    "roc_auc_score": make_scorer(roc_auc_score, response_method=["decision_function", "predict_proba"]),
+    "mutual_info_score": make_scorer(mutual_info_shannons),
+    # "mutual_info_proba_classif": make_scorer(mutual_info_proba_classif, response_method=["predict_proba"]),
+    # "mutual_info_proba_sum": make_scorer(mutual_info_proba_sum, response_method=["predict_proba"]),
+    # "determinant_based_mutual_information": make_scorer(determinant_based_mutual_information, response_method=["predict_proba"]),
+    "accuracy_score": make_scorer(accuracy_score),
+    # "log_loss": make_scorer(one_minus_log_loss, response_method=["predict_proba"])
+}
 
 
 # For mutual_info_score, we want to return the score in shannons (bits)
@@ -136,7 +132,7 @@ def determinant_based_mutual_information(y_true, y_pred_proba):
     return abs(det) * 4 # Max is 0.25 (max of x*1-x) because the probabilities must sum to 1. [0.5, 0] x [0, 0.5] = 0.25
 
 
-def mine_previous_results(file_path):
+def mine_previous_results(file_path, iterations):
     """
     Read the output file and return a dictionary of previous results.
     The keys are tuples of (metric, iteration, adjuster, dataset, column).
@@ -150,48 +146,17 @@ def mine_previous_results(file_path):
     # Skip the header line
     lines = lines[1:]
 
-    previous_results = {}
+    previous_results = defaultdict(dict)
     for line in [l.strip() for l in lines if l.strip()]:
-        metric, iteration, classifier, adjuster, dataset, column, value = line.split(",")
-        key = (classifier, adjuster, dataset, column)
+        metric, iteration, classifier, adjuster, dataset, p_column, c_column, c_value, value = line.split(",")
+        key = (classifier, adjuster, dataset, p_column, c_column, c_value)
         if key not in previous_results:
             previous_results[key] = {}
         if metric not in previous_results[key]:
-            previous_results[key][metric] = [-1] * ITERATIONS
+            previous_results[key][metric] = [-1] * iterations
         previous_results[key][metric][int(iteration)] = value
 
     return previous_results
-
-
-metrics = {
-    "roc_auc_score": make_scorer(roc_auc_score, response_method=["decision_function", "predict_proba"]),
-    "mutual_info_score": make_scorer(mutual_info_shannons),
-    "mutual_info_proba_classif": make_scorer(mutual_info_proba_classif, response_method=["predict_proba"]),
-    "mutual_info_proba_sum": make_scorer(mutual_info_proba_sum, response_method=["predict_proba"]),
-    "determinant_based_mutual_information": make_scorer(determinant_based_mutual_information, response_method=["predict_proba"]),
-    "accuracy_score": make_scorer(accuracy_score),
-    "log_loss": make_scorer(one_minus_log_loss, response_method=["predict_proba"])
-}
-
-def binarize_column(df, column, class0, class1):
-    """
-    Binarize the specified column in the DataFrame.
-    Map class0 to 0, class1 to 1, and drop rows with unmapped classes.
-    """
-    valid_classes = set(class0 + class1)
-    df[column] = df[column].astype(str)
-
-    # Flag invalid entries
-    invalid = df[~df[column].isin(valid_classes)]
-    if not invalid.empty:
-        print(f"Unmapped classes found: {invalid[column].unique()}")
-
-    # Map classes
-    df[column] = df[column].apply(
-        lambda x: 0 if x in class0 else 1 if x in class1 else np.nan
-    ).dropna()  # Remove rows with unmapped classes
-
-    return df
 
 
 def display_metrics(scores_by_metric):
@@ -200,46 +165,112 @@ def display_metrics(scores_by_metric):
         std_value = np.std(values)
         print(f"{metric: <40}  {mean_value:.6f} ± {std_value:.6f}", flush=True)
 
-# Read output file to check if we need to redo computations
-if args.write_over or not path.exists(args.output_path):
-    with open(args.output_path, 'w') as output_file:
-        output_file.write("metric,iteration,classifier,adjuster,dataset,column,value\n")
 
-results = mine_previous_results(args.output_path)
-print(f"{len(results)} previous results found in {args.output_path}", flush=True)
+def initialize_output_file(output_path, write_over):
+    if write_over or not path.exists(output_path):
+        with open(output_path, 'w') as output_file:
+            output_file.write("metric,iteration,classifier,adjuster,dataset,p_column,c_column,c_value,value\n")
 
-for method in ["combat", "combat_target", "limma", "limma_target", "unadjusted", "tampor", "quantile", "autoclass", "icvae", "seurat_scaling", "seurat_integration", "fastMNN", "liger", "wasserstein"]:
+
+
+def retrieve_and_filter_df(input_path, method, cache, index, classifier_name, dataset):
+    df = cache.get_dataframe(input_path)
+    print(f"Getting {input_path}", flush=True)
+    print(f"Total rows: {len(df)}", flush=True)
+    if df is None or len(df) == 0:
+        return None
+    if index is not None:
+        df = df.loc[index]
+    return df
+
+
+
+def measure_dataset_method(cache, index, learners, method, dataset, prediction_column, conditional_column, c_value, results, output_path, write_over, iterations, input_path, metrics):
     df = None
-    
-    for learner in LEARNERS:
+    for learner in learners:
         classifier_name = str(learner["algorithm"]).split("'")[1].split(".")[-1].replace("Classifier", "")
-        key = (classifier_name, method, dataset, args.column)
-        if not args.write_over and key in results:
-            print(f"Skipping {classifier_name} for {method}, {dataset}, {args.column} as results already exist.", flush=True)
+        key = (classifier_name, method, dataset, prediction_column, str(conditional_column), c_value)
+        description = f"{classifier_name:^25} for {method:^20} on {dataset:>10}, predicting {prediction_column:>15} | {conditional_column}={c_value}"
+
+        if key in results and not write_over:
+            print(f"Skipping {description}", flush=True)
             continue
-        if key not in results:
-            results[key] = {}
 
         if df is None:
-            df = cache.get_dataframe(args.input_dir + "/" + method + ".csv")
-            if args.class0 and args.class1:
-                df = binarize_column(df, args.column, args.class0, args.class1)
+            df = retrieve_and_filter_df(input_path, method, cache, index, classifier_name, dataset)
+            if df is None:
+                print(f"Skipping {description}", flush=True)
+                continue
 
-        print(f"Performing classification using {classifier_name} for {method}, {dataset}, {args.column}", flush=True)
-        scores = repeated_cross_val(df, args.column, learner, iterations=ITERATIONS, n_folds=3, n_jobs=12, metrics=metrics)
+        print(f"Performing classification using {classifier_name} for {method} on {dataset}, predicting {prediction_column} | {conditional_column}={c_value}", flush=True)
+        scores = repeated_cross_val(df, prediction_column, learner, iterations=iterations, n_folds=3, n_jobs=12, metrics=metrics)
 
-        # Reduce to 6 decimal places, and transpose
+        # Reduce to 6 decimal places
         scores_by_metric = {metric: [round(score[metric], 6) for score in scores] for metric in metrics}
-        for metric, values in scores_by_metric.items():
-            results[key][metric] = values
 
         # Print mean and std of each metric
         display_metrics(scores_by_metric)
 
-        # Write results to output file
-        with open(args.output_path, 'a') as output_file:
+        # Transpose structure, write to file
+        with open(output_path, 'a') as output_file:
             for metric, values in scores_by_metric.items():
+                results[key][metric] = values
                 for iteration, value in enumerate(values):
-                    output_file.write(f"{metric},{iteration},{classifier_name},{method},{dataset},{args.column},{value}\n")
-        
+                    output_file.write(f"{metric},{iteration},{classifier_name},{method},{dataset},{prediction_column},{conditional_column},{c_value},{value}\n")
 
+
+
+def process_indexes(cache, indexes, input_dir, output_path, prediction_column, conditional_column, write_over, iterations):
+    dataset = os.path.basename(input_dir)
+    results = mine_previous_results(output_path, iterations)
+    print(f"{len(results)} previous results found in {output_path}", flush=True)
+
+    metrics = setup_metrics()
+    learners = setup_learners()
+    methods = ["min_mean", "combat", "combat_target", "npn", "limma", "limma_target", "unadjusted", "tampor", "quantile", "autoclass", "icvae", "seurat_scaling", "seurat_integration", "fastMNN", "liger", "wasserstein", "monotonic", "non_monotonic"]
+
+    for index, c_value in indexes:
+        for method in methods:
+            input_path = input_dir / f"{method}.csv"
+            measure_dataset_method(cache, index, learners, method, dataset, prediction_column, conditional_column, c_value, results, output_path, write_over, iterations, input_path, metrics)
+
+
+
+def classify_conditionally(cache, input_dir, output_path, prediction_column, conditional_column, write_over, iterations):
+    df = cache.get_dataframe(input_dir / "unadjusted.csv")
+    print(f"Length of unadjusted: {len(df)}", flush=True)
+
+    indexes = []
+    if conditional_column:
+        conditional_values = df[conditional_column].unique()
+        for value in conditional_values:
+            index = df[conditional_column] == value
+            indexes.append((index, str(value)))
+            print(f"Length of {conditional_column}={value}: {len(df[df[conditional_column] == value])}", flush=True)
+    else:
+        # None represents "all rows"
+        indexes.append((None, "None"))
+
+    process_indexes(cache, indexes, input_dir, output_path, prediction_column, conditional_column, write_over, iterations)
+
+
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("-i", "--input-dir", type=Path, help="Input directory", required=True)
+    parser.add_argument("-o", "--output-path", help="Path to output file", required=True)
+    parser.add_argument("-p", "--prediction_column", help="Prediction column", required=True)
+    parser.add_argument('-c', "--conditional_column", help="Conditional column", required=False)
+    parser.add_argument("--both_ways", action="store_true", help="Classify both ways", required=False)
+    parser.add_argument("-w", "--write-over", action="store_true", help="Redo computations even if done before, writing over the previous results")
+    args = parser.parse_args()
+    cache = DataFrameCache()
+    random.seed()
+
+    initialize_output_file(args.output_path, args.write_over)
+    classify_conditionally(cache, args.input_dir, args.output_path, args.prediction_column, args.conditional_column, args.write_over, iterations=10)
+    if args.both_ways:
+        classify_conditionally(cache, args.input_dir, args.output_path, args.conditional_column, args.prediction_column, args.write_over, iterations=10)
+    
+
+if __name__ == "__main__":
+    main()
