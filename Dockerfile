@@ -31,6 +31,18 @@ RUN wget --quiet https://github.com/conda-forge/miniforge/releases/latest/downlo
 ENV RETICULATE_PYTHON=$CONDA_DIR/bin/python
 
 ####################################################################################
+# Update CMake to meet RcppPlanc requirements (needs 3.24+)
+####################################################################################
+
+RUN apt-get update && \
+    apt-get install -y wget gnupg software-properties-common && \
+    wget -O - https://apt.kitware.com/keys/kitware-archive-latest.asc 2>/dev/null | gpg --dearmor - | tee /etc/apt/trusted.gpg.d/kitware.gpg >/dev/null && \
+    echo 'deb https://apt.kitware.com/ubuntu/ jammy main' | tee /etc/apt/sources.list.d/kitware.list >/dev/null && \
+    apt-get update && \
+    apt-get install -y cmake && \
+    cmake --version
+
+####################################################################################
 # Create a user-writable directory for R packages and set ENV variable
 ####################################################################################
 
@@ -59,7 +71,14 @@ RUN conda install -y -c conda-forge numpy 'scikit-learn>=1.4' pandas 'tensorflow
 # Install additional Python packages
 ####################################################################################
 
-RUN conda install -y aif360 tabulate jaxtyping beartype aif360 pytables
+RUN conda install -y aif360 tabulate jaxtyping beartype aif360 pytables opentsne umap-learn
+
+####################################################################################
+# FIX: Create and define a writable cache directory for Numba (for UMAP)
+####################################################################################
+
+RUN mkdir -p /tmp/numba_cache && chmod -R 777 /tmp/numba_cache
+ENV NUMBA_CACHE_DIR=/tmp/numba_cache
 
 ####################################################################################
 # Clone libraries
@@ -88,4 +107,3 @@ RUN pip install 'aif360[FairAdapt]'
 #    chmod +x /usr/bin/confounded && \
 #    chmod 777 /confounded -R && \
 #    echo "Done importing Confounded code"
-
