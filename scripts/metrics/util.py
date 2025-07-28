@@ -168,6 +168,9 @@ def repeated_cross_val(df, predict_column, learner, iterations, n_folds, n_jobs,
         return []
 
     # Target variable
+    if predict_column not in df.columns:
+        print(f"Predict column {predict_column} not found in dataframe.")
+        print(f"Columns beginning with 'meta_' are: {df.columns[df.columns.str.startswith('meta_')]}")
     y = df[predict_column].copy()
 
     # Remove target and other categorical columns
