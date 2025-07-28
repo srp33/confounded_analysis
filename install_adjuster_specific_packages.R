@@ -1,25 +1,24 @@
-# Install BiocManager if it's not already present
-if (!requireNamespace("BiocManager", quietly = TRUE)) {
-    install.packages("BiocManager")
+# Install pak if it's not already available
+if (!requireNamespace("pak", quietly = TRUE)) {
+    install.packages("pak")
 }
 
-# --- Bioconductor Packages ---
-# A single, combined list of all Bioconductor packages to install
-bioc_packages <- c(
+# Install packages in dependency order to avoid conflicts
+# First install base packages
+base_packages <- c(
+    # Bioconductor Packages
     "limma", "vsn", "doParallel", "ggplot2", "ggpubr", 
-    "BatchQC", "batchelor" # rliger was removed from here
+    "BatchQC", "batchelor",
+    
+    # CRAN Packages
+    "ranger", "fairadapt", "rliger", "huge",
+    "MASS", "Rtsne", "umap"
 )
-BiocManager::install(bioc_packages, update = FALSE, ask = FALSE)
 
-# --- CRAN Packages ---
-# Install standard R packages from CRAN
-install.packages(c("ranger", "fairadapt"))
-install.packages("rliger") 
+pak::pkg_install(base_packages)
 
-# --- GitHub Packages ---
-# Install packages from GitHub using devtools
-if (!requireNamespace("devtools", quietly = TRUE)) {
-    install.packages("devtools")
-}
-devtools::install_github("satijalab/seurat", ref = "seurat5")
-devtools::install_github("satijalab/seurat-data", ref = "seurat5")
+# Then install Seurat
+pak::pkg_install("satijalab/seurat@seurat5")
+
+# Finally install SeuratData (depends on Seurat)
+pak::pkg_install("satijalab/seurat-data@seurat5")
