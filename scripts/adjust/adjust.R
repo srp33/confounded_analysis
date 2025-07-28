@@ -13,33 +13,8 @@ suppressPackageStartupMessages({
   library(rliger)
   library(fairadapt)
   library(future)
-  library(huge) # Added for NPN transformation
+  library(huge)
 })
-
-# Increase the maximum size for global variables in parallel processing
-# This is necessary for Seurat integration with large datasets.
-options(future.globals.maxSize = 2000 * 1024^2)
-
-# Print Seurat version for debugging
-message(paste("Using Seurat version:", packageVersion("Seurat")))
-
-# Parse command line arguments --------------------------
-
-parser <- ArgumentParser(description = "A script to apply various batch correction methods to tidy data.")
-
-parser$add_argument("input_file", help = "Path to the input CSV file. Rows are samples, columns are features/metadata.")
-parser$add_argument("output_file", help = "Path for the output adjusted CSV file.")
-parser$add_argument("-a", "--adjuster", default = "combat",
-                    choices = c("combat", "limma", "seurat_scaling", "seurat_integration", "harmony", "quantile", "fairadapt", "liger", "fastMNN", "npn"), # Added 'npn' option
-                    help = "Batch adjustment method to use.")
-parser$add_argument("-b", "--batch-col", default = "Batch", help = "Name of the column identifying the batch for each sample.")
-parser$add_argument("-c", "--column", nargs = "+", default = NULL, help = "Predictive columns to preserve. If specified, these are used to build the design matrix.")
-parser$add_argument("-f", "--full-design-matrix", action = "store_true", help = "If set, the design matrix will include all categorical metadata variables.")
-# Add a debug flag
-parser$add_argument("--debug", action = "store_true", help = "Enable verbose debugging messages.")
-
-
-args <- parser$parse_args()
 
 # Helper Functions ---------------------------------
 
@@ -182,6 +157,76 @@ restore_names <- function(matrix, prep_list) {
 
 # Adjustment Functions ---------------------------------
 
+adjust_min_mean <- function(matrix_, batch, ..., debug = FALSE) {
+  #' Adjusts a matrix by matching the minimum and mean values across batches.
+  #' @param matrix_ The matrix to adjust (features x samples).
+  #' @param batch The batch variable vector.
+  #' @return The adjusted matrix.
+  
+  message("Adjusting data by matching minimum and mean values across batches.")
+  
+  # Check for NA values in batch
+  if (any(is.na(batch))) {
+    message(sprintf("WARNING: Found %d NA values in batch variable", sum(is.na(batch))))
+    # Remove NA values
+    valid_indices <- !is.na(batch)
+    batch <- batch[valid_indices]
+    matrix_ <- matrix_[, valid_indices, drop = FALSE]
+  }
+  
+  # Get unique batch levels
+  batch_levels <- unique(batch)
+  batch_levels <- batch_levels[!is.na(batch_levels)]  # Remove any NA levels
+  
+  # Calculate global statistics
+  global_mins  <- apply(matrix_, 1, min)
+  global_means <- apply(matrix_, 1, mean)
+  
+  # Create a copy of the matrix to store adjusted values
+  adjusted_matrix <- matrix_
+  
+  # Process each batch separately
+  for (b in batch_levels) {
+    batch_indices <- which(batch == b)
+    if (length(batch_indices) > 0) {
+      batch_data <- matrix_[, batch_indices, drop = FALSE]
+      
+      # Calculate batch-specific statistics
+      batch_mins <- apply(batch_data, 1, min)
+      batch_means <- rowMeans(batch_data)
+      
+      # Adjust each feature in the batch
+      for (i in 1:nrow(batch_data)) {
+        # Skip adjustment if all values are identical
+        if (length(unique(batch_data[i,])) > 1) {
+          # Calculate adjustment factors
+          min_shift <- global_mins[i] - batch_mins[i]
+          mean_factor <- global_means[i] / batch_means[i]
+          
+          # Apply the transformation: first shift minimum, then scale to match mean
+          shifted_values <- batch_data[i,] + min_shift
+          # Recalculate mean after shifting
+          shifted_mean <- mean(shifted_values)
+          # Scale to match global mean
+          adjusted_values <- shifted_values * (global_means[i] / shifted_mean)
+          
+          # Store adjusted values
+          adjusted_matrix[i, batch_indices] <- adjusted_values
+        }
+      }
+      
+      if (debug) {
+        message(sprintf("Adjusted batch %s: %d samples", b, length(batch_indices)))
+        adjusted_batch_means <- rowMeans(adjusted_matrix[, batch_indices, drop = FALSE])
+        mean_diff <- mean(abs(adjusted_batch_means - global_means))
+        message(sprintf("Mean absolute difference from global means: %f", mean_diff))
+      }
+    }
+  }
+  
+  return(adjusted_matrix)
+}
+
 adjust_combat <- function(matrix_, batch, design, data_are_counts, debug = FALSE) {
   #' Adjusts a matrix using ComBat or ComBat_seq.
   #' @param matrix_ The matrix to adjust (features x samples).
@@ -210,30 +255,123 @@ adjust_limma <- function(matrix_, batch, design, ..., debug = FALSE) {
   return(limma::removeBatchEffect(matrix_, batch = batch, design = design))
 }
 
-adjust_quantile <- function(matrix_, ..., debug = FALSE) {
+adjust_quantile <- function(matrix_, batch, ..., debug = FALSE) {
   #' Adjusts a matrix using quantile normalization.
+  #' We adjust by batch.
   #' @param matrix_ The matrix to adjust (features x samples).
   #' @return The adjusted matrix.
 
   message("Adjusting using quantile normalization.")
-  return(t(normalizeQuantiles(as.matrix(t(matrix_)))))
+  
+  # Check for NA values in batch
+  if (any(is.na(batch))) {
+    message(sprintf("WARNING: Found %d NA values in batch variable", sum(is.na(batch))))
+    # Remove NA values
+    valid_indices <- !is.na(batch)
+    batch <- batch[valid_indices]
+    matrix_ <- matrix_[, valid_indices, drop = FALSE]
+  }
+
+  # Split the matrix by batch
+  batch_levels <- unique(batch)
+  batch_levels <- batch_levels[!is.na(batch_levels)]  # Remove any NA levels
+  matrix_by_batch <- list()
+  
+  for (b in batch_levels) {
+    batch_indices <- which(batch == b)
+    if (length(batch_indices) > 0) {
+      matrix_by_batch[[as.character(b)]] <- matrix_[, batch_indices, drop = FALSE]
+    }
+  }
+  
+  # Apply quantile normalization to each batch separately
+  for (b in names(matrix_by_batch)) {
+    old_values = matrix_by_batch[[b]]
+    new_values = t(limma::normalizeQuantiles(t(matrix_by_batch[[b]])))
+    # Verify changed
+    if (debug) {
+      old_gene_means = rowMeans(old_values)
+      new_gene_means = rowMeans(new_values)
+      message(sprintf("Stats old means: min: %f, max: %f, mean: %f", min(old_gene_means), max(old_gene_means), mean(old_gene_means)))
+      message(sprintf("Stats new means: min: %f, max: %f, mean: %f", min(new_gene_means), max(new_gene_means), mean(new_gene_means)))
+    }
+
+
+    matrix_by_batch[[b]] <- new_values
+    if (debug) {
+      was_changed = !all(old_values == matrix_by_batch[[b]])
+      if (was_changed) {
+        message(sprintf("Quantile normalization changed values for batch %s", b))
+      } else {
+        message(sprintf("Quantile normalization did not change values for batch %s", b))
+      }
+    }
+  }
+  
+  # Recombine the normalized batches
+  result_matrix <- matrix_
+  for (b in names(matrix_by_batch)) {
+    batch_indices <- which(batch == b)
+    result_matrix[, batch_indices] <- matrix_by_batch[[b]]
+  }
+  
+  return(result_matrix)
 }
 
-adjust_npn <- function(matrix_, ..., debug = FALSE) {
+adjust_npn <- function(matrix_, batch, ..., debug = FALSE) {
   #' Adjusts a matrix using Nonparanormal (NPN) transformation.
+  #' We adjust by batch.
   #' @param matrix_ The matrix to adjust (features x samples).
   #' @return The adjusted matrix.
   
-  message("Applying Nonparanormal (NPN) transformation.")
-  # The huge.npn function expects data in the format (samples x features).
-  # Our matrix is currently (features x samples), so we transpose it.
-  matrix_t <- t(matrix_)
+  message("Adjusting using Nonparanormal (NPN) transformation.")
   
-  # Apply the NPN transformation. Default method is "shrinkage".
-  npn_transformed_t <- huge::huge.npn(matrix_t, verbose = FALSE)
+  # Check for NA values in batch
+  if (any(is.na(batch))) {
+    message(sprintf("WARNING: Found %d NA values in batch variable", sum(is.na(batch))))
+    # Remove NA values
+    valid_indices <- !is.na(batch)
+    batch <- batch[valid_indices]
+    matrix_ <- matrix_[, valid_indices, drop = FALSE]
+  }
   
-  # Transpose the result back to (features x samples) format.
-  return(t(npn_transformed_t))
+  # Split the matrix by batch
+  batch_levels <- unique(batch)
+  batch_levels <- batch_levels[!is.na(batch_levels)]  # Remove any NA levels
+  matrix_by_batch <- list()
+  
+  for (b in batch_levels) {
+    batch_indices <- which(batch == b)
+    if (length(batch_indices) > 0) {
+      matrix_by_batch[[as.character(b)]] <- matrix_[, batch_indices, drop = FALSE]
+    }
+  }
+  
+  # Apply NPN transformation to each batch separately
+  for (b in names(matrix_by_batch)) {
+    # Transpose to (samples x features) for huge.npn
+    matrix_t <- t(matrix_by_batch[[b]])
+    # Apply NPN transformation
+    npn_transformed_t <- huge::huge.npn(matrix_t, verbose = FALSE)
+    # Transpose back to (features x samples)
+    matrix_by_batch[[b]] <- t(npn_transformed_t)
+
+    # Verify:
+    gene_means = apply(matrix_by_batch[[b]], 1, mean)
+    mean_mean = mean(gene_means)
+    mean_var = var(gene_means)
+    message(sprintf("Stats for means of batch %s:", b))
+    message(sprintf("Min: %f, Max: %f, Mean: %f, Var: %f", min(gene_means), max(gene_means), mean_mean, mean_var))
+  }
+  
+  # Recombine the transformed batches
+  result_matrix <- matrix_
+  for (b in names(matrix_by_batch)) {
+    batch_indices <- which(batch == as.character(b))
+    result_matrix[, batch_indices] <- matrix_by_batch[[b]]
+  }
+  
+  return(result_matrix)
 }
 
 
@@ -355,9 +493,28 @@ adjust_fairadapt <- function(gene_df, batch, design, ..., debug = FALSE) {
         stop("Could not identify a unique column to preserve from the design matrix.")
     }
 
+    # Debug information
+    if (debug) {
+        message(sprintf("DEBUG: gene_df dimensions: %d rows, %d cols", nrow(gene_df), ncol(gene_df)))
+        message(sprintf("DEBUG: batch length: %d", length(batch)))
+        message(sprintf("DEBUG: design dimensions: %d rows, %d cols", nrow(design), ncol(design)))
+        message(sprintf("DEBUG: design_col_name: %s", design_col_name))
+        message(sprintf("DEBUG: gene_df class: %s", class(gene_df)))
+        message(sprintf("DEBUG: batch class: %s", class(batch)))
+        message(sprintf("DEBUG: design class: %s", class(design)))
+    }
+
     data_for_adj <- gene_df
     data_for_adj$batch <- batch
     data_for_adj[[design_col_name]] <- design[, design_col_name]
+
+    # More debug information
+    if (debug) {
+        message(sprintf("DEBUG: data_for_adj dimensions: %d rows, %d cols", nrow(data_for_adj), ncol(data_for_adj)))
+        message(sprintf("DEBUG: data_for_adj column names: %s", paste(colnames(data_for_adj), collapse = ", ")))
+        message(sprintf("DEBUG: data_for_adj column classes: %s", paste(sapply(data_for_adj, class), collapse = ", ")))
+        message(sprintf("DEBUG: About to create matrix with dimensions: %d x %d", ncol(data_for_adj), ncol(data_for_adj)))
+    }
 
     adj.mat <- matrix(0, nrow = ncol(data_for_adj), ncol = ncol(data_for_adj))
     colnames(adj.mat) <- rownames(adj.mat) <- colnames(data_for_adj)
@@ -436,7 +593,7 @@ adjust_liger <- function(df_, batch, data_are_counts, debug = FALSE) {
 
 # Main Orchestration Function --------------------------------
 
-batch_adjust_tidy <- function(df, adjuster, batch_col, debug = FALSE) {
+batch_adjust_tidy <- function(df, input_file, adjuster, batch_col, column, full_design_matrix, debug = FALSE) {
   #' Main function to orchestrate the batch adjustment process.
   #' @param df The input tidy data frame (samples x columns).
   #' @param adjuster The name of the adjustment method to use.
@@ -450,15 +607,18 @@ batch_adjust_tidy <- function(df, adjuster, batch_col, debug = FALSE) {
   df[[batch_col]] <- NULL
 
   # Metadata columns start with "meta_"
+  meta_data_names = colnames(df)[startsWith(colnames(df), "meta_")]
   metadata_cols <- df[, startsWith(colnames(df), "meta_")]
+  message(sprintf("Metadata cols: %s", paste(colnames(metadata_cols), collapse=", ")))
+  message(sprintf("Same as original: %s", all(colnames(metadata_cols) == meta_data_names)))
   genes <- df[, !startsWith(colnames(df), "meta_")]
   
   message("2. Creating design matrix.")
-  design <- create_design_matrix(metadata_cols, args$column, args$full_design_matrix)
+  design <- create_design_matrix(metadata_cols, column, full_design_matrix)
 
   # --- Caching logic for transposed data ---
   # Create a unique filename for the cached transposed data based on the input file
-  transposed_cache_file <- sub("(\\.[^.]+)$", "_t\\1", args$input_file)
+  transposed_cache_file <- sub("(\\.[^.]+)$", "_t\\1", input_file)
   
   if (file.exists(transposed_cache_file)) {
     message(sprintf("Loading cached transposed data from '%s'", transposed_cache_file))
@@ -478,13 +638,14 @@ batch_adjust_tidy <- function(df, adjuster, batch_col, debug = FALSE) {
   
   adjusted_matrix <- switch(
     adjuster,
-    combat = adjust_combat(mat_genes, batch, design, data_are_counts, debug = FALSE),
-    limma = adjust_limma(mat_genes, batch, design, debug = FALSE),
-    quantile = adjust_quantile(mat_genes, debug = FALSE),
-    npn = adjust_npn(mat_genes, debug = FALSE), # Added npn case
-    seurat_scaling = adjust_seurat_scaling(mat_genes, batch, data_are_counts, debug = FALSE),
-    seurat_integration = adjust_seurat_integration(mat_genes, batch, data_are_counts, debug = FALSE),
-    fairadapt = adjust_fairadapt(mat_genes, batch, design, debug = FALSE),
+    min_mean = adjust_min_mean(mat_genes, batch),
+    combat = adjust_combat(mat_genes, batch, design, data_are_counts, debug = debug),
+    limma = adjust_limma(mat_genes, batch, design, debug = debug),
+    quantile = adjust_quantile(mat_genes, batch, debug = T),
+    npn = adjust_npn(mat_genes, batch, debug = debug),
+    seurat_scaling = adjust_seurat_scaling(mat_genes, batch, data_are_counts, debug = debug),
+    seurat_integration = adjust_seurat_integration(mat_genes, batch, data_are_counts, debug = debug),
+    fairadapt = adjust_fairadapt(genes, batch, design, debug = debug),
     fastMNN = {
         message("Adjusting with fastMNN.")
         prep_list <- prep_seurat_like(mat_genes, batch, data_are_counts)
@@ -494,20 +655,50 @@ batch_adjust_tidy <- function(df, adjuster, batch_col, debug = FALSE) {
         corrected_matrix <- as.matrix(assay(sce_corrected, "reconstructed"))
         restore_names(corrected_matrix, prep_list)
     },
-    liger = adjust_liger(mat_genes, batch, data_are_counts, debug = TRUE),
+    liger = adjust_liger(mat_genes, batch, data_are_counts, debug = debug),
     stop(sprintf("Unknown adjuster '%s'", adjuster))
   )
   
-  if(args$debug) message(sprintf("Dimensions of final adjusted matrix before transposing: %d rows, %d cols", nrow(adjusted_matrix), ncol(adjusted_matrix)))
+  if(debug) message(sprintf("Dimensions of final adjusted matrix before transposing: %d rows, %d cols", nrow(adjusted_matrix), ncol(adjusted_matrix)))
   
   message("5. Reconstructing the tidy data frame.")
   adjusted_df <- as.data.frame(t(adjusted_matrix))
-  
+
   final_df <- cbind(batch, metadata_cols, adjusted_df)
+  if(debug) {
+    message(sprintf("Metadata columns found in adjusted: %s", paste(colnames(adjusted_df)[startsWith(colnames(adjusted_df), "meta_")], collapse = ", ")))
+    message(sprintf("Metadata columns found in final: %s", paste(colnames(final_df)[startsWith(colnames(final_df), "meta_")], collapse = ", ")))
+    if(sum(startsWith(colnames(final_df), "meta_")) == 0 && length(meta_data_names) > 0) {
+      stop("No metadata columns found in final data frame.")
+    }
+  }
   colnames(final_df)[1] <- batch_col
   
+  # Reorder the columns
   return(final_df[, original_colnames])
 }
+
+
+# Increase the maximum size for global variables in parallel processing
+# This is necessary for Seurat integration with large datasets.
+options(future.globals.maxSize = 2000 * 1024^2)
+
+# Parse command line arguments --------------------------
+
+parser <- ArgumentParser(description = "A script to apply various batch correction methods to tidy data.")
+
+parser$add_argument("input_file", help = "Path to the input CSV file. Rows are samples, columns are features/metadata.")
+parser$add_argument("output_file", help = "Path for the output adjusted CSV file.")
+parser$add_argument("-a", "--adjuster", default = "combat",
+                    choices = c("min_mean", "combat", "limma", "seurat_scaling", "seurat_integration", "harmony", "quantile", "fairadapt", "liger", "fastMNN", "npn"),
+                    help = "Batch adjustment method to use.")
+parser$add_argument("-b", "--batch-col", default = "Batch", help = "Name of the column identifying the batch for each sample.")
+parser$add_argument("-c", "--column", nargs = "+", default = NULL, help = "Predictive columns to preserve. If specified, these are used to build the design matrix.")
+parser$add_argument("-f", "--full-design-matrix", action = "store_true", help = "If set, the design matrix will include all categorical metadata variables.")
+# Add a debug flag
+parser$add_argument("--debug", action = "store_true", help = "Enable verbose debugging messages.")
+
+args <- parser$parse_args()
 
 
 # Main Execution --------------------------------
@@ -527,8 +718,11 @@ message(sprintf("Starting batch adjustment with method: '%s'", args$adjuster))
 
 adjusted_data <- batch_adjust_tidy(
   df,
+  input_file = args$input_file,
   adjuster = args$adjuster,
   batch_col = args$batch_col,
+  column = args$column,
+  full_design_matrix=args$full_design_matrix,
   debug = args$debug
 )
 

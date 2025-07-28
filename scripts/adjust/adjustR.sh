@@ -11,11 +11,12 @@ DATA_DIR="/data"
 
 # Define adjusters to run in PARALLEL (all dataset jobs for an adjuster run at once)
 ADJUSTERS_PARALLEL=(
+    "min_mean"
     # "combat"
     # "quantile"
     # "seurat_scaling"
     # "seurat_integration"
-    "npn"
+    # "npn"
 )
 
 # Define adjusters to run SEQUENTIALLY (one dataset job at a time for each adjuster)
@@ -26,24 +27,26 @@ ADJUSTERS_SEQUENTIAL=(
 
 ADJUSTERS_TARGET=(
     # "combat"
-    "fairadapt"
+    # "fairadapt"
     # "limma"
 )
 
 # Define datasets to be processed by all adjusters
-DATASETS=("gse49711" "gse20194" "gse24080")
+DATASETS=("gse49711") #"special_distinct" "gse20194" "gse24080")
 
 # Define batch columns for each dataset using an associative array
 declare -A BATCH_COLS
 BATCH_COLS["gse49711"]="meta_Class"
 BATCH_COLS["gse20194"]="meta_batch"
 BATCH_COLS["gse24080"]="meta_batch"
+BATCH_COLS["special_distinct"]="batch"
 
 # Define target columns to preserve for specific combat and fairadapt adjustments
 declare -A TARGET_COLS
-TARGET_COLS["gse49711"]="meta_INSS_Stage_Split_1_2 meta_INSS_Stage_Split_2_3 meta_INSS_Stage_Split_3_4"
-TARGET_COLS["gse20194"]="meta_er_status meta_her2_status meta_pr_status"
-TARGET_COLS["gse24080"]="meta_efs_outcome_label meta_os_outcome_label"
+# For fairadapt, use only one column as it requires exactly one column to preserve (plus intercept)
+TARGET_COLS["gse49711"]="meta_INSS_Stage_Split_1_2"
+TARGET_COLS["gse20194"]="meta_er_status"
+TARGET_COLS["gse24080"]="meta_efs_outcome_label"
 
 
 # --- Helper Function ---
@@ -73,7 +76,7 @@ run_adjust() {
     printf " -> Processing %s for %s\n" "$dataset" "$adjuster"
     
     # Execute the R script. The calling loop will decide whether to run in background.
-    Rscript "$ADJUST_SCRIPT" "$input_file" "$output_file" -a "$adjuster" -b "$batch_col" $c_args
+    Rscript "$ADJUST_SCRIPT" "$input_file" "$output_file" -a "$adjuster" -b "$batch_col" $c_args --debug
 }
 
 
