@@ -31,7 +31,29 @@ expr_data = t(expr_data) %>%
     as.data.frame() %>%
     rownames_to_column(var = "meta_Sample_ID")
 
+meta_tibble = as_tibble(as.data.frame(getGEO("GSE49711")))
+
+varying_tibble <- meta_tibble %>%
+  select(where(~ n_distinct(.) > 1))
+print("Varying")
+print(varying_tibble)
+print("Varying Columns")
+print(colnames(varying_tibble))
+
+slim_tibble <- varying_tibble %>%
+  select(where(~ n_distinct(.) < 10))
+
+print("Slim")
+print(slim_tibble)
+print("Slim Columns")
+print(colnames(slim_tibble))
+print("Unique Values (not how many, but what they are for each column)")
+print(sapply(slim_tibble, unique))
+
+
+
 metadata = as_tibble(as.data.frame(getGEO("GSE49711"))) %>%
+    dplyr::rename(meta_Dataset = `GSE49711_series_matrix.txt.gz.dataset.ch1`) %>%
     dplyr::rename(meta_Sample_ID = `GSE49711_series_matrix.txt.gz.title`) %>%
     dplyr::rename(meta_Class = `GSE49711_series_matrix.txt.gz.class.label.ch1`) %>%
     dplyr::rename(meta_Age_at_Diagnosis = `GSE49711_series_matrix.txt.gz.age.at.diagnosis.ch1`) %>%
@@ -44,8 +66,7 @@ metadata = as_tibble(as.data.frame(getGEO("GSE49711"))) %>%
     dplyr::rename(meta_MYCN_Status = `GSE49711_series_matrix.txt.gz.mycn.status.ch1`) %>%
     dplyr::rename(meta_Progression = `GSE49711_series_matrix.txt.gz.progression.ch1`) %>%
     dplyr::rename(meta_Sex = `GSE49711_series_matrix.txt.gz.Sex.ch1`) %>%
-    select(!starts_with("GSE49711_")) %>%
-    filter(meta_Class %in% c("0", "1"))
+    select(!starts_with("GSE49711_"))
 
 data = inner_join(metadata, expr_data, by="meta_Sample_ID")
 

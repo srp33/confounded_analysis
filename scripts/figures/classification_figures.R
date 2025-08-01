@@ -40,7 +40,7 @@ all_info_df <- tribble(
   "gse20194", "GSE 20194 HER2",                 "meta_batch",      "meta_her2_status",
   "gse20194", "GSE 20194 PR",                   "meta_batch",      "meta_pr_status",
   "gse24080",  "GSE 24080 Cytogenetic Abnormality",    "meta_batch",      "meta_cytogenetic_abnormality",
-  "gse49711",  "GSE 49711 Stage 3 4",           "meta_Class",      "meta_INSS_Stage_Split_3_4"
+  "gse49711",  "GSE 49711 Stage 3 4",           "meta_Sex",      "meta_INSS_Stage_Split_3_4"
 )
 
 order <- c("unadjusted", "seurat_scaling", "liger", "seurat_integration", "monotonic", "non_monotonic", "wasserstein", "autoclass", "min_mean", "combat_target", "fastMNN", "combat", "quantile", "npn") #, "icvae", "fair_adapt", "limma_target", "limma", "tampor", "harmony", 
@@ -178,71 +178,3 @@ for (i in seq_len(nrow(all_info_df))) {
     ggsave(file.path(FIG_DIR, filename_for_plot), width = 11, height = 8.5, units = 'in')
   }
 }
-
-print(batchall)
-
-#metric comparison --------------
-metriccomp <- read_csv(paste(c(IN_DIR, "singlemetriccomparison_minus.csv"), collapse = ""))
-metricdata <- filter(metriccomp, dataset %in% datasets)
-
-score_averages = group_by(metricdata, adjuster, metric, dataset) %>%
-  summarize(ave=median(value), 
-	    interact = interaction(adjuster, metric))
-score_averages <- group_by(score_averages, adjuster, metric)
-
-# Save figure --------------------
-ggplot() +
-  geom_jitter(data = metricdata, mapping = aes(x = factor(dataset, datasets), y = value,  color = adjuster), position=position_jitterdodge()) + 
-  geom_boxplot(data = metricdata, mapping = aes(x = factor(dataset, datasets), y = value, color = adjuster)) +
-  
-  ggtitle("Single Metric Comparison")+
-  facet_wrap(vars(metric))+
-  theme_bw(base_size = 12) + 
-  scale_y_continuous(name = "Score: (true - trueRandom) - abs(batchRandom - batch)", limits = c(-1.0, 1.0)) +
-  theme(axis.title.x=element_blank(), legend.title=element_blank(), axis.text.x = element_text(angle = 90)) +
-  scale_colour_manual(values=cbp2)
-ggsave(paste(c(FIG_DIR, "singlemetriccomparison_minus.pdf"), collapse = ""), width = 11, height = 8.5, units = 'in')
-
-ggplot() +
-	geom_line(data = score_averages, mapping = aes(x = factor(dataset, datasets), y = ave, color = adjuster, linetype = metric, group = interact))+
-	geom_point(data = score_averages, mapping = aes(x = factor(dataset, datasets), y = ave, color = adjuster, pch = metric)) +
-	ggtitle("Single Metric Score Averages")+
-  theme_bw(base_size = 12) +
-  scale_y_continuous(name = "Average Score: (true - trueRandom) - abs(batchRandom - batch)", limits = c(-1.0, 1.0)) +
-  theme(axis.title.x=element_blank(), legend.title=element_blank(), axis.text.x = element_text(angle = 90)) +
-  scale_colour_manual(values=cbp2)
-ggsave(paste(c(FIG_DIR, "singleMetricScoreAverages_minus.pdf"), collapse = ""), width = 11, height = 8.5, units = 'in')
-
-
-
-
-# Classification accuracy --------
-#df <- read_csv(paste0(IN_DIR, "/classification.csv")) %>%
-#    mutate(adjuster = factor(adjuster, levels = order))
-
-
-#df <- df %>% filter(model != "MLPClassifier")
-#df <- df %>% filter(!str_detect(dataset, "pretrain"))
-
-#df %>% filter(column == "batch_col") %>%
-#  ggplot(aes(x = model, y = accuracy, fill = model)) +
-#  geom_boxplot() +
-#  facet_grid(dataset ~ adjuster, scales = "free_y") +
-#  theme(axis.text.x = element_blank(),
-#        axis.ticks.x = element_blank(),
-#        axis.title.x = element_blank()) +
-#  labs(y = "Batch Classification Accuracy")
-#ggsave(paste0(FIG_DIR, "/batch_accuracy.pdf"))
-
-#df %>% filter(column == "true_class_col") %>%
-#  ggplot(aes(x = model, y = accuracy, fill = model)) +
-#  geom_boxplot() +
-#  facet_grid(dataset ~ adjuster, scales = "free_y") +
-#  labs(y = "True Class Classification Accuracy") +
-#  theme_bw(base_size = 12) +
-#  theme(axis.text.x = element_blank(),
-#        axis.ticks.x = element_blank(),
-#        axis.title.x = element_blank())
-#ggsave(paste0(FIG_DIR, "/true_class_accuracy.pdf"))
-
-
