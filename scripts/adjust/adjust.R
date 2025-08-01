@@ -1,4 +1,9 @@
 # Load dependencies --------------------------------
+
+# Force OpenMP (used by preprocessCore) to run in single-threaded mode
+# This prevents errors when running multiple R processes in parallel.
+Sys.setenv(OMP_NUM_THREADS = 1)
+
 # Suppress package startup messages for a cleaner console output
 suppressPackageStartupMessages({
   library(dplyr)
@@ -14,6 +19,7 @@ suppressPackageStartupMessages({
   library(fairadapt)
   library(future)
   library(huge)
+  library(preprocessCore)
 })
 
 # Helper Functions ---------------------------------
@@ -255,66 +261,74 @@ adjust_limma <- function(matrix_, batch, design, ..., debug = FALSE) {
   return(limma::removeBatchEffect(matrix_, batch = batch, design = design))
 }
 
-adjust_quantile <- function(matrix_, batch, ..., debug = FALSE) {
-  #' Adjusts a matrix using quantile normalization.
-  #' We adjust by batch.
+adjust_quantile_global_reference <- function(matrix_, batch,..., debug = FALSE) {
+  #' Adjusts a matrix using quantile normalization with a global reference.
+  #' A single reference distribution is calculated from all samples, and each
+  #' batch is then normalized to this global target. This is generally more
+  #' robust than using a single batch as a fixed reference.
   #' @param matrix_ The matrix to adjust (features x samples).
+  #' @param batch A vector identifying the batch for each sample (column) in matrix_.
   #' @return The adjusted matrix.
 
-  message("Adjusting using quantile normalization.")
+  message("Adjusting using quantile normalization with a global reference.")
+
+  if (!requireNamespace("preprocessCore", quietly = TRUE)) {
+    stop("The 'preprocessCore' package is required. Please install it from Bioconductor.")
+  }
+
+  # --- Input Validation and Preparation (as in previous function) ---
+  if (debug) {
+    message(sprintf("DEBUG: Input matrix dimensions: %d x %d", nrow(matrix_), ncol(matrix_)))
+    message(sprintf("DEBUG: Batch length: %d", length(batch)))
+  }
   
-  # Check for NA values in batch
   if (any(is.na(batch))) {
-    message(sprintf("WARNING: Found %d NA values in batch variable", sum(is.na(batch))))
-    # Remove NA values
-    valid_indices <- !is.na(batch)
+    message(sprintf("WARNING: Found %d NA values in batch variable. These samples will be removed.", sum(is.na(batch))))
+    valid_indices <-!is.na(batch)
     batch <- batch[valid_indices]
-    matrix_ <- matrix_[, valid_indices, drop = FALSE]
+    matrix_ <- matrix_
   }
 
-  # Split the matrix by batch
+  # --- ROBUST STRATEGY: Generate a single target vector from the ENTIRE dataset ---
+  # This approach is less sensitive to outliers in any single batch.
+  message("Determining global target distribution from the entire dataset.")
+  global_target_distribution <- preprocessCore::normalize.quantiles.determine.target(matrix_)
+
+  if (debug) {
+    message(sprintf("DEBUG: Global target distribution vector generated. Length: %d", length(global_target_distribution)))
+  }
+
+  # --- Split the matrix by batch (for processing) ---
   batch_levels <- unique(batch)
-  batch_levels <- batch_levels[!is.na(batch_levels)]  # Remove any NA levels
-  matrix_by_batch <- list()
-  
-  for (b in batch_levels) {
-    batch_indices <- which(batch == b)
-    if (length(batch_indices) > 0) {
-      matrix_by_batch[[as.character(b)]] <- matrix_[, batch_indices, drop = FALSE]
-    }
-  }
-  
-  # Apply quantile normalization to each batch separately
-  for (b in names(matrix_by_batch)) {
-    old_values = matrix_by_batch[[b]]
-    new_values = t(limma::normalizeQuantiles(t(matrix_by_batch[[b]])))
-    # Verify changed
-    if (debug) {
-      old_gene_means = rowMeans(old_values)
-      new_gene_means = rowMeans(new_values)
-      message(sprintf("Stats old means: min: %f, max: %f, mean: %f", min(old_gene_means), max(old_gene_means), mean(old_gene_means)))
-      message(sprintf("Stats new means: min: %f, max: %f, mean: %f", min(new_gene_means), max(new_gene_means), mean(new_gene_means)))
-    }
+  matrix_by_batch <- stats::setNames(
+    lapply(batch_levels, function(b) {
+      matrix_
+    }),
+    batch_levels
+  )
 
-
-    matrix_by_batch[[b]] <- new_values
-    if (debug) {
-      was_changed = !all(old_values == matrix_by_batch[[b]])
-      if (was_changed) {
-        message(sprintf("Quantile normalization changed values for batch %s", b))
-      } else {
-        message(sprintf("Quantile normalization did not change values for batch %s", b))
-      }
-    }
-  }
-  
-  # Recombine the normalized batches
-  result_matrix <- matrix_
+  # --- Apply quantile normalization to each batch using the GLOBAL target ---
+  normalized_matrix_list <- list()
   for (b in names(matrix_by_batch)) {
-    batch_indices <- which(batch == b)
-    result_matrix[, batch_indices] <- matrix_by_batch[[b]]
+    message(sprintf("Normalizing batch: '%s'", b))
+    original_batch_matrix <- matrix_by_batch[[b]]
+    
+    normalized_batch_matrix <- preprocessCore::normalize.quantiles.use.target(
+      x = original_batch_matrix,
+      target = global_target_distribution
+    )
+    
+    dimnames(normalized_batch_matrix) <- dimnames(original_batch_matrix)
+    normalized_matrix_list[[as.character(b)]] <- normalized_batch_matrix
   }
-  
+
+  # --- Recombine the normalized batches in the original order ---
+  result_matrix <- matrix(NA_real_, nrow = nrow(matrix_), ncol = ncol(matrix_), dimnames = dimnames(matrix_))
+  for (b in names(normalized_matrix_list)) {
+      original_colnames <- colnames(matrix_by_batch[[b]])
+      result_matrix[, original_colnames] <- normalized_matrix_list[[b]]
+  }
+
   return(result_matrix)
 }
 
@@ -511,8 +525,6 @@ adjust_fairadapt <- function(gene_df, batch, design, ..., debug = FALSE) {
     # More debug information
     if (debug) {
         message(sprintf("DEBUG: data_for_adj dimensions: %d rows, %d cols", nrow(data_for_adj), ncol(data_for_adj)))
-        message(sprintf("DEBUG: data_for_adj column names: %s", paste(colnames(data_for_adj), collapse = ", ")))
-        message(sprintf("DEBUG: data_for_adj column classes: %s", paste(sapply(data_for_adj, class), collapse = ", ")))
         message(sprintf("DEBUG: About to create matrix with dimensions: %d x %d", ncol(data_for_adj), ncol(data_for_adj)))
     }
 
