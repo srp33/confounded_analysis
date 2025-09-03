@@ -168,7 +168,7 @@ def run_platform_prediction_cv(h5_path, expression_dataset_name, y_target, n_fol
 
 if __name__ == "__main__":
     # --- Define your dataset names ---
-    H5_FILE_PATH = '/data/refinebio.h5'
+    H5_FILE_PATH = '/data/gold/refinebio.h5'
     EXPRESSION_NAME = 'HOMO_SAPIENS' 
     METADATA_NAME = 'metadata_HOMO_SAPIENS_indexed'
     METADATA_COLUMN_OF_INTEREST = 'refinebio_platform' 

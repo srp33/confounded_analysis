@@ -2,13 +2,9 @@
 #
 # reduce.sh
 #
-# This script automates the process of running dimensionality reduction (PCA, LDA, etc.)
+# This script automates the process of running dimensionality reduction
 # on a set of batch-corrected data files using a Python script.
-#
-# For each dataset and for each reduction type, it iterates through all the
-# corrected CSV files (e.g., combat.csv, unadjusted.csv) and calls the
-# Python script to generate a new CSV file containing the 2D coordinates.
-# These output files can then be used by a separate plotting script.
+# It delegates caching to the Python script to avoid re-processing.
 
 # Exit immediately if a command exits with a non-zero status.
 set -e
@@ -16,46 +12,56 @@ set -e
 # --- Configuration ---
 
 # Path to the Python script that performs dimensionality reduction
+# (This script is expected to handle its own hash-based caching)
 REDUCTION_SCRIPT="/scripts/metrics/reduce.py"
 
-# Base directory where dataset folders containing corrected CSVs are located
-DATA_DIR="/data"
+# Base directory where dataset folders are located
+DATA_DIR="/data/gold"
 
-# Base directory where output CSVs with reduced dimensions will be saved
-OUTPUT_DIR="/data/reduced_data"
+# Base directory for output files
+OUTPUT_DIR="/data/gold/reduced_data"
+
+# Central directory to store cache files
+HASH_DIR="/data/.cache"
 
 # Define datasets to be processed
-# Add or remove dataset names as needed.
 DATASETS=(
-    "gse49711"
     "gse20194"
+    "gse49711"
     "gse24080"
     # "special_distinct"
 )
 
-# Define the types of dimensionality reduction to perform
-REDUCTION_TYPES=("pca" "lda" "tsne" "umap")
-
 # --- Dataset-Specific Column Configuration ---
 
-# Define batch columns for each dataset using an associative array
 declare -A BATCH_COLS
-BATCH_COLS["gse49711"]="meta_Class"
+BATCH_COLS["gse49711"]="meta_Sex"
 BATCH_COLS["gse20194"]="meta_batch"
 BATCH_COLS["gse24080"]="meta_batch"
 BATCH_COLS["special_distinct"]="batch"
 
-# Define the "true biological signal" column for each dataset.
+# TRUE_COLS: Primary biological signal columns used for LDA (Linear Discriminant Analysis)
+# LDA requires class labels for supervised dimensionality reduction
 declare -A TRUE_COLS
-TRUE_COLS["gse49711"]="meta_INSS_Stage_Split_1_2"
+TRUE_COLS["gse49711"]="meta_INSS_Stage_Split_3_4"
 TRUE_COLS["gse20194"]="meta_er_status"
 TRUE_COLS["gse24080"]="meta_efs_outcome_label"
 TRUE_COLS["special_distinct"]="class"
 
+# Additional metadata columns to include in the output
+declare -A ADDITIONAL_META_COLS
+ADDITIONAL_META_COLS["gse49711"]=""
+ADDITIONAL_META_COLS["gse20194"]="meta_her2_status meta_pr_status"
+ADDITIONAL_META_COLS["gse24080"]="meta_cytogenetic_abnormality"
+ADDITIONAL_META_COLS["special_distinct"]=""
+
 
 # --- Main Execution ---
 
-printf "\n\033[0;32mStarting Dimensionality Reduction with Python\033[0m\n"
+printf "\n\033[0;32mStarting Dimensionality Reduction\033[0m\n"
+
+# Create the central cache directory if it doesn't exist
+mkdir -p "$HASH_DIR"
 
 # Loop through each dataset
 for dataset in "${DATASETS[@]}"; do
@@ -65,6 +71,7 @@ for dataset in "${DATASETS[@]}"; do
     input_dir="${DATA_DIR}/${dataset}"
     batch_col="${BATCH_COLS[$dataset]}"
     true_col="${TRUE_COLS[$dataset]}"
+    additional_meta_cols="${ADDITIONAL_META_COLS[$dataset]}"
     output_dir_dataset="${OUTPUT_DIR}/${dataset}"
 
     # Check if the required columns are defined for the dataset
@@ -73,36 +80,38 @@ for dataset in "${DATASETS[@]}"; do
         continue
     fi
 
-    # Create the output directory for the current dataset
+    # Create the output directory for the dataset
     mkdir -p "$output_dir_dataset"
 
-    # Loop through each reduction type for the current dataset
-    for reduction_type in "${REDUCTION_TYPES[@]}"; do
-        printf " -> Applying %s reduction...\n" "$(echo "$reduction_type" | tr '[:lower:]' '[:upper:]')"
-
-        # Find all corrected CSV files in the input directory
-        for input_file in "$input_dir"/*.csv; do
-            if [ -f "$input_file" ]; then
-                # Extract the method name from the filename (e.g., "combat" from "combat.csv")
-                method_name=$(basename "$input_file" .csv)
-                printf "    - Processing method: %s\n" "$method_name"
-
-                # Define the output file path
-                output_file="${output_dir_dataset}/${method_name}_${reduction_type}.csv"
-
-                # Execute the Python script with file-specific arguments.
-                # The script is expected to take one input CSV, run reduction,
-                # and save the coordinates to the output CSV.
-                python3 "$REDUCTION_SCRIPT" \
-                    --input-file "$input_file" \
-                    --output-file "$output_file" \
-                    --batch-col "$batch_col" \
-                    --true-col "$true_col" \
-                    --reduction-type "$reduction_type" \
+    # Find all corrected CSV files in the input directory
+    for input_file in "$input_dir"/*.csv; do
+        # Process the file only if it exists and is not a transposed file (ending in _t.csv)
+        if [ -f "$input_file" ] && [[ "$input_file" != *_t.csv ]]; then
+            ( # Start a subshell for each parallel job
+                # Build the command with optional additional metadata columns
+                cmd_args=(
+                    python3 "$REDUCTION_SCRIPT"
+                    --input-file "$input_file"
+                    --output-dir "$output_dir_dataset"
+                    --batch-col "$batch_col"
+                    --true-col "$true_col"
+                    --hash-dir "$HASH_DIR"
+                    # --write-over
                     --debug
-            fi
-        done
+                )
+                
+                # Add additional metadata columns if they exist
+                if [[ -n "$additional_meta_cols" ]]; then
+                    cmd_args+=(--additional-meta-cols $additional_meta_cols)
+                fi
+                
+                # Execute the command
+                "${cmd_args[@]}"
+            ) & # Run the subshell in the background
+        fi
     done
 done
+
+wait # Wait for all background processes to finish
 
 printf "\n\033[0;32mAll dimensionality reduction tasks are complete.\033[0m\n"
