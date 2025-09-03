@@ -9,7 +9,7 @@ osf_datasets="GSE19615,GSE20194,GSE20271,GSE23720,GSE25055,GSE25065,GSE31448,"\
 gdrive_datasets="GSE115577,GSE123845,GSE163882"
 
 echo "Downloading OSF datasets..."
-python3 /scripts/prepdata/download_datasets_new.py \
+python3 /scripts/prepdata/download_datasets.py \
     --source osf \
     --project-id eky3p \
     --raw-download-dir /data/raw_download \
@@ -18,7 +18,7 @@ python3 /scripts/prepdata/download_datasets_new.py \
     --datasets "$osf_datasets"
 
 echo "Downloading Google Drive datasets..."
-python3 /scripts/prepdata/download_datasets_new.py \
+python3 /scripts/prepdata/download_datasets.py \
     --source gdrive \
     --folder-id 1smhpktMRyP4yyFHKHSisxRd9jwb8kvrq \
     --raw-download-dir /data/raw_download \
