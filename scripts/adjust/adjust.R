@@ -1,10 +1,10 @@
-# Load dependencies --------------------------------
+# Load dependencies -----------------------------------------------------------
 
-# Force OpenMP (used by preprocessCore) to run in single-threaded mode
+# Force OpenMP to run in single-threaded mode.
 # This prevents errors when running multiple R processes in parallel.
 Sys.setenv(OMP_NUM_THREADS = 1)
 
-# Suppress package startup messages for a cleaner console output
+# Suppress package startup messages for a cleaner console output.
 suppressPackageStartupMessages({
   library(dplyr)
   library(readr)
@@ -20,9 +20,12 @@ suppressPackageStartupMessages({
   library(future)
   library(huge)
   library(preprocessCore)
+  library(data.table)
 })
 
-# Helper Functions ---------------------------------
+source("scripts/adjust/gmm_adjust.R")
+
+# Helper Functions ------------------------------------------------------------
 
 transpose_essential <- function(gene_df) {
   #' Transposes a quantitative data frame robustly.
@@ -53,7 +56,7 @@ ComBat_ignore_nonvariance <- function(matrix_, batch, design) {
   #' @param batch The batch variable vector.
   #' @param design The design matrix.
   #' @return The adjusted matrix.
-
+  
   varying_row_mask <- apply(matrix_, 1, function(x) { length(unique(x)) > 1 })
   
   if(sum(varying_row_mask) < nrow(matrix_)) {
@@ -93,7 +96,7 @@ create_design_matrix <- function(categorical_df, columns_to_use = NULL, use_all 
     message("No columns selected for design matrix. Returning intercept-only model.")
     return(matrix(1, nrow = nrow(categorical_df), ncol = 1, dimnames = list(NULL, "Intercept")))
   }
-
+  
   design <- model.matrix(~ ., data = design_df)
   return(design)
 }
@@ -112,10 +115,10 @@ prep_seurat_like <- function(df_, batch, data_are_counts) {
   #' @param batch The batch variable vector.
   #' @param data_are_counts Logical, TRUE if data is raw counts.
   #' @return A list containing the Seurat object and original names.
-
+  
   original_feature_names <- rownames(df_)
   original_sample_names <- colnames(df_)
-
+  
   sanitized_feature_names <- make.unique(gsub("_", "-", original_feature_names))
   sanitized_sample_names <- make.unique(gsub("_", "-", original_sample_names))
   
@@ -135,7 +138,7 @@ prep_seurat_like <- function(df_, batch, data_are_counts) {
     message("Data appears pre-normalized. Setting 'data' layer directly from input.")
     seurat_obj <- SetAssayData(seurat_obj, layer = "data", new.data = df_copy)
   }
-
+  
   return(list(
     obj = seurat_obj,
     orig_features = original_feature_names,
@@ -161,7 +164,8 @@ restore_names <- function(matrix, prep_list) {
     return(matrix)
 }
 
-# Adjustment Functions ---------------------------------
+
+# Adjustment Functions --------------------------------------------------------
 
 adjust_min_mean <- function(matrix_, batch, ..., debug = FALSE) {
   #' Adjusts a matrix by matching the minimum and mean values across batches.
@@ -234,7 +238,7 @@ adjust_min_mean <- function(matrix_, batch, ..., debug = FALSE) {
 }
 
 adjust_combat <- function(matrix_, batch, design, data_are_counts, debug = FALSE) {
-  #' Adjusts a matrix using ComBat or ComBat_seq.
+  #' Adjust matrix using ComBat or ComBat_seq.
   #' @param matrix_ The matrix to adjust (features x samples).
   #' @param batch The batch variable vector.
   #' @param design The design matrix.
@@ -418,7 +422,7 @@ adjust_seurat_integration <- function(df_, batch, data_are_counts, debug = FALSE
   #' @param batch The batch variable vector.
   #' @param data_are_counts Logical, TRUE if data is raw counts.
   #' @return The adjusted matrix.
-
+  
   message("Adjusting data with Seurat's RPCA integration (variable features only).")
   prep_list <- prep_seurat_like(df_, batch, data_are_counts)
   seurat_obj <- prep_list$obj
@@ -462,6 +466,7 @@ adjust_seurat_integration <- function(df_, batch, data_are_counts, debug = FALSE
 
   seurat_obj.integrated <- IntegrateData(anchorset = anchors, k.weight = k_weight, verbose = FALSE)
   
+  # Combine integrated and non-integrated features.
   integrated_matrix_sanitized <- as.matrix(GetAssayData(seurat_obj.integrated, assay = "integrated", layer = "data"))
   
   integrated_features_sanitized <- rownames(integrated_matrix_sanitized)
