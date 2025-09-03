@@ -1,109 +1,111 @@
-FROM bioconductor/bioconductor:RELEASE_3_19
+# Stage 1: Install system-level dependencies and ccache
+FROM bioconductor/bioconductor:RELEASE_3_21 as builder-base
 
 ####################################################################################
-# Set environment variables
+# Set base environment variables
 ####################################################################################
-
 ENV LANG=C.UTF-8 LC_ALL=C.UTF-8
-ENV PATH /opt/conda/bin:$PATH
-ENV JAVA_HOME=/usr/lib/jvm/java-8-openjdk-amd64/jre
 ENV TZ=America/Denver
 
 ####################################################################################
-# Env variables
+# Install system dependencies and ccache for compilation caching
 ####################################################################################
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends wget gnupg software-properties-common git ccache && \
+    wget -O - https://apt.kitware.com/keys/kitware-archive-latest.asc 2>/dev/null | gpg --dearmor - | tee /etc/apt/trusted.gpg.d/kitware.gpg >/dev/null && \
+    echo 'deb https://apt.kitware.com/ubuntu/ jammy main' | tee /etc/apt/sources.list.d/kitware.list >/dev/null && \
+    apt-get update && \
+    apt-get install -y --no-install-recommends cmake && \
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/* && \
+    cmake --version
 
-ENV TORCHINDUCTOR_CACHE_DIR=/tmp/torch_cache
-# Using ARG to make the Conda path reusable and clean
+####################################################################################
+# Configure ccache to intercept and cache compiler calls
+####################################################################################
+ENV PATH /usr/lib/ccache:$PATH
+ENV CC="ccache gcc"
+ENV CXX="ccache g++"
+# This directory will be mounted as a cache during the build
+ENV CCACHE_DIR=/cache/ccache
+
+
+# Stage 2: Build the Python environment in parallel
+FROM builder-base as python-env
+
+####################################################################################
+# Set Conda environment variables
+####################################################################################
 ARG CONDA_DIR=/opt/conda
 ENV PATH $CONDA_DIR/bin:$PATH
 ENV CONDA_PREFIX=$CONDA_DIR
 
 ####################################################################################
-# Install Miniforge3 FIRST to ensure Conda Python is primary
+# Install Miniforge3
 ####################################################################################
-
 RUN wget --quiet https://github.com/conda-forge/miniforge/releases/latest/download/Miniforge3-Linux-x86_64.sh -O ~/miniforge.sh && \
     /bin/bash ~/miniforge.sh -b -p $CONDA_DIR && \
     rm ~/miniforge.sh
 
-# Explicitly tell R's reticulate package which Python to use.
-ENV RETICULATE_PYTHON=$CONDA_DIR/bin/python
+####################################################################################
+# Install Python packages with persistent cache mounts for conda and pip
+####################################################################################
+RUN --mount=type=cache,id=conda-cache,target=/opt/conda/pkgs \
+    --mount=type=cache,id=pip-cache,target=/root/.cache/pip \
+    --mount=type=cache,id=ccache,target=/cache/ccache \
+    conda install -y -c conda-forge numpy 'scikit-learn>=1.4' pandas 'tensorflow>=2.0' pytorch matplotlib && \
+    conda install -y aif360 tabulate jaxtyping beartype pytables opentsne umap-learn geoparse seaborn && \
+    conda install -y -c conda-forge psutil tqdm rich memory_profiler py-cpuinfo && \
+    pip install gdown osfclient && \
+    pip install 'aif360[FairAdapt]' && \
+    conda clean --all -y
+
+# Stage 3: Build the R environment in parallel
+FROM builder-base as r-env
 
 ####################################################################################
-# Update CMake to meet RcppPlanc requirements (needs 3.24+)
+# Set R library path
 ####################################################################################
-
-RUN apt-get update && \
-    apt-get install -y wget gnupg software-properties-common && \
-    wget -O - https://apt.kitware.com/keys/kitware-archive-latest.asc 2>/dev/null | gpg --dearmor - | tee /etc/apt/trusted.gpg.d/kitware.gpg >/dev/null && \
-    echo 'deb https://apt.kitware.com/ubuntu/ jammy main' | tee /etc/apt/sources.list.d/kitware.list >/dev/null && \
-    apt-get update && \
-    apt-get install -y cmake && \
-    cmake --version
-
-####################################################################################
-# Create a user-writable directory for R packages and set ENV variable
-####################################################################################
-
-RUN mkdir -p /home/r_libs && \
-    chmod -R 777 /home/r_libs
 ENV R_LIBS_USER=/home/r_libs
+RUN mkdir -p $R_LIBS_USER && \
+    chmod -R 777 $R_LIBS_USER
 
 ####################################################################################
-# Install R packages
+# Install R packages using a single, consolidated script (Except Seurat)
 ####################################################################################
-
-COPY install_main_packages.R /
-RUN Rscript /install_main_packages.R
-COPY install_annotation_packages.R /
-RUN Rscript /install_annotation_packages.R
-COPY install_adjuster_specific_packages.R /
-RUN Rscript /install_adjuster_specific_packages.R
+COPY install_packages.R /
 
 ####################################################################################
-# Install basic Python packages
+# Run the R installation with persistent cache mounts for pak and ccache
+# FIX: Added --mount flags to cache R packages (pak) and compiled objects (ccache).
 ####################################################################################
+RUN --mount=type=cache,id=r-pak-cache,target=/root/.cache \
+    --mount=type=cache,id=ccache,target=/cache/ccache \
+    Rscript /install_packages.R
 
-RUN conda install -y -c conda-forge numpy 'scikit-learn>=1.4' pandas 'tensorflow>=2.0' pytorch matplotlib
-
-####################################################################################
-# Install additional Python packages
-####################################################################################
-
-RUN conda install -y aif360 tabulate jaxtyping beartype aif360 pytables opentsne umap-learn
+# Final Stage: Assemble the final image
+FROM builder-base
 
 ####################################################################################
-# FIX: Create and define a writable cache directory for Numba (for UMAP)
+# Copy artifacts from parallel stages
 ####################################################################################
+COPY --from=python-env /opt/conda /opt/conda
+COPY --from=r-env /home/r_libs /home/r_libs
 
-RUN mkdir -p /tmp/numba_cache && chmod -R 777 /tmp/numba_cache
+####################################################################################
+# Set all final environment variables
+####################################################################################
+ARG CONDA_DIR=/opt/conda
+ENV PATH $CONDA_DIR/bin:$PATH
+ENV CONDA_PREFIX=$CONDA_DIR
+ENV RETICULATE_PYTHON=$CONDA_DIR/bin/python
+ENV R_LIBS_USER=/home/r_libs
+ENV TORCHINDUCTOR_CACHE_DIR=/tmp/torch_cache
 ENV NUMBA_CACHE_DIR=/tmp/numba_cache
 
 ####################################################################################
-# Clone libraries
+# Create final directories and clone repositories
 ####################################################################################
-
+RUN mkdir -p /tmp/numba_cache && chmod -R 777 /tmp/numba_cache
 RUN git clone https://github.com/edammer/TAMPOR.git /opt/TAMPOR
 RUN git clone https://github.com/datapplab/AutoClass.git /opt/AutoClass
-
-####################################################################################
-# Pip
-####################################################################################
-
-RUN pip install 'aif360[FairAdapt]'
-
-####################################################################################
-# Install Confounded within the image
-####################################################################################
-
-#RUN cd /tmp && \
-#    git clone https://github.com/jdayton3/Confounded.git && \
-#    mkdir /confounded && \
-#    mv /tmp/Confounded/confounded /confounded && \
-#    mv /tmp/Confounded/data /confounded && \
-#    rm -rf /tmp/Confounded && \
-#    echo '#!/bin/bash\ncd /confounded\npython -m confounded "$@"' > /usr/bin/confounded && \
-#    chmod +x /usr/bin/confounded && \
-#    chmod 777 /confounded -R && \
-#    echo "Done importing Confounded code"

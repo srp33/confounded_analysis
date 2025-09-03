@@ -2,11 +2,11 @@
 
 set -e
 
-image=srp33/confounded-paper:version1
+image=enhanced-combination-gen
 
-docker build -t $image .
+DOCKER_BUILDKIT=1 docker build -t $image .
 
-mkdir -p data/gse20194 data/gse24080 data/gse49711 data/r
+mkdir -p data/r data/.cache data/gold data/raw_data data/combined_data data/raw_download
 mkdir -p outputs/figures/classification outputs/figures/pca outputs/figures/mse_mmd 
 mkdir -p outputs/metrics outputs/optimizations outputs/tables outputs/metrics/archive
 
@@ -18,6 +18,7 @@ docker run -i -t --rm \
   -v $(pwd)/outputs:/outputs \
   -v $(pwd)/scripts:/scripts \
   -v $(pwd)/tmp:/tmp \
+  -v $(pwd)/data/.cache:/.cache \
   -v $(pwd)/tmp/matplotlib/config:/.config/matplotlib \
   -v $(pwd)/tmp/matplotlib/cache:/.cache/matplotlib \
   $image \
