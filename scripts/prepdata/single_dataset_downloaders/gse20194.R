@@ -8,7 +8,7 @@ suppressPackageStartupMessages({
     library(tibble)
 })
 
-registerDoParallel(cores=8)
+registerDoParallel(cores=20)
 
 eSet = SCAN("GSE20194", probeSummaryPackage="hgu133ahsentrezgprobe")
 
@@ -41,10 +41,10 @@ pData = read_excel("/tmp/gse20194_meta.xls") %>%
     dplyr::rename(meta_bmn_grade = `BMNgrd`) %>%
     dplyr::select(-`title`, -`source name`, -`organism`, -`molecule`, -`label`, -`platform`, -`Additional information`, -`Tbefore`, -`Nbefore`, -`ER`, -`Her2 IHC`, -`Her2 FISH`, -`Treatments Comments`)
 
-if (!dir.exists("/data/gse20194"))
-    dir.create("/data/gse20194")
+if (!dir.exists("/data/gold/gse20194"))
+    dir.create("/data/gold/gse20194")
 
 inner_join(eData, pData) %>%
     dplyr::select(-CEL_file) %>%
     dplyr::select(Sample, age, race, er_status, treatment_response, pr_status, batch, bmn_grade, her2_status, histology, treatment_code, matches("^\\d.+")) %>%
-    write_csv("/data/gse20194/unadjusted.csv")
+    write_csv("/data/gold/gse20194/unadjusted.csv")

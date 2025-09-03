@@ -1,4 +1,4 @@
-out_file_path = "/data/gse49711/unadjusted.csv"
+out_file_path = "/data/gold/gse49711/unadjusted.csv"
 
 suppressPackageStartupMessages({
     library(dplyr)
@@ -73,7 +73,7 @@ data = inner_join(metadata, expr_data, by="meta_Sample_ID")
 #print(table(data$Sex))
 #print(table(data$MYCN_Status))
 
-if (!dir.exists("/data/gse49711"))
-    dir.create("/data/gse49711")
+if (!dir.exists("/data/gold/gse49711"))
+    dir.create("/data/gold/gse49711")
 
 write_csv(data, out_file_path)

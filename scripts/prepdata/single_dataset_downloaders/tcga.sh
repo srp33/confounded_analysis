@@ -6,9 +6,9 @@ thisDir=$(dirname $0)
 
 printf "\033[0;32mDownloading the TCGA dataset\033[0m\n"
 
-full=/data/tcga/unadjusted.csv
-medium=/data/tcga_medium/unadjusted.csv
-small=/data/tcga_small/unadjusted.csv
+full=/data/gold/tcga/unadjusted.csv
+medium=/data/gold/tcga_medium/unadjusted.csv
+small=/data/gold/tcga_small/unadjusted.csv
 rnaseq="/tmp/rnaseq.tsv.gz"
 mutations="/tmp/mutations.tsv.gz"
 labels="/tmp/labels.tsv.gz"

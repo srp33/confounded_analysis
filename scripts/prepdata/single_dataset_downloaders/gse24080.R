@@ -69,8 +69,8 @@ pData = read_excel("/tmp/gse24080_meta.xls") %>%
     dplyr::rename(meta_random_label = `CPR1`) %>%
     dplyr::select(meta_batch, meta_Sample, meta_CEL_file, meta_cytogenetic_abnormality, meta_age, meta_race, meta_efs_outcome_label, meta_os_outcome_label, meta_sex_label, meta_random_label)
 
-if (!dir.exists("/data/gse24080"))
-    dir.create("/data/gse24080")
+if (!dir.exists("/data/gold/gse24080"))
+    dir.create("/data/gold/gse24080")
 
 inner_join(eData, pData) %>%
     dplyr::select(-CEL_file) %>%
@@ -82,4 +82,4 @@ inner_join(eData, pData) %>%
         message("Rows dropped due to NA: ", before - after)
         na.omit(.)
     } %>%
-    write_csv("/data/gse24080/unadjusted.csv")
+    write_csv("/data/gold/gse24080/unadjusted.csv")

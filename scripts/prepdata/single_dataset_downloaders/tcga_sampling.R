@@ -3,8 +3,8 @@ suppressPackageStartupMessages({
   library(dplyr)
 })
 
-IN_FILE <- "/data/tcga/unadjusted.csv"
-OUT_DIR <- "/data"
+IN_FILE <- "/data/gold/tcga/unadjusted.csv"
+OUT_DIR <- "/data/gold"
 MEDIUM <- paste0(OUT_DIR, "/tcga_medium/unadjusted.csv")
 SMALL <- paste0(OUT_DIR, "/tcga_small/unadjusted.csv")
 
