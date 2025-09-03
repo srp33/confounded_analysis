@@ -28,9 +28,9 @@ source("scripts/adjust/gmm_adjust.R")
 # Helper Functions ------------------------------------------------------------
 
 transpose_essential <- function(gene_df) {
-  #' Transposes a quantitative data frame robustly.
+  #' Transpose a quantitative data frame robustly.
   #'
-  #' This multi-step process ensures that sample names (row names) are
+  #' This multi-step process ensures sample names (row names) are
   #' correctly preserved during the conversion from a data frame to a
   #' transposed matrix (features x samples).
   #'
@@ -45,8 +45,9 @@ transpose_essential <- function(gene_df) {
   return(mat_quantitative)
 }
 
+
 ComBat_ignore_nonvariance <- function(matrix_, batch, design) {
-  #' A wrapper for ComBat that handles features with zero variance.
+  #' Wrap ComBat to handle features with zero variance.
   #'
   #' ComBat fails if any feature (row) has zero variance across all samples.
   #' This function identifies such features, excludes them from the ComBat
@@ -59,10 +60,12 @@ ComBat_ignore_nonvariance <- function(matrix_, batch, design) {
   
   varying_row_mask <- apply(matrix_, 1, function(x) { length(unique(x)) > 1 })
   
-  if(sum(varying_row_mask) < nrow(matrix_)) {
+  if (sum(varying_row_mask) < nrow(matrix_)) {
     message(
-      sprintf("Found %d features with zero variance. These will be ignored by ComBat.",
-              nrow(matrix_) - sum(varying_row_mask))
+      sprintf(
+        "Found %d features with zero variance. These will be ignored by ComBat.",
+        nrow(matrix_) - sum(varying_row_mask)
+      )
     )
   }
   
@@ -70,20 +73,21 @@ ComBat_ignore_nonvariance <- function(matrix_, batch, design) {
   return(matrix_)
 }
 
+
 create_design_matrix <- function(categorical_df, columns_to_use = NULL, use_all = FALSE) {
-  #' Creates a design matrix from a data frame of categorical variables.
+  #' Create a design matrix from a data frame of categorical variables.
   #'
   #' @param categorical_df A data frame with samples as rows and categorical metadata as columns.
   #' @param columns_to_use A character vector of specific columns to include in the model.
   #' @param use_all A boolean indicating whether to use all columns in the data frame.
   #' @return A design matrix.
-
+  
   if (!is.null(columns_to_use)) {
     if (!all(columns_to_use %in% colnames(categorical_df))) {
       stop("One or more specified columns for the design matrix were not found in the metadata.")
     }
     design_df <- categorical_df[, columns_to_use, drop = FALSE]
-    message(sprintf("Creating design matrix from specified columns: %s", paste(columns_to_use, collapse = ", ")))
+    message("Creating design matrix from specified columns: ", paste(columns_to_use, collapse = ", "))
   } else if (use_all) {
     design_df <- categorical_df
     message("Creating design matrix from all available categorical variables.")
@@ -91,7 +95,7 @@ create_design_matrix <- function(categorical_df, columns_to_use = NULL, use_all 
     message("Creating design matrix with intercept only.")
     return(matrix(1, nrow = nrow(categorical_df), ncol = 1, dimnames = list(NULL, "Intercept")))
   }
-
+  
   if (ncol(design_df) == 0) {
     message("No columns selected for design matrix. Returning intercept-only model.")
     return(matrix(1, nrow = nrow(categorical_df), ncol = 1, dimnames = list(NULL, "Intercept")))
@@ -103,7 +107,7 @@ create_design_matrix <- function(categorical_df, columns_to_use = NULL, use_all 
 
 
 prep_seurat_like <- function(df_, batch, data_are_counts) {
-  #' Prepares a Seurat object for downstream adjustments.
+  #' Prepare a Seurat object for downstream adjustments.
   #'
   #' This helper function handles common preprocessing steps:
   #' 1. Stores original feature (gene) and sample names.
@@ -128,9 +132,9 @@ prep_seurat_like <- function(df_, batch, data_are_counts) {
   
   meta <- data.frame(Batch = batch)
   rownames(meta) <- sanitized_sample_names
-
+  
   seurat_obj <- CreateSeuratObject(counts = df_copy, meta.data = meta)
-
+  
   if (data_are_counts) {
     message("Data appears to be raw counts. Normalizing using LogNormalize.")
     seurat_obj <- NormalizeData(seurat_obj, normalization.method = "LogNormalize", scale.factor = 10000, verbose = FALSE)
@@ -146,96 +150,66 @@ prep_seurat_like <- function(df_, batch, data_are_counts) {
   ))
 }
 
-restore_names <- function(matrix, prep_list) {
-    #' Restores original feature and sample names to a matrix.
-    #' @param matrix The matrix with sanitized names.
-    #' @param prep_list The list returned by `prep_seurat_like`.
-    #' @return The matrix with original names.
-    
-    feature_name_map <- data.frame(original = prep_list$orig_features, sanitized = rownames(prep_list$obj))
-    sample_name_map <- data.frame(original = prep_list$orig_samples, sanitized = colnames(prep_list$obj))
 
-    original_rownames <- feature_name_map$original[match(rownames(matrix), feature_name_map$sanitized)]
-    original_colnames <- sample_name_map$original[match(colnames(matrix), sample_name_map$sanitized)]
-    
-    rownames(matrix) <- original_rownames
-    colnames(matrix) <- original_colnames
-    
-    return(matrix)
+restore_names <- function(matrix, prep_list) {
+  #' Restore original feature and sample names to a matrix.
+  #' @param matrix The matrix with sanitized names.
+  #' @param prep_list The list returned by `prep_seurat_like`.
+  #' @return The matrix with original names.
+  
+  feature_name_map <- data.frame(original = prep_list$orig_features, sanitized = rownames(prep_list$obj))
+  sample_name_map <- data.frame(original = prep_list$orig_samples, sanitized = colnames(prep_list$obj))
+  
+  original_rownames <- feature_name_map$original[match(rownames(matrix), feature_name_map$sanitized)]
+  original_colnames <- sample_name_map$original[match(colnames(matrix), sample_name_map$sanitized)]
+  
+  rownames(matrix) <- original_rownames
+  colnames(matrix) <- original_colnames
+  
+  return(matrix)
 }
 
 
 # Adjustment Functions --------------------------------------------------------
 
 adjust_min_mean <- function(matrix_, batch, ..., debug = FALSE) {
-  #' Adjusts a matrix by matching the minimum and mean values across batches.
+  #' Adjust matrix by matching minimum and mean values across batches.
+  #' Assumes the batch vector contains no NA values.
   #' @param matrix_ The matrix to adjust (features x samples).
   #' @param batch The batch variable vector.
   #' @return The adjusted matrix.
   
   message("Adjusting data by matching minimum and mean values across batches.")
   
-  # Check for NA values in batch
-  if (any(is.na(batch))) {
-    message(sprintf("WARNING: Found %d NA values in batch variable", sum(is.na(batch))))
-    # Remove NA values
-    valid_indices <- !is.na(batch)
-    batch <- batch[valid_indices]
-    matrix_ <- matrix_[, valid_indices, drop = FALSE]
-  }
-  
-  # Get unique batch levels
   batch_levels <- unique(batch)
-  batch_levels <- batch_levels[!is.na(batch_levels)]  # Remove any NA levels
   
-  # Calculate global statistics
-  global_mins  <- apply(matrix_, 1, min)
+  global_mins <- apply(matrix_, 1, min)
   global_means <- apply(matrix_, 1, mean)
   
-  # Create a copy of the matrix to store adjusted values
   adjusted_matrix <- matrix_
   
-  # Process each batch separately
   for (b in batch_levels) {
     batch_indices <- which(batch == b)
     if (length(batch_indices) > 0) {
       batch_data <- matrix_[, batch_indices, drop = FALSE]
       
-      # Calculate batch-specific statistics
       batch_mins <- apply(batch_data, 1, min)
       batch_means <- rowMeans(batch_data)
       
-      # Adjust each feature in the batch
-      for (i in 1:nrow(batch_data)) {
-        # Skip adjustment if all values are identical
-        if (length(unique(batch_data[i,])) > 1) {
-          # Calculate adjustment factors
-          min_shift <- global_mins[i] - batch_mins[i]
-          mean_factor <- global_means[i] / batch_means[i]
-          
-          # Apply the transformation: first shift minimum, then scale to match mean
-          shifted_values <- batch_data[i,] + min_shift
-          # Recalculate mean after shifting
-          shifted_mean <- mean(shifted_values)
-          # Scale to match global mean
-          adjusted_values <- shifted_values * (global_means[i] / shifted_mean)
-          
-          # Store adjusted values
-          adjusted_matrix[i, batch_indices] <- adjusted_values
-        }
-      }
+      adjusted_matrix[, batch_indices] <- global_mins + (batch_data - batch_mins) * (global_means - global_mins) / (batch_means - batch_mins)
       
       if (debug) {
-        message(sprintf("Adjusted batch %s: %d samples", b, length(batch_indices)))
+        message("DEBUG: Adjusted batch ", b, ": ", length(batch_indices), " samples")
         adjusted_batch_means <- rowMeans(adjusted_matrix[, batch_indices, drop = FALSE])
         mean_diff <- mean(abs(adjusted_batch_means - global_means))
-        message(sprintf("Mean absolute difference from global means: %f", mean_diff))
+        message("DEBUG: Mean absolute difference from global means: ", round(mean_diff, 6))
       }
     }
   }
   
   return(adjusted_matrix)
 }
+
 
 adjust_combat <- function(matrix_, batch, design, data_are_counts, debug = FALSE) {
   #' Adjust matrix using ComBat or ComBat_seq.
@@ -244,7 +218,7 @@ adjust_combat <- function(matrix_, batch, design, data_are_counts, debug = FALSE
   #' @param design The design matrix.
   #' @param data_are_counts If TRUE, use ComBat_seq for count data.
   #' @return The adjusted matrix.
-
+  
   if (data_are_counts) {
     message("Using ComBat_seq for count data.")
     return(ComBat_seq(matrix_, batch, covar_mod = design))
@@ -254,147 +228,110 @@ adjust_combat <- function(matrix_, batch, design, data_are_counts, debug = FALSE
   }
 }
 
+
 adjust_limma <- function(matrix_, batch, design, ..., debug = FALSE) {
-  #' Adjusts a matrix using limma's removeBatchEffect.
+  #' Adjust matrix using limma's removeBatchEffect.
   #' @param matrix_ The matrix to adjust (features x samples).
   #' @param batch The batch variable vector.
   #' @param design The design matrix.
   #' @return The adjusted matrix.
-
+  
   message("Adjusting data with limma::removeBatchEffect.")
   return(limma::removeBatchEffect(matrix_, batch = batch, design = design))
 }
 
-adjust_quantile_global_reference <- function(matrix_, batch,..., debug = FALSE) {
-  #' Adjusts a matrix using quantile normalization with a global reference.
-  #' A single reference distribution is calculated from all samples, and each
-  #' batch is then normalized to this global target. This is generally more
-  #' robust than using a single batch as a fixed reference.
-  #' @param matrix_ The matrix to adjust (features x samples).
+
+adjust_quantile <- function(matrix_, batch, debug = FALSE) {
+  #' Adjust matrix using quantile normalization with a global reference.
+  #' Assumes the batch vector contains no NA values.
+  #' @param matrix_ The matrix to adjust (genes x samples).
   #' @param batch A vector identifying the batch for each sample (column) in matrix_.
+  #' @param debug A logical flag to enable verbose debugging messages.
   #' @return The adjusted matrix.
-
-  message("Adjusting using quantile normalization with a global reference.")
-
-  if (!requireNamespace("preprocessCore", quietly = TRUE)) {
-    stop("The 'preprocessCore' package is required. Please install it from Bioconductor.")
-  }
-
-  # --- Input Validation and Preparation (as in previous function) ---
-  if (debug) {
-    message(sprintf("DEBUG: Input matrix dimensions: %d x %d", nrow(matrix_), ncol(matrix_)))
-    message(sprintf("DEBUG: Batch length: %d", length(batch)))
-  }
   
-  if (any(is.na(batch))) {
-    message(sprintf("WARNING: Found %d NA values in batch variable. These samples will be removed.", sum(is.na(batch))))
-    valid_indices <-!is.na(batch)
-    batch <- batch[valid_indices]
-    matrix_ <- matrix_
-  }
-
-  # --- ROBUST STRATEGY: Generate a single target vector from the ENTIRE dataset ---
-  # This approach is less sensitive to outliers in any single batch.
+  # Transpose because preprocessCore normalizes columns (we want to normalize genes).
+  matrix_ <- t(matrix_)
+  
   message("Determining global target distribution from the entire dataset.")
   global_target_distribution <- preprocessCore::normalize.quantiles.determine.target(matrix_)
-
+  
   if (debug) {
-    message(sprintf("DEBUG: Global target distribution vector generated. Length: %d", length(global_target_distribution)))
+    message("DEBUG: Global target distribution vector generated. Length: ", length(global_target_distribution))
   }
-
-  # --- Split the matrix by batch (for processing) ---
+  
+  result_matrix <- matrix_
   batch_levels <- unique(batch)
-  matrix_by_batch <- stats::setNames(
-    lapply(batch_levels, function(b) {
-      matrix_
-    }),
-    batch_levels
-  )
-
-  # --- Apply quantile normalization to each batch using the GLOBAL target ---
-  normalized_matrix_list <- list()
-  for (b in names(matrix_by_batch)) {
-    message(sprintf("Normalizing batch: '%s'", b))
-    original_batch_matrix <- matrix_by_batch[[b]]
+  
+  for (b in batch_levels) {
+    message("Normalizing batch: '", b, "'")
+    rows_for_batch <- which(batch == b)
     
     normalized_batch_matrix <- preprocessCore::normalize.quantiles.use.target(
-      x = original_batch_matrix,
+      x = matrix_[rows_for_batch, , drop = FALSE],
       target = global_target_distribution
     )
     
-    dimnames(normalized_batch_matrix) <- dimnames(original_batch_matrix)
-    normalized_matrix_list[[as.character(b)]] <- normalized_batch_matrix
+    result_matrix[rows_for_batch, ] <- normalized_batch_matrix
   }
-
-  # --- Recombine the normalized batches in the original order ---
-  result_matrix <- matrix(NA_real_, nrow = nrow(matrix_), ncol = ncol(matrix_), dimnames = dimnames(matrix_))
-  for (b in names(normalized_matrix_list)) {
-      original_colnames <- colnames(matrix_by_batch[[b]])
-      result_matrix[, original_colnames] <- normalized_matrix_list[[b]]
-  }
-
-  return(result_matrix)
+  
+  # Transpose back to original orientation (features x samples).
+  return(t(result_matrix))
 }
 
-adjust_npn <- function(matrix_, batch, ..., debug = FALSE) {
-  #' Adjusts a matrix using Nonparanormal (NPN) transformation.
-  #' We adjust by batch.
+
+adjust_npn <- function(matrix_, batch, debug = FALSE) {
+  #' Adjust matrix using Nonparanormal (NPN) transformation.
+  #' If batch is NULL, the entire matrix is adjusted at once.
+  #' Assumes the batch vector contains no NA values.
   #' @param matrix_ The matrix to adjust (features x samples).
   #' @return The adjusted matrix.
   
-  message("Adjusting using Nonparanormal (NPN) transformation.")
-  
-  # Check for NA values in batch
-  if (any(is.na(batch))) {
-    message(sprintf("WARNING: Found %d NA values in batch variable", sum(is.na(batch))))
-    # Remove NA values
-    valid_indices <- !is.na(batch)
-    batch <- batch[valid_indices]
-    matrix_ <- matrix_[, valid_indices, drop = FALSE]
-  }
-  
-  # Split the matrix by batch
-  batch_levels <- unique(batch)
-  batch_levels <- batch_levels[!is.na(batch_levels)]  # Remove any NA levels
-  matrix_by_batch <- list()
-  
-  for (b in batch_levels) {
-    batch_indices <- which(batch == b)
-    if (length(batch_indices) > 0) {
-      matrix_by_batch[[as.character(b)]] <- matrix_[, batch_indices, drop = FALSE]
-    }
-  }
-  
-  # Apply NPN transformation to each batch separately
-  for (b in names(matrix_by_batch)) {
-    # Transpose to (samples x features) for huge.npn
-    matrix_t <- t(matrix_by_batch[[b]])
-    # Apply NPN transformation
+  if (is.null(batch)) {
+    # If no batch is provided, adjust the whole matrix.
+    message("Batch is NULL. Adjusting entire matrix with NPN transformation.")
+    
+    # Transpose to (samples x features) for huge.npn.
+    matrix_t <- t(matrix_)
+    
     npn_transformed_t <- huge::huge.npn(matrix_t, verbose = FALSE)
-    # Transpose back to (features x samples)
-    matrix_by_batch[[b]] <- t(npn_transformed_t)
-
-    # Verify:
-    gene_means = apply(matrix_by_batch[[b]], 1, mean)
-    mean_mean = mean(gene_means)
-    mean_var = var(gene_means)
-    message(sprintf("Stats for means of batch %s:", b))
-    message(sprintf("Min: %f, Max: %f, Mean: %f, Var: %f", min(gene_means), max(gene_means), mean_mean, mean_var))
+    
+    return(t(npn_transformed_t))
+    
+  } else {
+    message("Adjusting using Nonparanormal (NPN) transformation by batch.")
+    
+    # Split the matrix by batch.
+    batch_levels <- unique(batch)
+    matrix_by_batch <- list()
+    
+    for (b in batch_levels) {
+      batch_indices <- which(batch == b)
+      if (length(batch_indices) > 0) {
+        matrix_by_batch[[as.character(b)]] <- matrix_[, batch_indices, drop = FALSE]
+      }
+    }
+    
+    # Apply NPN transformation to each batch.
+    for (b in names(matrix_by_batch)) {
+      matrix_t <- t(matrix_by_batch[[b]])
+      npn_transformed_t <- huge::huge.npn(matrix_t, verbose = FALSE)
+      matrix_by_batch[[b]] <- t(npn_transformed_t)
+    }
+    
+    # Reassemble the matrix from the adjusted batches.
+    result_matrix <- matrix_
+    for (b in names(matrix_by_batch)) {
+      batch_indices <- which(batch == as.character(b))
+      result_matrix[, batch_indices] <- matrix_by_batch[[b]]
+    }
+    
+    return(result_matrix)
   }
-  
-  # Recombine the transformed batches
-  result_matrix <- matrix_
-  for (b in names(matrix_by_batch)) {
-    batch_indices <- which(batch == as.character(b))
-    result_matrix[, batch_indices] <- matrix_by_batch[[b]]
-  }
-  
-  return(result_matrix)
 }
 
 
 adjust_seurat_scaling <- function(df_, batch, data_are_counts, debug = FALSE) {
-  #' Adjusts using Seurat's ScaleData regression method.
+  #' Adjust using Seurat's ScaleData regression method.
   #' @param df_ The data matrix (features x samples).
   #' @param batch The batch variable vector.
   #' @param data_are_counts Logical, TRUE if data is raw counts.
@@ -412,8 +349,9 @@ adjust_seurat_scaling <- function(df_, batch, data_are_counts, debug = FALSE) {
   return(restore_names(scaled_matrix, prep_list))
 }
 
+
 adjust_seurat_integration <- function(df_, batch, data_are_counts, debug = FALSE) {
-  #' Adjusts using Seurat's anchor-based integration workflow.
+  #' Adjust using Seurat's anchor-based integration workflow.
   #'
   #' This version integrates the default set of variable features and then
   #' combines the result with the original, unadjusted data for the remaining features.
@@ -429,19 +367,17 @@ adjust_seurat_integration <- function(df_, batch, data_are_counts, debug = FALSE
   
   seurat_obj.list <- SplitObject(seurat_obj, split.by = "Batch")
   
-  # The RPCA workflow requires that PCA be run on each individual object in the list.
+  # Pre-process each batch object.
   for (i in 1:length(seurat_obj.list)) {
-      if (data_are_counts) {
-          seurat_obj.list[[i]] <- FindVariableFeatures(seurat_obj.list[[i]], selection.method = "vst", nfeatures = 2000, verbose = FALSE)
-      } else {
-          # For pre-normalized data, statistical models like 'vst' or 'disp' can fail.
-          # A more robust method is to rank by variance directly.
-          if(debug) message(sprintf("Finding variable features for batch %d by variance ranking.", i))
-          hvf_data <- GetAssayData(seurat_obj.list[[i]], layer="data")
-          variances <- apply(hvf_data, 1, var, na.rm = TRUE)
-          top_features <- names(sort(variances, decreasing = TRUE)[1:2000])
-          VariableFeatures(seurat_obj.list[[i]]) <- top_features
-      }
+    if (data_are_counts) {
+      seurat_obj.list[[i]] <- FindVariableFeatures(seurat_obj.list[[i]], selection.method = "vst", nfeatures = 2000, verbose = FALSE)
+    } else {
+      if (debug) message("DEBUG: Finding variable features for batch ", i, " by variance ranking.")
+      hvf_data <- GetAssayData(seurat_obj.list[[i]], layer = "data")
+      variances <- apply(hvf_data, 1, var, na.rm = TRUE)
+      top_features <- names(sort(variances, decreasing = TRUE)[1:2000])
+      VariableFeatures(seurat_obj.list[[i]]) <- top_features
+    }
     
     all_features_in_obj <- rownames(seurat_obj.list[[i]])
     seurat_obj.list[[i]] <- ScaleData(seurat_obj.list[[i]], features = all_features_in_obj, verbose = FALSE)
@@ -451,6 +387,7 @@ adjust_seurat_integration <- function(df_, batch, data_are_counts, debug = FALSE
     seurat_obj.list[[i]] <- RunPCA(seurat_obj.list[[i]], npcs = npcs_to_use, features = VariableFeatures(seurat_obj.list[[i]]), verbose = FALSE)
   }
   
+  # Find integration anchors.
   min_batch_size <- min(sapply(seurat_obj.list, ncol))
   k_anchor <- min(5, min_batch_size - 1)
   dims_to_use <- 1:min(30, min_batch_size - 1)
@@ -461,9 +398,10 @@ adjust_seurat_integration <- function(df_, batch, data_are_counts, debug = FALSE
     stop("Integration failed: Not enough anchors were found between datasets.")
   }
   
-  k_weight <- min(67, min_batch_size - 1)
-  if(debug) message(sprintf("Setting k.weight to %d", k_weight))
-
+  # Integrate data.
+  k_weight <- min(100, min_batch_size - 1) # Seurat default is 100
+  if (debug) message("DEBUG: Setting k.weight to ", k_weight)
+  
   seurat_obj.integrated <- IntegrateData(anchorset = anchors, k.weight = k_weight, verbose = FALSE)
   
   # Combine integrated and non-integrated features.
@@ -486,252 +424,406 @@ adjust_seurat_integration <- function(df_, batch, data_are_counts, debug = FALSE
   
   combined_matrix <- rbind(integrated_matrix_sanitized, original_non_integrated_data)
   
-  if(debug) message(sprintf("Seurat integration - Combined matrix dimensions: %d rows, %d cols", nrow(combined_matrix), ncol(combined_matrix)))
+  if (debug) message("DEBUG: Seurat integration - Combined matrix dimensions: ", nrow(combined_matrix), " rows, ", ncol(combined_matrix), " cols")
   
+  # Ensure final matrix has original feature and sample order.
   final_matrix <- combined_matrix[prep_list$orig_features, prep_list$orig_samples, drop = FALSE]
   
   return(final_matrix)
 }
 
+
 adjust_fairadapt <- function(gene_df, batch, design, ..., debug = FALSE) {
-    #' Adjusts data using the fairadapt method.
-    #' Note: `fairadapt` requires a design matrix with exactly one variable to preserve.
-    #' @param gene_df The quantitative data (samples x features).
-    #' @param batch The batch variable vector.
-    #' @param design The design matrix.
-    #' @return The adjusted matrix (features x samples).
-
-    message("Adjusting using fairadapt.")
-
-    if (ncol(design) != 2) {
-        stop("fairadapt requires a design matrix with exactly one column to preserve (plus the intercept).")
-    }
-    
-    design_col_name <- colnames(design)[colnames(design) != "(Intercept)"]
-    if (length(design_col_name) != 1) {
-        stop("Could not identify a unique column to preserve from the design matrix.")
-    }
-
-    # Debug information
-    if (debug) {
-        message(sprintf("DEBUG: gene_df dimensions: %d rows, %d cols", nrow(gene_df), ncol(gene_df)))
-        message(sprintf("DEBUG: batch length: %d", length(batch)))
-        message(sprintf("DEBUG: design dimensions: %d rows, %d cols", nrow(design), ncol(design)))
-        message(sprintf("DEBUG: design_col_name: %s", design_col_name))
-        message(sprintf("DEBUG: gene_df class: %s", class(gene_df)))
-        message(sprintf("DEBUG: batch class: %s", class(batch)))
-        message(sprintf("DEBUG: design class: %s", class(design)))
-    }
-
-    data_for_adj <- gene_df
-    data_for_adj$batch <- batch
-    data_for_adj[[design_col_name]] <- design[, design_col_name]
-
-    # More debug information
-    if (debug) {
-        message(sprintf("DEBUG: data_for_adj dimensions: %d rows, %d cols", nrow(data_for_adj), ncol(data_for_adj)))
-        message(sprintf("DEBUG: About to create matrix with dimensions: %d x %d", ncol(data_for_adj), ncol(data_for_adj)))
-    }
-
-    adj.mat <- matrix(0, nrow = ncol(data_for_adj), ncol = ncol(data_for_adj))
-    colnames(adj.mat) <- rownames(adj.mat) <- colnames(data_for_adj)
-    
-    batch_idx <- which(colnames(adj.mat) == "batch")
-    design_idx <- which(colnames(adj.mat) == design_col_name)
-    
-    adj.mat[, batch_idx] <- 1
-    adj.mat[design_idx, ] <- 0
-    diag(adj.mat) <- 0
-
-    formula <- as.formula(paste(design_col_name, "~ ."))
-
-    mod <- fairadapt(formula,
-                     train.data = data_for_adj,
-                     prot.attr = "batch",
-                     adj.mat = adj.mat)
-
-    adjusted_df <- mod$adapt.train[, colnames(gene_df), drop = FALSE]
-
-    return(t(as.matrix(adjusted_df)))
+  #' Adjust data using the fairadapt method.
+  #' Note: `fairadapt` requires a design matrix with exactly one variable to preserve.
+  #' @param gene_df The quantitative data (samples x features).
+  #' @param batch The batch variable vector.
+  #' @param design The design matrix.
+  #' @return The adjusted matrix (features x samples).
+  
+  message("Adjusting using fairadapt.")
+  
+  if (ncol(design) != 2) {
+    stop("fairadapt requires a design matrix with exactly one column to preserve (plus the intercept).")
+  }
+  
+  design_col_name <- colnames(design)[colnames(design) != "(Intercept)"]
+  if (length(design_col_name) != 1) {
+    stop("Could not identify a unique column to preserve from the design matrix.")
+  }
+  
+  if (debug) {
+    message("DEBUG: gene_df dimensions: ", nrow(gene_df), " rows, ", ncol(gene_df), " cols")
+    message("DEBUG: batch length: ", length(batch))
+    message("DEBUG: design dimensions: ", nrow(design), " rows, ", ncol(design), " cols")
+    message("DEBUG: design_col_name: ", design_col_name)
+  }
+  
+  data_for_adj <- gene_df
+  data_for_adj$batch <- batch
+  data_for_adj[[design_col_name]] <- design[, design_col_name]
+  
+  adj.mat <- matrix(0, nrow = ncol(data_for_adj), ncol = ncol(data_for_adj))
+  colnames(adj.mat) <- rownames(adj.mat) <- colnames(data_for_adj)
+  
+  batch_idx <- which(colnames(adj.mat) == "batch")
+  design_idx <- which(colnames(adj.mat) == design_col_name)
+  
+  adj.mat[, batch_idx] <- 1
+  adj.mat[design_idx, ] <- 0
+  diag(adj.mat) <- 0
+  
+  formula <- as.formula(paste(design_col_name, "~ ."))
+  
+  mod <- fairadapt(formula,
+    train.data = data_for_adj,
+    prot.attr = "batch",
+    adj.mat = adj.mat
+  )
+  
+  adjusted_df <- mod$adapt.train[, colnames(gene_df), drop = FALSE]
+  
+  return(t(as.matrix(adjusted_df)))
 }
 
+
 adjust_liger <- function(df_, batch, data_are_counts, debug = FALSE) {
-  #' Adjusts using the LIGER method.
+  #' Adjust using the LIGER method.
   message("Adjusting with LIGER.")
   prep_list <- prep_seurat_like(df_, batch, data_are_counts)
   
   liger_obj <- seuratToLiger(prep_list$obj)
-
-  # LIGER's default normalization and gene selection can fail on pre-normalized data.
-  # We will use a more robust method if the data is not raw counts.
-  if(data_are_counts){
+  
+  if (data_are_counts) {
     liger_obj <- normalize(liger_obj)
     liger_obj <- selectGenes(liger_obj)
   } else {
     message("Data is pre-normalized. Bypassing LIGER's normalize() and selectGenes().")
-    # Manually set the variable features using a robust method
-    hvf_data <- GetAssayData(prep_list$obj, layer="data")
+    hvf_data <- GetAssayData(prep_list$obj, layer = "data")
     variances <- apply(hvf_data, 1, var, na.rm = TRUE)
     top_features <- names(sort(variances, decreasing = TRUE)[1:2000])
-    # The correct slot is 'varFeatures', not 'var.genes'
-    liger_obj@varFeatures <- top_features
+    liger_obj@var.features <- top_features
   }
-
+  
   liger_obj <- scaleNotCenter(liger_obj)
-
-  # Use the modern rliger functions
-  liger_obj <- runIntegration(liger_obj, k = 20, verbose = FALSE) 
+  liger_obj <- runIntegration(liger_obj, k = 20, verbose = FALSE)
   liger_obj <- quantileNorm(liger_obj, verbose = FALSE)
   
   if (debug) message("DEBUG: Available slots in liger object: ", paste(slotNames(liger_obj), collapse = ", "))
   
-  # The corrected data is in the 'H.norm' slot after quantileNorm.
-  # This is a matrix of cell factor loadings (cells x k).
-  # We reconstruct the expression matrix by multiplying with W (genes x k).
   corrected_matrix_sanitized <- liger_obj@W %*% t(liger_obj@H.norm)
-  
-  # Start with a copy of the full, normalized data matrix from the Seurat object. This is our target.
   final_matrix_sanitized <- as.matrix(GetAssayData(prep_list$obj, layer = "data"))
   
-  # Find the common features to avoid subscript errors and overwrite them.
   common_features <- intersect(rownames(corrected_matrix_sanitized), rownames(final_matrix_sanitized))
-  if (debug) message(sprintf("Liger - Found %d common features between corrected and target matrices.", length(common_features)))
+  if (debug) message("DEBUG: Liger - Found ", length(common_features), " common features between corrected and target matrices.")
   
   final_matrix_sanitized[common_features, ] <- corrected_matrix_sanitized[common_features, ]
-  if (debug) message("Liger - Successfully overwrote variable features in the target matrix.")
+  if (debug) message("DEBUG: Liger - Successfully overwrote variable features in the target matrix.")
   
-  # Now, restore the original names to the full, completed matrix.
   final_matrix <- restore_names(final_matrix_sanitized, prep_list)
-  if (debug) message(sprintf("Liger - Final matrix with restored names dimensions: %d rows, %d cols", nrow(final_matrix), ncol(final_matrix)))
+  if (debug) message("DEBUG: Liger - Final matrix with restored names dimensions: ", nrow(final_matrix), " rows, ", ncol(final_matrix), " cols")
   
   return(final_matrix)
 }
 
 
-# Main Orchestration Function --------------------------------
+adjust_gmm_common <- function(matrix_, batch, adjustment_strategy, strategy_name, debug = FALSE, meta_file = NULL) {
+  #' Common implementation for all GMM-based adjustment methods.
+  #' Wrapper for gmm_adjust to fit into the main adjustment pipeline with caching support.
+  #' Handles the transposition of data to match gmm_adjust's input requirements.
+  #' @param matrix_ The matrix to adjust (features x samples).
+  #' @param batch The batch variable vector.
+  #' @param adjustment_strategy The strategy to pass to the underlying GMM functions.
+  #' @param strategy_name Human-readable name for the strategy (for logging).
+  #' @param debug Logical flag for debug output.
+  #' @param meta_file Path to save the recommended modes for each gene.
+  #' @return The adjusted matrix (features x samples).
+  
+  message("Adjusting with GMM-based adjustment (", strategy_name, ", with caching support).")
 
-batch_adjust_tidy <- function(df, input_file, adjuster, batch_col, column, full_design_matrix, debug = FALSE) {
+  genes_df <- as.data.frame(t(matrix_))
+
+  cache_folder = "/data/.cache/gmm_cache"
+  if (!dir.exists(cache_folder)) {
+    dir.create(cache_folder, recursive = TRUE)
+  }
+  force_recalculate = FALSE
+
+  if (is.null(batch)){
+    # Use cached bimodal normalize for single batch processing
+    result <- bimodal_normalize_cached(
+      genes_df, 
+      cache_folder = cache_folder,
+      force_recalculate = force_recalculate,
+      debug = debug, 
+      log_file = "/outputs/bimodal_parallel.log", 
+      adjustment_strategy = adjustment_strategy, 
+      num_workers = -1
+    )
+    
+    if (is.null(result)) {
+      # Fallback to original implementation
+      message("WARNING: Cached implementation failed, falling back to original")
+      result <- bimodal_normalize(genes_df, debug = debug, log_file="/outputs/bimodal_parallel.log", adjustment_strategy=adjustment_strategy, num_workers=-1)
+    }
+    
+    adjusted_genes_df <- result$bimodal_data
+    if (!is.null(meta_file)) {
+      recommended_modes <- result$recommended_modes
+      # Format has gene names as the column names, batch names as the row names, and 1 or 2 as values.
+      write.csv(recommended_modes, file=meta_file, row.names=TRUE)
+    }
+  }
+  else {
+    # Use cached gmm_adjust for multi-batch processing
+    adjusted_genes_df <- gmm_adjust_cached(
+      genes_df, 
+      batch, 
+      debug = debug, 
+      log_file = "/outputs/gmm_parallel.log", 
+      adjustment_strategy = adjustment_strategy,
+      cache_folder = cache_folder,
+      force_recalculate = force_recalculate,
+      num_workers = -1
+    )
+    
+    if (is.null(adjusted_genes_df)) {
+      # Fallback to original implementation
+      message("WARNING: Cached implementation failed, falling back to original")
+      adjusted_genes_df <- gmm_adjust(genes_df, batch, debug = debug, log_file="/outputs/gmm_parallel.log", adjustment_strategy=adjustment_strategy, num_workers=-1)
+    }
+  }
+
+  return(t(as.matrix(adjusted_genes_df)))
+}
+
+adjust_gmm <- function(matrix_, batch, debug = FALSE, meta_file = NULL) {
+  #' Wrapper for GMM adjustment with simple strategy.
+  return(adjust_gmm_common(matrix_, batch, "simple", "Simple", debug, meta_file))
+}
+
+adjust_gmm_scale_separate <- function(matrix_, batch, debug = FALSE, meta_file = NULL) {
+  #' Wrapper for GMM adjustment with scale separate strategy.
+  return(adjust_gmm_common(matrix_, batch, "scale_separate", "Scaling Separately", debug, meta_file))
+}
+
+adjust_gmm_npn <- function(matrix_, batch, debug = FALSE, meta_file = NULL) {
+  #' Wrapper for GMM adjustment with NPN strategy.
+  return(adjust_gmm_common(matrix_, batch, "npn", "NPN", debug, meta_file))
+}
+
+adjust_gmm_npn_unit_std <- function(matrix_, batch, debug = FALSE, meta_file = NULL) {
+  #' Wrapper for GMM adjustment with NPN unit standard deviation strategy.
+  return(adjust_gmm_common(matrix_, batch, "npn_unit_std", "NPN, Unit Std", debug, meta_file))
+}
+
+
+# Main Orchestration Function -------------------------------------------------
+
+batch_adjust_tidy <- function(df, input_file, adjuster, batch_col, column, full_design_matrix, reduce_rows=NULL, reduce_cols=NULL, debug=FALSE, meta_file=NULL) {
   #' Main function to orchestrate the batch adjustment process.
   #' @param df The input tidy data frame (samples x columns).
   #' @param adjuster The name of the adjustment method to use.
   #' @param batch_col The name of the batch column.
   #' @return A tidy data frame with adjusted values.
+  
+  # --- 0. Pre-processing: Handle NA values ---
+  message("0. Pre-processing: Checking for NA values in the batch column.")
+  if (!is.null(batch_col) && any(is.na(df[[batch_col]]))) {
+    na_count <- sum(is.na(df[[batch_col]]))
+    message("WARNING: Found ", na_count, " NA values in batch column ('", batch_col, "'). These samples (rows) will be removed before adjustment.")
+    
+    df <- df[!is.na(df[[batch_col]]), ]
+    
+    if (nrow(df) == 0) {
+      stop("All samples were removed due to NA values in the batch column. Cannot proceed.")
+    }
+  }
 
+  # --- 0.5. Reduce rows, if applicable ---
+  if (!is.null(reduce_rows)) {
+    message("Reducing rows to ", reduce_rows, " rows.")
+    df <- df[1:reduce_rows, ]
+  }
+  
+  # --- 1. Separate data components ---
   message("1. Separating metadata, batch, and gene data.")
   original_colnames <- colnames(df)
-  batch <- df[[batch_col]]
-  
-  df[[batch_col]] <- NULL
 
-  # Metadata columns start with "meta_"
-  meta_data_names = colnames(df)[startsWith(colnames(df), "meta_")]
-  metadata_cols <- df[, startsWith(colnames(df), "meta_")]
-  message(sprintf("Metadata cols: %s", paste(colnames(metadata_cols), collapse=", ")))
-  message(sprintf("Same as original: %s", all(colnames(metadata_cols) == meta_data_names)))
+  # Handle first column containing sample IDs
+  first_col_name <- colnames(df)[1]
+  if (first_col_name %in% c("...1", "", "X", "meta_Sample_ID")) {
+    if (first_col_name == "meta_Sample_ID") {
+      message("Detected meta_Sample_ID column - setting as row names")
+    } else {
+      message("Detected unnamed first column with sample IDs - setting as row names")
+    }
+    rownames(df) <- df[[1]]
+    df <- df[, -1]
+  }
+
+  if (!is.null(batch_col)) {
+    batch <- df[[batch_col]]
+    df[[batch_col]] <- NULL
+  }
+  else {
+    batch <- NULL
+  }
+  
+  # Metadata columns start with "meta_".
+
+  meta_data_names <- colnames(df)[startsWith(colnames(df), "meta_")]
+  metadata_cols <- df[, startsWith(colnames(df), "meta_"), drop = FALSE]
+  message("Metadata cols: ", paste(colnames(metadata_cols), collapse = ", "))
+  
   genes <- df[, !startsWith(colnames(df), "meta_")]
   
+  # Verify all gene columns are numeric
+  numeric_cols <- sapply(genes, is.numeric)
+  if (!all(numeric_cols)) {
+    non_numeric <- colnames(genes)[!numeric_cols]
+    stop(sprintf("Non-numeric columns found in gene data: %s", paste(non_numeric, collapse = ", ")))
+  }
+  
+  # --- 2. Create design matrix ---
   message("2. Creating design matrix.")
   design <- create_design_matrix(metadata_cols, column, full_design_matrix)
-
-  # --- Caching logic for transposed data ---
-  # Create a unique filename for the cached transposed data based on the input file
+  
+  # --- 3. Transpose gene data (with caching) ---
   transposed_cache_file <- sub("(\\.[^.]+)$", "_t\\1", input_file)
   
   if (file.exists(transposed_cache_file)) {
-    message(sprintf("Loading cached transposed data from '%s'", transposed_cache_file))
-    # Use read.csv with row.names=1 and check.names=FALSE
+    message("Loading cached transposed data from '", transposed_cache_file, "'")
     mat_genes <- as.matrix(read.csv(transposed_cache_file, row.names = 1, check.names = FALSE))
   } else {
     message("3. Transposing gene data for adjustment (features x samples).")
     mat_genes <- transpose_essential(genes)
-    message(sprintf("Caching transposed data to '%s'", transposed_cache_file))
-    # Use write.csv to preserve row names correctly
+    message("Caching transposed data to '", transposed_cache_file, "'")
     write.csv(mat_genes, transposed_cache_file, row.names = TRUE, quote = FALSE)
   }
 
-  data_are_counts <- !any(mat_genes < 0, na.rm = TRUE)
+  if (!is.null(reduce_cols)) {
+    message("Reducing gene expression columns to ", reduce_cols, " columns.")
+    mat_genes <- mat_genes[1:reduce_cols, ]
+  }
+  if (!is.null(reduce_rows)) {
+    message("Reducing gene expression rows to ", reduce_rows, " rows.")
+    mat_genes <- mat_genes[, 1:reduce_rows]
+  }
 
-  message(sprintf("4. Applying '%s' adjustment method.", adjuster))
+  # Determine if data are counts (all non-negative).
+  data_are_counts <- !any(mat_genes < 0, na.rm = TRUE)
   
-  adjusted_matrix <- switch(
-    adjuster,
-    min_mean = adjust_min_mean(mat_genes, batch),
-    combat = adjust_combat(mat_genes, batch, design, data_are_counts, debug = debug),
-    limma = adjust_limma(mat_genes, batch, design, debug = debug),
-    quantile = adjust_quantile(mat_genes, batch, debug = T),
-    npn = adjust_npn(mat_genes, batch, debug = debug),
-    seurat_scaling = adjust_seurat_scaling(mat_genes, batch, data_are_counts, debug = debug),
-    seurat_integration = adjust_seurat_integration(mat_genes, batch, data_are_counts, debug = debug),
-    fairadapt = adjust_fairadapt(genes, batch, design, debug = debug),
-    fastMNN = {
-        message("Adjusting with fastMNN.")
-        prep_list <- prep_seurat_like(mat_genes, batch, data_are_counts)
-        sce_list <- lapply(unique(batch), function(b) as.SingleCellExperiment(prep_list$obj[, prep_list$obj$Batch == b]))
-        # The 'scale.data is empty' warning is expected as fastMNN works on the logcounts layer.
-        sce_corrected <- do.call(batchelor::fastMNN, c(sce_list, list(assay.type = "logcounts")))
-        corrected_matrix <- as.matrix(assay(sce_corrected, "reconstructed"))
-        restore_names(corrected_matrix, prep_list)
+  # --- 4. Apply adjustment method ---
+  message("4. Applying '", adjuster, "' adjustment method.")
+  
+  adjusted_matrix <- switch(adjuster,
+    "gmm" = adjust_gmm(mat_genes, batch, debug=TRUE, meta_file=meta_file),
+    "gmm_scale_separate" = adjust_gmm_scale_separate(mat_genes, batch, debug=TRUE, meta_file=meta_file),
+    "gmm_npn" = adjust_gmm_npn(mat_genes, batch, debug=TRUE, meta_file=meta_file),
+    "gmm_npn_unit_std" = adjust_gmm_npn_unit_std(mat_genes, batch, debug=TRUE, meta_file=meta_file),
+    "min_mean" = adjust_min_mean(mat_genes, batch, debug = debug),
+    "combat" = adjust_combat(mat_genes, batch, design, data_are_counts, debug = debug),
+    "limma" = adjust_limma(mat_genes, batch, design, debug = debug),
+    "quantile" = adjust_quantile(mat_genes, batch, debug = debug),
+    "npn" = adjust_npn(mat_genes, batch, debug = debug),
+    "seurat_scaling" = adjust_seurat_scaling(mat_genes, batch, data_are_counts, debug = debug),
+    "seurat_integration" = adjust_seurat_integration(mat_genes, batch, data_are_counts, debug = debug),
+    "fairadapt" = adjust_fairadapt(genes, batch, design, debug = debug),
+    "fastMNN" = {
+      message("Adjusting with fastMNN.")
+      prep_list <- prep_seurat_like(mat_genes, batch, data_are_counts)
+      sce_list <- lapply(unique(batch), function(b) as.SingleCellExperiment(prep_list$obj[, prep_list$obj$Batch == b]))
+      sce_corrected <- do.call(batchelor::fastMNN, c(sce_list, list(assay.type = "logcounts")))
+      corrected_matrix <- as.matrix(assay(sce_corrected, "reconstructed"))
+      restore_names(corrected_matrix, prep_list)
     },
-    liger = adjust_liger(mat_genes, batch, data_are_counts, debug = debug),
+    "liger" = adjust_liger(mat_genes, batch, data_are_counts, debug = debug),
     stop(sprintf("Unknown adjuster '%s'", adjuster))
   )
   
-  if(debug) message(sprintf("Dimensions of final adjusted matrix before transposing: %d rows, %d cols", nrow(adjusted_matrix), ncol(adjusted_matrix)))
+  if (debug) message("DEBUG: Dimensions of final adjusted matrix before transposing: ", nrow(adjusted_matrix), " rows, ", ncol(adjusted_matrix), " cols")
   
+  # --- 5. Reconstruct tidy data frame ---
   message("5. Reconstructing the tidy data frame.")
   adjusted_df <- as.data.frame(t(adjusted_matrix))
 
-  final_df <- cbind(batch, metadata_cols, adjusted_df)
-  if(debug) {
-    message(sprintf("Metadata columns found in adjusted: %s", paste(colnames(adjusted_df)[startsWith(colnames(adjusted_df), "meta_")], collapse = ", ")))
-    message(sprintf("Metadata columns found in final: %s", paste(colnames(final_df)[startsWith(colnames(final_df), "meta_")], collapse = ", ")))
-    if(sum(startsWith(colnames(final_df), "meta_")) == 0 && length(meta_data_names) > 0) {
-      stop("No metadata columns found in final data frame.")
-    }
+  if (debug) message("DEBUG: Dimensions of final adjusted matrix after transposing: ", nrow(adjusted_df), " rows, ", ncol(adjusted_df), " cols")
+
+  # Restore other columns if reduced
+  if (!is.null(reduce_cols)) {
+    message(" 5.1 Restoring skipped columns (reduced)")
+    adjusted_df <- cbind(adjusted_df, genes[ ,reduce_cols:ncol(genes)])
   }
-  colnames(final_df)[1] <- batch_col
   
-  # Reorder the columns
-  return(final_df[, original_colnames])
+  if (is.null(batch)){
+    message(" 5.2 Restoring metadata columns")
+    final_df <- cbind(metadata_cols, adjusted_df)
+  }
+  else {
+    message(" 5.2 Restoring batch and metadata columns")
+    final_df <- cbind(batch, metadata_cols, adjusted_df)
+    colnames(final_df)[1] <- batch_col
+  }
+  
+  if (sum(startsWith(colnames(final_df), "meta_")) == 0 && length(meta_data_names) > 0) {
+    stop("No metadata columns found in final data frame.")
+  }
+  
+  # Reorder columns to match original input, but only use columns that exist in final_df
+  message(" 5.3 Reorder columns")
+  available_cols <- intersect(original_colnames, colnames(final_df))
+  return(final_df[, available_cols])
 }
 
 
-# Increase the maximum size for global variables in parallel processing
-# This is necessary for Seurat integration with large datasets.
+# Set future plan for parallel processing -------------------------------------
+# Increase the maximum size for global variables.
 options(future.globals.maxSize = 2000 * 1024^2)
 
-# Parse command line arguments --------------------------
+
+# Parse command line arguments ------------------------------------------------
 
 parser <- ArgumentParser(description = "A script to apply various batch correction methods to tidy data.")
 
 parser$add_argument("input_file", help = "Path to the input CSV file. Rows are samples, columns are features/metadata.")
 parser$add_argument("output_file", help = "Path for the output adjusted CSV file.")
-parser$add_argument("-a", "--adjuster", default = "combat",
-                    choices = c("min_mean", "combat", "limma", "seurat_scaling", "seurat_integration", "harmony", "quantile", "fairadapt", "liger", "fastMNN", "npn"),
-                    help = "Batch adjustment method to use.")
-parser$add_argument("-b", "--batch-col", default = "Batch", help = "Name of the column identifying the batch for each sample.")
+parser$add_argument("-a", "--adjuster",
+  default = "combat",
+  choices = c("gmm", "gmm_scale_separate", "gmm_npn", "gmm_npn_unit_std", "min_mean", "combat", "limma", "seurat_scaling", "seurat_integration", "quantile", "fairadapt", "liger", "fastMNN", "npn"),
+  help = "Batch adjustment method to use."
+)
+parser$add_argument("-b", "--batch-col", default = NULL, help = "Name of the column identifying the batch for each sample.")
 parser$add_argument("-c", "--column", nargs = "+", default = NULL, help = "Predictive columns to preserve. If specified, these are used to build the design matrix.")
 parser$add_argument("-f", "--full-design-matrix", action = "store_true", help = "If set, the design matrix will include all categorical metadata variables.")
-# Add a debug flag
+parser$add_argument("-R", "--reduce-rows", default = NULL, help = "Number of rows to reduce to.")
+parser$add_argument("-r", "--reduce-cols", default = NULL, help = "Number of columns to reduce to.")
+parser$add_argument("-m", "--meta-file", default = NULL, help = "Path to save the recommended modes for each gene.")
 parser$add_argument("--debug", action = "store_true", help = "Enable verbose debugging messages.")
 
 args <- parser$parse_args()
 
+# Main Execution --------------------------------------------------------------
 
-# Main Execution --------------------------------
-
-message(sprintf("Reading input file '%s'", args$input_file))
+message("Reading input file '", args$input_file, "'")
 suppressMessages(df <- vroom(args$input_file, show_col_types = FALSE))
-message(sprintf("Input file has %d rows and %d columns.", nrow(df), ncol(df)))
+message("Input file has ", nrow(df), " rows and ", ncol(df), " columns.")
 
-if (!(args$batch_col %in% names(df))) {
+if (!is.null(args$batch_col) && !(args$batch_col %in% names(df))) {
   stop(sprintf(
     "The specified batch column ('%s') was not found in the input file. Please check the column name.",
     args$batch_col
   ))
 }
 
-message(sprintf("Starting batch adjustment with method: '%s'", args$adjuster))
+# Changing "Sample_ID" column to "meta_Sample_ID" to simplify later code.
+if ("Sample_ID" %in% names(df)) {
+  df <- df %>% dplyr::rename(meta_Sample_ID = Sample_ID)
+}
+
+
+
+message("Starting batch adjustment with method: '", args$adjuster, "'")
 
 adjusted_data <- batch_adjust_tidy(
   df,
@@ -739,12 +831,17 @@ adjusted_data <- batch_adjust_tidy(
   adjuster = args$adjuster,
   batch_col = args$batch_col,
   column = args$column,
-  full_design_matrix=args$full_design_matrix,
-  debug = args$debug
+  full_design_matrix = args$full_design_matrix,
+  debug = args$debug,
+  meta_file = args$meta_file
 )
 
+start_time = Sys.time()
+message("Writing adjusted data to '", args$output_file, "'")
+# Round numeric columns and write to output file.
 adjusted_data %>%
-  mutate(across(where(is.numeric), ~round(., 6))) %>%
-  write_csv(args$output_file)
+  mutate(across(where(is.numeric), ~ sprintf("%.6f", .))) %>%
+  fwrite(args$output_file)
 
-message(sprintf("Successfully saved adjusted data to '%s'", args$output_file))
+elapsed_time = Sys.time() - start_time
+message("Successfully saved adjusted data to '", args$output_file, "'", " in ", elapsed_time, " seconds.")
