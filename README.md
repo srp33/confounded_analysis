@@ -178,7 +178,7 @@ The batch effect adjustment phase implements multiple methods for removing unwan
 
 - **`all.sh`** - Master script that executes all adjustment methods in sequence
 - **`adjustR_data.sh`** - Runs R-based methods on individual datasets in parallel/sequential modes
-- **`adjustR_individual_data.sh`** - Applies R methods to individual datasets with global batch correction
+- **`adjustR_individual_prep.sh`** - Applies R methods to individual datasets with global batch correction
 - **`adjustR_combined_data.sh`** - Processes combined dataset pairs for cross-study batch correction
 
 ### Deep Learning Methods

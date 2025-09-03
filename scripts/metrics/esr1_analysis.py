@@ -5,11 +5,20 @@ import numpy as np
 import os
 from functools import reduce
 
+# --- Global Configuration ---
+
 # Configure pandas display options
 pd.set_option('display.max_columns', None)
 pd.set_option('display.max_rows', None)
 pd.set_option('display.width', None)
 pd.set_option('display.max_colwidth', None)
+
+sns.set_theme(style="whitegrid", palette="Set2")
+plt.rcParams['figure.dpi'] = 100
+plt.rcParams['savefig.dpi'] = 300
+plt.rcParams['font.family'] = 'sans-serif'
+plt.rcParams['font.sans-serif'] = ['Arial', 'DejaVu Sans', 'Liberation Sans', 'Bitstream Vera Sans', 'sans-serif']
+
 
 # --- Function Definitions ---
 
@@ -71,7 +80,7 @@ def analyze_dataframe(df, df_name):
     return gene_columns
 
 def prepare_data_for_plotting(df, df_name, debug=False):
-    """Prepare a single dataframe for plotting."""
+    """Prepare a single dataframe for plotting by adding dataset info and mapping ER status."""
     df_copy = df.copy()
     df_copy['dataset'] = df_name
     if 'meta_er_status' in df_copy.columns:
@@ -82,20 +91,19 @@ def prepare_data_for_plotting(df, df_name, debug=False):
         # Map numeric ER status to string representation
         df_copy['er_status_str'] = df_copy['meta_er_status'].map({1: 'Positive', 0: 'Negative'})
         df_copy.dropna(subset=['er_status_str'], inplace=True)
-        df_copy['group'] = df_copy['meta_source'] + '-' + df_copy['er_status_str']
         
         if debug:
-            print(f"  Value counts for 'group' AFTER mapping:\n{df_copy['group'].value_counts(dropna=False)}")
+            print(f"  Value counts for 'er_status_str' AFTER mapping:\n{df_copy['er_status_str'].value_counts(dropna=False)}")
 
     elif debug:
         print(f"DEBUG: 'meta_er_status' column NOT FOUND in {df_name}")
 
     return df_copy
 
-def generate_histograms(datasets, output_dir="/outputs/figures/histograms/"):
-    """Generate log-transformed histograms to compare gene distributions."""
+def generate_histograms(datasets, output_dir="/outputs/figures/histograms/", debug=False):
+    """Generate log-transformed KDE plots to compare gene distributions."""
     print(f"\n{'='*100}")
-    print("GENERATING HISTOGRAMS")
+    print("GENERATING DISTRIBUTION PLOTS (KDE)")
     print(f"{'='*100}")
     os.makedirs(output_dir, exist_ok=True)
 
@@ -105,37 +113,59 @@ def generate_histograms(datasets, output_dir="/outputs/figures/histograms/"):
     common_genes = list(reduce(set.intersection, [set(df.columns) for df in datasets.values()]))
     genes_to_plot = [gene for gene in target_genes if gene in common_genes]
     
-    print(f"Generating histograms for {len(genes_to_plot)} common target genes: {genes_to_plot}")
+    print(f"Generating plots for {len(genes_to_plot)} common target genes: {genes_to_plot}")
 
-    # Prepare all datasets for plotting
-    prepared_datasets = {name: prepare_data_for_plotting(df, name) for name, df in datasets.items()}
-    num_datasets = len(datasets)
-
+    # --- FIX STARTS HERE ---
+    # # Pending, might fix blank plot error (The original preparation function removed rows needed by histograms).
+    # # The old method filtered data based on 'er_status_str', which is not used here and could remove all data for a facet.
+    # # This new approach performs a simpler preparation, only adding the 'dataset' column.
+    prepared_dfs = []
+    for name, df in datasets.items():
+        df_copy = df.copy()
+        df_copy['dataset'] = name
+        prepared_dfs.append(df_copy)
+    combined_df = pd.concat(prepared_dfs, ignore_index=True)
+    
+    if debug:
+        print(f"DEBUG: Shape of combined_df for histograms: {combined_df.shape}")
+        print(f"DEBUG: Value counts for 'dataset' column:\n{combined_df['dataset'].value_counts(dropna=False)}")
+    # --- FIX ENDS HERE ---
+    
     for gene in genes_to_plot:
         print(f"  - Processing {gene}...")
-        fig, axes = plt.subplots(num_datasets, 1, figsize=(12, 5 * num_datasets), sharex=True)
-        # Ensure axes is always a list for consistent indexing
-        if num_datasets == 1:
-            axes = [axes]
-        fig.suptitle(f'Log-Transformed Distribution for {gene}', fontsize=16, fontweight='bold')
+        
+        # Apply log transform safely to a temporary column
+        log_gene_col = f"log_{gene}"
+        # Ensure the column has no NaNs before transformation to avoid warnings/errors
+        valid_data = combined_df[[gene]].dropna()
+        combined_df[log_gene_col] = np.log1p(combined_df[gene] - valid_data[gene].min())
+        
+        # Create a faceted KDE plot for better comparison
+        g = sns.displot(
+            data=combined_df, 
+            x=log_gene_col, 
+            hue='meta_source', 
+            col='dataset', 
+            kind='kde',
+            fill=True,
+            height=5,
+            aspect=1.2,
+            facet_kws={'sharey': False, 'sharex': False} # Un-share axes for better individual plot scaling
+        )
+        g.fig.suptitle(f'Log-Transformed Distribution for {gene}', fontsize=16, fontweight='bold', y=1.03)
+        g.set_axis_labels(f'Log-Transformed {gene} Expression', 'Density')
+        g.set_titles("Dataset: {col_name}")
+        
+        # Remove the temporary column
+        combined_df.drop(columns=[log_gene_col], inplace=True)
 
-        for ax, (name, df) in zip(axes, prepared_datasets.items()):
-            df_copy = df.copy()
-            # Apply log transform safely
-            df_copy[gene] = np.log1p(df_copy[gene] - df_copy[gene].min())
-            
-            sns.histplot(data=df_copy, x=gene, hue='meta_source', ax=ax, bins=30, kde=True)
-            ax.set_title(f'Dataset: {name}', fontsize=12)
-            ax.set_ylabel('Frequency')
+        filepath = os.path.join(output_dir, f"{gene}_distribution_comparison.png")
+        plt.savefig(filepath, bbox_inches='tight')
+        plt.close(g.fig)
+        print(f"    Saved plot to {filepath}")
         
-        axes[-1].set_xlabel(f'Log-Transformed {gene} Expression')
-        plt.tight_layout(rect=[0, 0, 1, 0.96])
-        
-        filepath = os.path.join(output_dir, f"{gene}_histogram_comparison.png")
-        plt.savefig(filepath, dpi=300, bbox_inches='tight')
-        plt.close(fig)
-        print(f"    Saved histogram to {filepath}")
-    print(f"\nAll histograms saved to: {output_dir}")
+    print(f"\nAll distribution plots saved to: {output_dir}")
+
 
 def generate_faceted_plots(datasets, plot_kind, required_genes, output_dir, debug=False):
     """Generate faceted plots (e.g., violin, scatter) for all datasets."""
@@ -159,53 +189,62 @@ def generate_faceted_plots(datasets, plot_kind, required_genes, output_dir, debu
     print(f"Generating plots for genes: {available_genes}")
     
     if plot_kind == 'violin':
-        plot_order = [
-            'gse20194-Negative', 'gse20194-Positive',
-            'gse62944-Negative', 'gse62944-Positive'
-        ]
-        palette = {
-            'gse20194-Negative': '#3498db', 'gse20194-Positive': '#e74c3c',
-            'gse62944-Negative': '#2ecc71', 'gse62944-Positive': '#f1c40f'
-        }
         for gene in available_genes:
             print(f"  - Creating plot for {gene}...")
+            # Use catplot for faceted violin plots with split violins
             g = sns.catplot(
-                data=combined_df, x='group', y=gene, col='dataset', kind='violin',
-                order=plot_order, palette=palette, inner='quartile',
-                col_order=list(datasets.keys()), height=10, aspect=(2/len(datasets.keys())),
+                data=combined_df, 
+                x='meta_source', 
+                y=gene, 
+                hue='er_status_str',
+                col='dataset', 
+                kind='violin',
+                split=True, # Create split violins for direct comparison
+                inner='quartile',
+                height=10, 
+                aspect=0.3,
                 sharey=False
             )
             g.fig.suptitle(f'Gene Expression for {gene} by Source and ER Status', y=1.03, fontsize=16, fontweight='bold')
-            g.set_axis_labels("Group (Source - ER Status)", f"{gene} Expression Level")
+            g.set_axis_labels("Source", f"{gene} Expression Level")
             g.set_titles("Dataset: {col_name}")
-            g.set_xticklabels(rotation=45, ha='right')
-            filepath = os.path.join(output_dir, f"{gene}_violin_plot.png")
-            plt.savefig(filepath, dpi=300, bbox_inches='tight')
+            g.set_xticklabels(rotation=15, ha='right')
+            g.add_legend(title="ER Status")
+            
+            filepath = os.path.join(output_dir, f"{gene}_split_violin_plot.png")
+            plt.savefig(filepath, bbox_inches='tight')
             plt.close('all')
             print(f"    Saved plot to {filepath}")
 
     elif plot_kind == 'scatter':
         print("  - Creating scatter plot for ESR1 vs. LRRC8D...")
+        # Use FacetGrid for customized scatter plots
         g = sns.FacetGrid(
-            combined_df, col="dataset", hue="er_status_str", col_wrap=3, height=5,
-            hue_order=['Positive', 'Negative'], palette={'Positive': '#e74c3c', 'Negative': '#3498db'}
+            combined_df, 
+            col="dataset", 
+            hue="er_status_str", 
+            col_wrap=3, 
+            height=5,
+            hue_order=['Positive', 'Negative']
         )
-        g.map(sns.scatterplot, 'ESR1', 'LRRC8D', alpha=0.7, edgecolor='w', s=50)
-        g.fig.suptitle('ESR1 vs. LRRC8D Expression by ER Status', y=1.05, fontsize=16, fontweight='bold')
+        g.map(sns.scatterplot, 'ESR1', 'LRRC8D', alpha=0.8, edgecolor='w', s=60)
+        g.fig.suptitle('ESR1 vs. LRRC8D Expression by ER Status', y=1.03, fontsize=16, fontweight='bold')
         g.set_axis_labels("ESR1 Expression", "LRRC8D Expression")
         g.set_titles("Dataset: {col_name}")
         g.add_legend(title="ER Status")
+        
         filepath = os.path.join(output_dir, "ESR1_vs_LRRC8D_scatter.png")
-        plt.savefig(filepath, dpi=300, bbox_inches='tight')
+        plt.savefig(filepath, bbox_inches='tight')
         plt.close('all')
         print(f"    Saved plot to {filepath}")
 
     print(f"\nAll {plot_kind} plots saved to: {output_dir}")
 
+
 # --- Main Execution ---
 if __name__ == "__main__":
     # Define the directory containing your CSV data files
-    DATA_DIRECTORY = '/data/gse_20194_62944/'
+    DATA_DIRECTORY = '/data/gold/gse_20194_62944/'
     
     # Load all datasets from the directory
     all_datasets = load_datasets(DATA_DIRECTORY)

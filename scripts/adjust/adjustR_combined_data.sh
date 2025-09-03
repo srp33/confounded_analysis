@@ -25,8 +25,8 @@ ADJUSTERS_PARALLEL=(
 ADJUSTERS_SEQUENTIAL=(
     # "fastMNN"
     "gmm"
-    "gmm_scale_separate"
-    "gmm_npn"
+    # "gmm_scale_separate"
+    # "gmm_npn"
 )
 
 # --- Helper Function ---

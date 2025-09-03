@@ -10,9 +10,11 @@ mkdir -p data/r data/.cache data/gold data/raw_data data/combined_data data/raw_
 mkdir -p outputs/figures/classification outputs/figures/pca outputs/figures/mse_mmd 
 mkdir -p outputs/metrics outputs/optimizations outputs/tables outputs/metrics/archive
 
+GROUP_ID=$(getent group docker | cut -d: -f3)
+
 #docker run -d --rm \
 docker run -i -t --rm \
-  --user $(id -u):$(id -g) \
+  --user $(id -u):$GROUP_ID \
   --env HOME=/ \
   -v $(pwd)/data:/data \
   -v $(pwd)/outputs:/outputs \

@@ -527,6 +527,24 @@ adjust_liger <- function(df_, batch, data_are_counts, debug = FALSE) {
 }
 
 
+adjust_fastMNN <- function(df_, batch, data_are_counts, debug = FALSE) {
+  #' Adjust using the fastMNN method from batchelor.
+  #' @param df_ The data matrix (features x samples).
+  #' @param batch The batch variable vector.
+  #' @param data_are_counts Logical, TRUE if data is raw counts.
+  #' @param debug Logical flag for debug output.
+  #' @return The adjusted matrix.
+  
+  message("Adjusting with fastMNN.")
+  prep_list <- prep_seurat_like(df_, batch, data_are_counts)
+  sce_list <- lapply(unique(batch), function(b) as.SingleCellExperiment(prep_list$obj[, prep_list$obj$Batch == b]))
+  sce_corrected <- do.call(batchelor::fastMNN, c(sce_list, list(assay.type = "logcounts")))
+  corrected_matrix <- as.matrix(assay(sce_corrected, "reconstructed"))
+  
+  return(restore_names(corrected_matrix, prep_list))
+}
+
+
 adjust_gmm_common <- function(matrix_, batch, adjustment_strategy, strategy_name, debug = FALSE, meta_file = NULL) {
   #' Common implementation for all GMM-based adjustment methods.
   #' Wrapper for gmm_adjust to fit into the main adjustment pipeline with caching support.
@@ -561,12 +579,6 @@ adjust_gmm_common <- function(matrix_, batch, adjustment_strategy, strategy_name
       num_workers = -1
     )
     
-    if (is.null(result)) {
-      # Fallback to original implementation
-      message("WARNING: Cached implementation failed, falling back to original")
-      result <- bimodal_normalize(genes_df, debug = debug, log_file="/outputs/bimodal_parallel.log", adjustment_strategy=adjustment_strategy, num_workers=-1)
-    }
-    
     adjusted_genes_df <- result$bimodal_data
     if (!is.null(meta_file)) {
       recommended_modes <- result$recommended_modes
@@ -586,12 +598,6 @@ adjust_gmm_common <- function(matrix_, batch, adjustment_strategy, strategy_name
       force_recalculate = force_recalculate,
       num_workers = -1
     )
-    
-    if (is.null(adjusted_genes_df)) {
-      # Fallback to original implementation
-      message("WARNING: Cached implementation failed, falling back to original")
-      adjusted_genes_df <- gmm_adjust(genes_df, batch, debug = debug, log_file="/outputs/gmm_parallel.log", adjustment_strategy=adjustment_strategy, num_workers=-1)
-    }
   }
 
   return(t(as.matrix(adjusted_genes_df)))
@@ -730,14 +736,7 @@ batch_adjust_tidy <- function(df, input_file, adjuster, batch_col, column, full_
     "seurat_scaling" = adjust_seurat_scaling(mat_genes, batch, data_are_counts, debug = debug),
     "seurat_integration" = adjust_seurat_integration(mat_genes, batch, data_are_counts, debug = debug),
     "fairadapt" = adjust_fairadapt(genes, batch, design, debug = debug),
-    "fastMNN" = {
-      message("Adjusting with fastMNN.")
-      prep_list <- prep_seurat_like(mat_genes, batch, data_are_counts)
-      sce_list <- lapply(unique(batch), function(b) as.SingleCellExperiment(prep_list$obj[, prep_list$obj$Batch == b]))
-      sce_corrected <- do.call(batchelor::fastMNN, c(sce_list, list(assay.type = "logcounts")))
-      corrected_matrix <- as.matrix(assay(sce_corrected, "reconstructed"))
-      restore_names(corrected_matrix, prep_list)
-    },
+    "fastMNN" = adjust_fastMNN(mat_genes, batch, data_are_counts, debug = debug),
     "liger" = adjust_liger(mat_genes, batch, data_are_counts, debug = debug),
     stop(sprintf("Unknown adjuster '%s'", adjuster))
   )

@@ -30,7 +30,7 @@ Usage:
     python scripts/prepdata/generate_all_combinations.py --dry-run
 
 Arguments:
-    --debug                 Enable detailed debug output
+    --debug                Enable detailed debug output
     --dry-run              Show what would be done without actually doing it
     --force                Force regeneration of all combinations (bypass cache)
     --parallel N           Number of parallel processes (default: 1)

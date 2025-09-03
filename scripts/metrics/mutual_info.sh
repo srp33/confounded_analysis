@@ -2,6 +2,9 @@
 
 set -e
 
+# Set PYTHONPATH for Python imports
+export PYTHONPATH="/scripts:$PYTHONPATH"
+
 printf "\033[0;32mCalculating Mutual info\033[0m\n"
 
 out_path="/outputs/metrics/mutual_info.csv"

@@ -2,6 +2,9 @@
 
 set -e
 
+# Set PYTHONPATH for Python imports
+export PYTHONPATH="/scripts:$PYTHONPATH"
+
 printf "\033[0;32mCalculating MMD\033[0m\n"
 
 out_path="/outputs/metrics/mmd.csv"

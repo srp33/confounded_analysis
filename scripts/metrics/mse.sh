@@ -17,6 +17,9 @@ conditional_rm "${out_path}"
 
 script_path="$(dirname $0)/mse.py"
 
+# Set PYTHONPATH to include the project root
+export PYTHONPATH="/scripts:$PYTHONPATH"
+
 python "${script_path}" -i /data/gold/gse49711 -o "$out_path"
 python "${script_path}" -i /data/gold/gse20194 -o "$out_path"
 python "${script_path}" -i /data/gold/gse24080 -o "$out_path"

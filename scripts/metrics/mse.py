@@ -1,7 +1,8 @@
 import argparse
 import numpy as np
 import os
-from util import *
+from scripts.utils import DataFrameCache, split_metadata_genes
+from util import repeated_cross_val
 from pathlib import Path
 
 parser = argparse.ArgumentParser()

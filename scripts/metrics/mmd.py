@@ -1,7 +1,8 @@
 import argparse
 import numpy as np
 from sklearn.metrics.pairwise import rbf_kernel, linear_kernel
-from util import *
+from scripts.utils import DataFrameCache
+from util import repeated_cross_val, split_into_batches
 from pathlib import Path
 
 parser = argparse.ArgumentParser()
