@@ -107,5 +107,4 @@ ENV NUMBA_CACHE_DIR=/tmp/numba_cache
 # Create final directories and clone repositories
 ####################################################################################
 RUN mkdir -p /tmp/numba_cache && chmod -R 777 /tmp/numba_cache
-RUN git clone https://github.com/edammer/TAMPOR.git /opt/TAMPOR
 RUN git clone https://github.com/datapplab/AutoClass.git /opt/AutoClass
