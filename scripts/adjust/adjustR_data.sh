@@ -19,7 +19,6 @@ DATA_DIR="/data/gold"
 ADJUSTERS_PARALLEL=(
     # "quantile"
     # "min_mean"
-    # "weird_mean"
     # "combat"
     # "seurat_scaling"
     # "seurat_integration"

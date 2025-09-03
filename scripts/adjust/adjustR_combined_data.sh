@@ -18,7 +18,6 @@ DATA_DIR="/data/combined_data"
 # Define adjusters to run in PARALLEL (all dataset jobs for an adjuster run at once)
 ADJUSTERS_PARALLEL=(
     "min_mean"
-    "weird_mean"
     "npn"
 )
 

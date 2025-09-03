@@ -40,10 +40,29 @@ all_info_df <- tribble(
   "gse20194", "GSE 20194 HER2",                 "meta_batch",      "meta_her2_status",
   "gse20194", "GSE 20194 PR",                   "meta_batch",      "meta_pr_status",
   "gse24080",  "GSE 24080 Cytogenetic Abnormality",    "meta_batch",      "meta_cytogenetic_abnormality",
-  "gse49711",  "GSE 49711 Stage 3 4",           "meta_Sex",      "meta_INSS_Stage_Split_3_4"
+  "gse49711",  "GSE 49711 Stage 3 4",           "meta_Sex",      "meta_INSS_Stage_Split_3_4",
+
+  "gse_20194_62944", "GSE 20194 62944 ER",       "meta_source",      "meta_er_status",
+
+  "2_dims_no_bio_no_batch",   "2 dims no bio no batch",   "meta_batch", "meta_bio",
+  "2_dims_no_bio_yes_batch",  "2 dims no bio yes batch",  "meta_batch", "meta_bio",
+  "2_dims_yes_bio_no_batch",  "2 dims yes bio no batch",  "meta_batch", "meta_bio",
+  "2_dims_yes_bio_yes_batch",  "2 dims yes bio yes batch",  "meta_batch", "meta_bio",
+
+  "400_dims_no_bio_no_batch",   "400 dims no bio no batch",   "meta_batch", "meta_bio",
+  "400_dims_no_bio_yes_batch",  "400 dims no bio yes batch",  "meta_batch", "meta_bio",
+  "400_dims_yes_bio_no_batch",  "400 dims yes bio no batch",  "meta_batch", "meta_bio",
+  "400_dims_yes_bio_yes_batch",  "400 dims yes bio yes batch",  "meta_batch", "meta_bio",
+
+  "1000_dims_no_bio_no_batch",   "1000 dims no bio no batch",   "meta_batch", "meta_bio",
+  "1000_dims_no_bio_yes_batch",  "1000 dims no bio yes batch",  "meta_batch", "meta_bio",
+  "1000_dims_yes_bio_no_batch",  "1000 dims yes bio no batch",  "meta_batch", "meta_bio",
+  "1000_dims_yes_bio_yes_batch",  "1000 dims yes bio yes batch",  "meta_batch", "meta_bio",
+
+  "structured_synthetic", "Structured Synthetic", "meta_batch", "meta_bio"
 )
 
-order <- c("unadjusted", "seurat_scaling", "liger", "seurat_integration", "monotonic", "non_monotonic", "wasserstein", "autoclass", "min_mean", "combat_target", "fastMNN", "combat", "quantile", "npn") #, "icvae", "fair_adapt", "limma_target", "limma", "tampor", "harmony", 
+order <- c("unadjusted", "seurat_scaling", "liger", "seurat_integration", "monotonic", "non_monotonic", "wasserstein", "autoclass", "min_mean", "combat_target", "fastMNN", "combat", "quantile", "npn", "simple", "gmm", "gmm_scale_separate", "gmm_npn") #, "icvae", "fair_adapt", "limma_target", "limma", "harmony", 
 
 score_functions <- c("roc_auc_score", "mutual_info_score", "accuracy_score")
 
