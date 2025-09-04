@@ -230,6 +230,7 @@ def main():
     parser = argparse.ArgumentParser(description="Run HistGradientBoosting classification on gene expression data for ER status.")
     parser.add_argument('--input-data', required=True, help='Path to the combined gene expression data file.')
     parser.add_argument('--output', required=True, help='Path for the detailed output CSV file.')
+    parser.add_argument('--confusion-matrix', required=True, help='Path for the confusion matrices .txt file.')
     parser.add_argument('--summary', required=True, help='Path for the summary metrics CSV file.')
     parser.add_argument('--adjustment', default='Unadjusted', help='Name of the adjustment method used.')
     parser.add_argument('--cache-dir', default='./.cache', help='Directory to store cache files.')
@@ -247,7 +248,7 @@ def main():
     # Ensure output file exists and has a header.
     os.makedirs(os.path.dirname(args.output), exist_ok=True)
     if not os.path.exists(args.output) or os.path.getsize(args.output) == 0:
-        pd.DataFrame(columns=['metric', 'classifier', 'adjuster', 'dataset', 'column', 'value']).to_csv(args.output, index=False)
+        pd.DataFrame(columns=['combination', 'metric', 'classifier', 'adjuster', 'dataset', 'column', 'value']).to_csv(args.output, index=False)
     
     print_now(f"=== HistGradientBoostingClassifier ER Status Classification ({args.adjustment}) ===")
     

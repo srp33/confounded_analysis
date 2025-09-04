@@ -9,7 +9,8 @@ printf "\033[0;32mRunning Classification experiment\033[0m\n"
 # Define paths and parameters used in the script.
 script_path="/scripts/metrics/hist_gradient_er_classification.py"
 input_base="/data/combined_data/gse20194_gse96058_hiseq"
-out_path="/outputs/metrics/hist_gradient_er_results.csv"
+out_path="/outputs/metrics/er_classification_all_combinations.csv"
+matrix_path="/outputs/metrics/confusion_matrix.txt"
 summary_path="/outputs/metrics/hist_gradient_er_summary_gse20194_gse96058_hiseq.csv"
 cache_dir="/data/.cache/"
 # Standardize the number of repeats for all experiments.
@@ -57,10 +58,11 @@ for input_file in $(find "${input_base}" -name "*.csv"); do
         --input-data "${input_file}" \
         --summary "${summary_path}" \
         --output "${out_path}" \
+        --confusion-matrix "${matrix_path}" \
         --adjustment "${adjustment}" \
         --cache-dir "${cache_dir}" \
         --n-repeats "${n_repeats}" \
-        --force-rerun \
+        --force-rerun 
 
 done
 
