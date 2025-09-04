@@ -1,0 +1,84 @@
+Bootstrap: docker
+From: bioconductor/bioconductor:RELEASE_3_21
+
+####################################################################################
+# Set base environment variables
+####################################################################################
+%environment
+    export LANG="C.UTF-8"
+    export LC_ALL="C.UTF-8"
+    export TZ="America/Denver"
+
+    # Set Conda and R environment variables
+    export CONDA_DIR="/opt/conda"
+    export PATH="$CONDA_DIR/bin:$PATH"
+    export CONDA_PREFIX="$CONDA_DIR"
+    export RETICULATE_PYTHON="$CONDA_DIR/bin/python"
+    export R_LIBS_USER="/home/r_libs"
+    export TORCHINDUCTOR_CACHE_DIR="/tmp/torch_cache"
+    export NUMBA_CACHE_DIR="/tmp/numba_cache"
+
+    # Configure ccache
+    export PATH="/usr/lib/ccache:$PATH"
+    export CC="ccache gcc"
+    export CXX="ccache g++"
+    export CCACHE_DIR="/cache/ccache"
+    
+####################################################################################
+# Copy the R installation script into the container before the build
+####################################################################################
+%files
+    install_packages.R /install_packages.R
+    
+####################################################################################
+# Execute all installation steps
+# This section combines all 'RUN' commands from the Dockerfile's stages.
+####################################################################################
+%post
+    echo "Starting build process..."
+
+    # Stage 1: Install system-level dependencies and ccache
+    apt-get update
+    apt-get install -y --no-install-recommends wget gnupg software-properties-common git ccache
+    wget -O - https://apt.kitware.com/keys/kitware-archive-latest.asc 2>/dev/null | gpg --dearmor - | tee /etc/apt/trusted.gpg.d/kitware.gpg >/dev/null
+    echo 'deb https://apt.kitware.com/ubuntu/ jammy main' | tee /etc/apt/sources.list.d/kitware.list >/dev/null
+    apt-get update
+    apt-get install -y --no-install-recommends cmake
+    apt-get clean
+    rm -rf /var/lib/apt/lists/*
+    cmake --version
+    
+    # Stage 2: Build the Python environment
+    # Miniforge3 installation
+    wget --quiet https://github.com/conda-forge/miniforge/releases/latest/download/Miniforge3-Linux-x86_64.sh -O /tmp/miniforge.sh
+    /bin/bash /tmp/miniforge.sh -b -p /opt/conda
+    rm /tmp/miniforge.sh
+    
+    # Python package installation with Conda and Pip
+    /opt/conda/bin/conda install -y -c conda-forge numpy 'scikit-learn>=1.4' pandas 'tensorflow>=2.0' pytorch matplotlib
+    /opt/conda/bin/conda install -y aif360 tabulate jaxtyping beartype pytables opentsne umap-learn geoparse seaborn
+    /opt/conda/bin/conda install -y -c conda-forge psutil tqdm rich memory_profiler py-cpuinfo
+    /opt/conda/bin/pip install gdown osfclient
+    /opt/conda/bin/pip install 'aif360[FairAdapt]'
+    /opt/conda/bin/conda clean --all -y
+    
+    # Stage 3: Build the R environment
+    # R library setup
+    mkdir -p /home/r_libs
+    chmod -R 777 /home/r_libs
+    
+    # R package installation
+    # NOTE: The '--mount' flags for pak and ccache are removed.
+    Rscript /install_packages.R
+
+    # Final Stage: Assemble
+    # The final environment variables are set in the %environment section.
+    # The 'COPY --from' commands are unnecessary because all files are installed
+    # directly into the final image during the build process.
+    
+    # Create final directories and clone repositories
+    mkdir -p /tmp/numba_cache
+    chmod -R 777 /tmp/numba_cache
+    git clone https://github.com/datapplab/AutoClass.git /opt/AutoClass
+    
+    echo "Build completed."
