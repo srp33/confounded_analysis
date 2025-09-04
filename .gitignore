@@ -5,3 +5,4 @@ tmp*
 outputs/*.log
 outputs/metrics/archive
 .DS_Store
+*.out
