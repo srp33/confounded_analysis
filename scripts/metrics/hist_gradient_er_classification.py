@@ -38,6 +38,12 @@ def calculate_metrics(y_true, y_pred, y_proba):
     # Use confusion matrix for robust calculation of TPR/TNR.
     tn, fp, fn, tp = confusion_matrix(y_true, y_pred, labels=[0, 1]).ravel()
     print_now("_____________HERE")
+
+    # os.makedirs(os.path.dirname(matrix_file), exist_ok=True)
+    # if not os.path.exists(matrix_file) or os.path.getsize(matrix_file) == 0:
+    #     pd.DataFrame('adjuster', 'dataset', 'true_positive', 'false_negative', 'false_positive', 'true negative']).to_csv(matrix_file, index=False)
+    
+    
     metrics = {
         'Accuracy': accuracy_score(y_true, y_pred),
         'ROC AUC': roc_auc_score(y_true, y_proba),

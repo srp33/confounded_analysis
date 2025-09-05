@@ -1,54 +1,54 @@
 combination,metric,classifier,adjuster,dataset,column,value
-Accuracy,HistGradientBoosting,Unadjusted,Combined,meta_er_status,0.9542,
-Accuracy,HistGradientBoosting,Unadjusted,Combined on gse20194,meta_er_status,0.9276,
-Accuracy,HistGradientBoosting,Unadjusted,Combined on gse96058_hiseq,meta_er_status,0.9565,
-MCC (Matthews Corr Coef),HistGradientBoosting,Unadjusted,Combined,meta_er_status,0.7488,
-MCC (Matthews Corr Coef),HistGradientBoosting,Unadjusted,Combined on gse20194,meta_er_status,0.8454,
-MCC (Matthews Corr Coef),HistGradientBoosting,Unadjusted,Combined on gse96058_hiseq,meta_er_status,0.6886,
-ROC AUC,HistGradientBoosting,Unadjusted,Combined,meta_er_status,0.9670,
-ROC AUC,HistGradientBoosting,Unadjusted,Combined on gse20194,meta_er_status,0.9503,
-ROC AUC,HistGradientBoosting,Unadjusted,Combined on gse96058_hiseq,meta_er_status,0.9616,
-Sensitivity (TPR),HistGradientBoosting,Unadjusted,Combined,meta_er_status,0.9761,
-Sensitivity (TPR),HistGradientBoosting,Unadjusted,Combined on gse20194,meta_er_status,0.9421,
-Sensitivity (TPR),HistGradientBoosting,Unadjusted,Combined on gse96058_hiseq,meta_er_status,0.9782,
-Specificity (TNR),HistGradientBoosting,Unadjusted,Combined,meta_er_status,0.7613,
-Specificity (TNR),HistGradientBoosting,Unadjusted,Combined on gse20194,meta_er_status,0.9035,
-Specificity (TNR),HistGradientBoosting,Unadjusted,Combined on gse96058_hiseq,meta_er_status,0.6953,
-Accuracy,HistGradientBoosting,Unadjusted,Combined,meta_er_status,0.9558,
-Accuracy,HistGradientBoosting,Unadjusted,Combined on gse20194,meta_er_status,0.9156,
-Accuracy,HistGradientBoosting,Unadjusted,Combined on gse96058_hiseq,meta_er_status,0.9594,
-MCC (Matthews Corr Coef),HistGradientBoosting,Unadjusted,Combined,meta_er_status,0.7581,
-MCC (Matthews Corr Coef),HistGradientBoosting,Unadjusted,Combined on gse20194,meta_er_status,0.8216,
-MCC (Matthews Corr Coef),HistGradientBoosting,Unadjusted,Combined on gse96058_hiseq,meta_er_status,0.7174,
-ROC AUC,HistGradientBoosting,Unadjusted,Combined,meta_er_status,0.9652,
-ROC AUC,HistGradientBoosting,Unadjusted,Combined on gse20194,meta_er_status,0.9529,
-ROC AUC,HistGradientBoosting,Unadjusted,Combined on gse96058_hiseq,meta_er_status,0.9582,
-Sensitivity (TPR),HistGradientBoosting,Unadjusted,Combined,meta_er_status,0.9761,
-Sensitivity (TPR),HistGradientBoosting,Unadjusted,Combined on gse20194,meta_er_status,0.9605,
-Sensitivity (TPR),HistGradientBoosting,Unadjusted,Combined on gse96058_hiseq,meta_er_status,0.9770,
-Specificity (TNR),HistGradientBoosting,Unadjusted,Combined,meta_er_status,0.7774,
-Specificity (TNR),HistGradientBoosting,Unadjusted,Combined on gse20194,meta_er_status,0.8444,
-Specificity (TNR),HistGradientBoosting,Unadjusted,Combined on gse96058_hiseq,meta_er_status,0.7475,
-Accuracy,HistGradientBoosting,Unadjusted,gse20194,meta_er_status,0.9243,
-MCC (Matthews Corr Coef),HistGradientBoosting,Unadjusted,gse20194,meta_er_status,0.8399,
-ROC AUC,HistGradientBoosting,Unadjusted,gse20194,meta_er_status,0.9488,
-Sensitivity (TPR),HistGradientBoosting,Unadjusted,gse20194,meta_er_status,0.9421,
-Specificity (TNR),HistGradientBoosting,Unadjusted,gse20194,meta_er_status,0.8958,
-Accuracy,HistGradientBoosting,Unadjusted,gse20194,meta_er_status,0.9161,
-MCC (Matthews Corr Coef),HistGradientBoosting,Unadjusted,gse20194,meta_er_status,0.8218,
-ROC AUC,HistGradientBoosting,Unadjusted,gse20194,meta_er_status,0.9494,
-Sensitivity (TPR),HistGradientBoosting,Unadjusted,gse20194,meta_er_status,0.9418,
-Specificity (TNR),HistGradientBoosting,Unadjusted,gse20194,meta_er_status,0.8750,
-Accuracy,HistGradientBoosting,Unadjusted,gse96058_hiseq,meta_er_status,0.9565,
-MCC (Matthews Corr Coef),HistGradientBoosting,Unadjusted,gse96058_hiseq,meta_er_status,0.6833,
-ROC AUC,HistGradientBoosting,Unadjusted,gse96058_hiseq,meta_er_status,0.9591,
-Sensitivity (TPR),HistGradientBoosting,Unadjusted,gse96058_hiseq,meta_er_status,0.9798,
-Specificity (TNR),HistGradientBoosting,Unadjusted,gse96058_hiseq,meta_er_status,0.6774,
-Accuracy,HistGradientBoosting,Unadjusted,gse96058_hiseq,meta_er_status,0.9572,
-MCC (Matthews Corr Coef),HistGradientBoosting,Unadjusted,gse96058_hiseq,meta_er_status,0.6899,
-ROC AUC,HistGradientBoosting,Unadjusted,gse96058_hiseq,meta_er_status,0.9608,
-Sensitivity (TPR),HistGradientBoosting,Unadjusted,gse96058_hiseq,meta_er_status,0.9798,
-Specificity (TNR),HistGradientBoosting,Unadjusted,gse96058_hiseq,meta_er_status,0.6868,
+Accuracy,HistGradientBoosting,Unadjusted,Combined,meta_er_status,0.9542
+Accuracy,HistGradientBoosting,Unadjusted,Combined on gse20194,meta_er_status,0.9276
+Accuracy,HistGradientBoosting,Unadjusted,Combined on gse96058_hiseq,meta_er_status,0.9565
+MCC (Matthews Corr Coef),HistGradientBoosting,Unadjusted,Combined,meta_er_status,0.7488
+MCC (Matthews Corr Coef),HistGradientBoosting,Unadjusted,Combined on gse20194,meta_er_status,0.8454
+MCC (Matthews Corr Coef),HistGradientBoosting,Unadjusted,Combined on gse96058_hiseq,meta_er_status,0.6886
+ROC AUC,HistGradientBoosting,Unadjusted,Combined,meta_er_status,0.9670
+ROC AUC,HistGradientBoosting,Unadjusted,Combined on gse20194,meta_er_status,0.9503
+ROC AUC,HistGradientBoosting,Unadjusted,Combined on gse96058_hiseq,meta_er_status,0.9616
+Sensitivity (TPR),HistGradientBoosting,Unadjusted,Combined,meta_er_status,0.9761
+Sensitivity (TPR),HistGradientBoosting,Unadjusted,Combined on gse20194,meta_er_status,0.9421
+Sensitivity (TPR),HistGradientBoosting,Unadjusted,Combined on gse96058_hiseq,meta_er_status,0.9782
+Specificity (TNR),HistGradientBoosting,Unadjusted,Combined,meta_er_status,0.7613
+Specificity (TNR),HistGradientBoosting,Unadjusted,Combined on gse20194,meta_er_status,0.9035
+Specificity (TNR),HistGradientBoosting,Unadjusted,Combined on gse96058_hiseq,meta_er_status,0.6953
+Accuracy,HistGradientBoosting,Unadjusted,Combined,meta_er_status,0.9558
+Accuracy,HistGradientBoosting,Unadjusted,Combined on gse20194,meta_er_status,0.9156
+Accuracy,HistGradientBoosting,Unadjusted,Combined on gse96058_hiseq,meta_er_status,0.9594
+MCC (Matthews Corr Coef),HistGradientBoosting,Unadjusted,Combined,meta_er_status,0.7581
+MCC (Matthews Corr Coef),HistGradientBoosting,Unadjusted,Combined on gse20194,meta_er_status,0.8216
+MCC (Matthews Corr Coef),HistGradientBoosting,Unadjusted,Combined on gse96058_hiseq,meta_er_status,0.7174
+ROC AUC,HistGradientBoosting,Unadjusted,Combined,meta_er_status,0.9652
+ROC AUC,HistGradientBoosting,Unadjusted,Combined on gse20194,meta_er_status,0.9529
+ROC AUC,HistGradientBoosting,Unadjusted,Combined on gse96058_hiseq,meta_er_status,0.9582
+Sensitivity (TPR),HistGradientBoosting,Unadjusted,Combined,meta_er_status,0.9761
+Sensitivity (TPR),HistGradientBoosting,Unadjusted,Combined on gse20194,meta_er_status,0.9605
+Sensitivity (TPR),HistGradientBoosting,Unadjusted,Combined on gse96058_hiseq,meta_er_status,0.9770
+Specificity (TNR),HistGradientBoosting,Unadjusted,Combined,meta_er_status,0.7774
+Specificity (TNR),HistGradientBoosting,Unadjusted,Combined on gse20194,meta_er_status,0.8444
+Specificity (TNR),HistGradientBoosting,Unadjusted,Combined on gse96058_hiseq,meta_er_status,0.7475
+Accuracy,HistGradientBoosting,Unadjusted,gse20194,meta_er_status,0.9243
+MCC (Matthews Corr Coef),HistGradientBoosting,Unadjusted,gse20194,meta_er_status,0.8399
+ROC AUC,HistGradientBoosting,Unadjusted,gse20194,meta_er_status,0.9488
+Sensitivity (TPR),HistGradientBoosting,Unadjusted,gse20194,meta_er_status,0.9421
+Specificity (TNR),HistGradientBoosting,Unadjusted,gse20194,meta_er_status,0.8958
+Accuracy,HistGradientBoosting,Unadjusted,gse20194,meta_er_status,0.9161
+MCC (Matthews Corr Coef),HistGradientBoosting,Unadjusted,gse20194,meta_er_status,0.8218
+ROC AUC,HistGradientBoosting,Unadjusted,gse20194,meta_er_status,0.9494
+Sensitivity (TPR),HistGradientBoosting,Unadjusted,gse20194,meta_er_status,0.9418
+Specificity (TNR),HistGradientBoosting,Unadjusted,gse20194,meta_er_status,0.8750
+Accuracy,HistGradientBoosting,Unadjusted,gse96058_hiseq,meta_er_status,0.9565
+MCC (Matthews Corr Coef),HistGradientBoosting,Unadjusted,gse96058_hiseq,meta_er_status,0.6833
+ROC AUC,HistGradientBoosting,Unadjusted,gse96058_hiseq,meta_er_status,0.9591
+Sensitivity (TPR),HistGradientBoosting,Unadjusted,gse96058_hiseq,meta_er_status,0.9798
+Specificity (TNR),HistGradientBoosting,Unadjusted,gse96058_hiseq,meta_er_status,0.6774
+Accuracy,HistGradientBoosting,Unadjusted,gse96058_hiseq,meta_er_status,0.9572
+MCC (Matthews Corr Coef),HistGradientBoosting,Unadjusted,gse96058_hiseq,meta_er_status,0.6899
+ROC AUC,HistGradientBoosting,Unadjusted,gse96058_hiseq,meta_er_status,0.9608
+Sensitivity (TPR),HistGradientBoosting,Unadjusted,gse96058_hiseq,meta_er_status,0.9798
+Specificity (TNR),HistGradientBoosting,Unadjusted,gse96058_hiseq,meta_er_status,0.6868
 gse20194_gse96058_hiseq,Accuracy,HistGradientBoosting,Unadjusted,"Train on gse20194, Test on gse96058_hiseq",meta_er_status,0.9378
 gse20194_gse96058_hiseq,ROC AUC,HistGradientBoosting,Unadjusted,"Train on gse20194, Test on gse96058_hiseq",meta_er_status,0.8885
 gse20194_gse96058_hiseq,Sensitivity (TPR),HistGradientBoosting,Unadjusted,"Train on gse20194, Test on gse96058_hiseq",meta_er_status,0.9716
