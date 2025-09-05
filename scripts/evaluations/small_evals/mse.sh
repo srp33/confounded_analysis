@@ -7,7 +7,7 @@ printf "\033[0;32mCalculating MSE\033[0m\n"
 out_path="/outputs/metrics/mse.csv"
 pivot_path="/outputs/metrics/pivot_mse.csv"
 
-source /scripts/metrics/utils.sh
+source /scripts/evaluations/utils.sh
 
 # Save previous file to an archive
 archive_file "${out_path}"

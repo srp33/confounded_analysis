@@ -13,7 +13,7 @@ set -e
 
 # Path to the Python script that performs dimensionality reduction
 # (This script is expected to handle its own hash-based caching)
-REDUCTION_SCRIPT="/scripts/metrics/reduce.py"
+REDUCTION_SCRIPT="$(dirname "$0")/reduce.py"
 
 # Base directory where dataset folders are located
 DATA_DIR="/data/gold"

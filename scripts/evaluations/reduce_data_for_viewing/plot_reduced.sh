@@ -8,9 +8,8 @@
 set -e
 
 # --- Configuration ---
-PLOT_SCRIPT="/scripts/figures/plot_reduced.R"
+PLOT_SCRIPT="$(dirname "$0")/plot_reduced.R"
 BASE_INPUT_DIR="/data/gold/reduced_data"
-METADATA_DIR="/data/gold" # Assuming metadata lives in the parent data directory
 OUTPUT_DIR="/outputs/figures/reduced"
 
 # Define datasets to be processed

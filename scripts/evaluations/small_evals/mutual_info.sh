@@ -10,7 +10,7 @@ printf "\033[0;32mCalculating Mutual info\033[0m\n"
 out_path="/outputs/metrics/mutual_info.csv"
 confusion_path="/outputs/metrics/confusion_matrix.md"
 
-source /scripts/metrics/utils.sh
+source /scripts/evaluations/utils.sh
 
 # Save previous file to an archive
 archive_file "${out_path}"
