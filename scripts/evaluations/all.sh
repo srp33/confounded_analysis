@@ -2,8 +2,6 @@
 
 set -e
 
-touch /outputs/hist_gradient_er.log
-
 # python /scripts/evaluations/esr1/esr1_analysis.py &> /outputs/esr1_analysis.log
 
 # python /scripts/evaluations/quick_classify_refine_datasets/eval_refine.py &> /outputs/eval_refine.log
