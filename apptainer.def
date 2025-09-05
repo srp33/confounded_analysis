@@ -55,11 +55,10 @@ From: bioconductor/bioconductor:RELEASE_3_21
     rm /tmp/miniforge.sh
     
     # Python package installation with Conda and Pip
-    /opt/conda/bin/conda install -y -c conda-forge numpy 'scikit-learn>=1.4' pandas 'tensorflow>=2.0' pytorch matplotlib
+    /opt/conda/bin/conda install -y -c conda-forge numpy 'scikit-learn>=1.4' pandas pytorch matplotlib
     /opt/conda/bin/conda install -y aif360 tabulate jaxtyping beartype pytables opentsne umap-learn geoparse seaborn
     /opt/conda/bin/conda install -y -c conda-forge psutil tqdm rich memory_profiler py-cpuinfo
     /opt/conda/bin/pip install gdown osfclient
-    /opt/conda/bin/pip install 'aif360[FairAdapt]'
     /opt/conda/bin/conda clean --all -y
     
     # Stage 3: Build the R environment
