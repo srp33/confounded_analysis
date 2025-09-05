@@ -495,3 +495,57 @@ Sensitivity (TPR),HistGradientBoosting,Unadjusted,gse96058_hiseq,meta_er_status,
 Specificity (TNR),HistGradientBoosting,Unadjusted,gse96058_hiseq,meta_er_status,0.6868
 True Negative,HistGradientBoosting,Unadjusted,gse96058_hiseq,meta_er_status,49.0000
 True Positive,HistGradientBoosting,Unadjusted,gse96058_hiseq,meta_er_status,839.0000
+Accuracy,HistGradientBoosting,Unadjusted,Combined,meta_er_status,0.9542
+Accuracy,HistGradientBoosting,Unadjusted,Combined on gse20194,meta_er_status,0.9276
+Accuracy,HistGradientBoosting,Unadjusted,Combined on gse96058_hiseq,meta_er_status,0.9565
+False Negative,HistGradientBoosting,Unadjusted,Combined,meta_er_status,21.6667
+False Negative,HistGradientBoosting,Unadjusted,Combined on gse20194,meta_er_status,3.0000
+False Negative,HistGradientBoosting,Unadjusted,Combined on gse96058_hiseq,meta_er_status,18.6667
+False Positive,HistGradientBoosting,Unadjusted,Combined,meta_er_status,24.6667
+False Positive,HistGradientBoosting,Unadjusted,Combined on gse20194,meta_er_status,3.0000
+False Positive,HistGradientBoosting,Unadjusted,Combined on gse96058_hiseq,meta_er_status,21.6667
+MCC (Matthews Corr Coef),HistGradientBoosting,Unadjusted,Combined,meta_er_status,0.7488
+MCC (Matthews Corr Coef),HistGradientBoosting,Unadjusted,Combined on gse20194,meta_er_status,0.8454
+MCC (Matthews Corr Coef),HistGradientBoosting,Unadjusted,Combined on gse96058_hiseq,meta_er_status,0.6886
+ROC AUC,HistGradientBoosting,Unadjusted,Combined,meta_er_status,0.9670
+ROC AUC,HistGradientBoosting,Unadjusted,Combined on gse20194,meta_er_status,0.9503
+ROC AUC,HistGradientBoosting,Unadjusted,Combined on gse96058_hiseq,meta_er_status,0.9616
+Sensitivity (TPR),HistGradientBoosting,Unadjusted,Combined,meta_er_status,0.9761
+Sensitivity (TPR),HistGradientBoosting,Unadjusted,Combined on gse20194,meta_er_status,0.9421
+Sensitivity (TPR),HistGradientBoosting,Unadjusted,Combined on gse96058_hiseq,meta_er_status,0.9782
+Specificity (TNR),HistGradientBoosting,Unadjusted,Combined,meta_er_status,0.7613
+Specificity (TNR),HistGradientBoosting,Unadjusted,Combined on gse20194,meta_er_status,0.9035
+Specificity (TNR),HistGradientBoosting,Unadjusted,Combined on gse96058_hiseq,meta_er_status,0.6953
+True Negative,HistGradientBoosting,Unadjusted,Combined,meta_er_status,78.6667
+True Negative,HistGradientBoosting,Unadjusted,Combined on gse20194,meta_er_status,29.0000
+True Negative,HistGradientBoosting,Unadjusted,Combined on gse96058_hiseq,meta_er_status,49.6667
+True Positive,HistGradientBoosting,Unadjusted,Combined,meta_er_status,886.3333
+True Positive,HistGradientBoosting,Unadjusted,Combined on gse20194,meta_er_status,48.6667
+True Positive,HistGradientBoosting,Unadjusted,Combined on gse96058_hiseq,meta_er_status,837.6667
+Accuracy,HistGradientBoosting,Unadjusted,Combined,meta_er_status,0.9558
+Accuracy,HistGradientBoosting,Unadjusted,Combined on gse20194,meta_er_status,0.9156
+Accuracy,HistGradientBoosting,Unadjusted,Combined on gse96058_hiseq,meta_er_status,0.9594
+False Negative,HistGradientBoosting,Unadjusted,Combined,meta_er_status,21.6667
+False Negative,HistGradientBoosting,Unadjusted,Combined on gse20194,meta_er_status,2.0000
+False Negative,HistGradientBoosting,Unadjusted,Combined on gse96058_hiseq,meta_er_status,19.6667
+False Positive,HistGradientBoosting,Unadjusted,Combined,meta_er_status,23.0000
+False Positive,HistGradientBoosting,Unadjusted,Combined on gse20194,meta_er_status,5.0000
+False Positive,HistGradientBoosting,Unadjusted,Combined on gse96058_hiseq,meta_er_status,18.0000
+MCC (Matthews Corr Coef),HistGradientBoosting,Unadjusted,Combined,meta_er_status,0.7581
+MCC (Matthews Corr Coef),HistGradientBoosting,Unadjusted,Combined on gse20194,meta_er_status,0.8216
+MCC (Matthews Corr Coef),HistGradientBoosting,Unadjusted,Combined on gse96058_hiseq,meta_er_status,0.7174
+ROC AUC,HistGradientBoosting,Unadjusted,Combined,meta_er_status,0.9652
+ROC AUC,HistGradientBoosting,Unadjusted,Combined on gse20194,meta_er_status,0.9529
+ROC AUC,HistGradientBoosting,Unadjusted,Combined on gse96058_hiseq,meta_er_status,0.9582
+Sensitivity (TPR),HistGradientBoosting,Unadjusted,Combined,meta_er_status,0.9761
+Sensitivity (TPR),HistGradientBoosting,Unadjusted,Combined on gse20194,meta_er_status,0.9605
+Sensitivity (TPR),HistGradientBoosting,Unadjusted,Combined on gse96058_hiseq,meta_er_status,0.9770
+Specificity (TNR),HistGradientBoosting,Unadjusted,Combined,meta_er_status,0.7774
+Specificity (TNR),HistGradientBoosting,Unadjusted,Combined on gse20194,meta_er_status,0.8444
+Specificity (TNR),HistGradientBoosting,Unadjusted,Combined on gse96058_hiseq,meta_er_status,0.7475
+True Negative,HistGradientBoosting,Unadjusted,Combined,meta_er_status,80.3333
+True Negative,HistGradientBoosting,Unadjusted,Combined on gse20194,meta_er_status,27.0000
+True Negative,HistGradientBoosting,Unadjusted,Combined on gse96058_hiseq,meta_er_status,53.3333
+True Positive,HistGradientBoosting,Unadjusted,Combined,meta_er_status,886.3333
+True Positive,HistGradientBoosting,Unadjusted,Combined on gse20194,meta_er_status,49.6667
+True Positive,HistGradientBoosting,Unadjusted,Combined on gse96058_hiseq,meta_er_status,836.6667
