@@ -2,15 +2,15 @@
 
 set -e
 
-image=remove-batch-effects:latest
+image="remove-batch-effects.sif"
 
-DOCKER_BUILDKIT=1 docker build -t $image .
-
-SHARED_DIR=$(pwd)/../groups/
+SHARED_DIR=$(pwd)/../groups/grp_batch_effects
 
 mkdir -p $SHARED_DIR/data $SHARED_DIR/data/.cache 
 mkdir -p $SHARED_DIR/outputs/figures/ $SHARED_DIR/outputs/metrics $SHARED_DIR/outputs/tables
 mkdir -p $SHARED_DIR/tmp
+
+module load apptainer
 
 apptainer exec \
   --bind "$(pwd)$SHARED_DIR/data":/data \
@@ -20,6 +20,6 @@ apptainer exec \
   --bind "$(pwd)/data/.cache":/.cache \
   --bind "$(pwd)/tmp/matplotlib/config":/.config/matplotlib \
   --bind "$(pwd)/tmp/matplotlib/cache":/.cache/matplotlib \
-#  --env HOME=/ \
+  --env HOME=/ \
   $image \
   /scripts/all.sh
