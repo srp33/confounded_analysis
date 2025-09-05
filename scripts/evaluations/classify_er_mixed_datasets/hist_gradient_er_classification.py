@@ -37,19 +37,17 @@ def calculate_metrics(y_true, y_pred, y_proba):
 
     # Use confusion matrix for robust calculation of TPR/TNR.
     tn, fp, fn, tp = confusion_matrix(y_true, y_pred, labels=[0, 1]).ravel()
-    print_now("_____________HERE")
-
-    # os.makedirs(os.path.dirname(matrix_file), exist_ok=True)
-    # if not os.path.exists(matrix_file) or os.path.getsize(matrix_file) == 0:
-    #     pd.DataFrame('adjuster', 'dataset', 'true_positive', 'false_negative', 'false_positive', 'true negative']).to_csv(matrix_file, index=False)
-    
     
     metrics = {
         'Accuracy': accuracy_score(y_true, y_pred),
         'ROC AUC': roc_auc_score(y_true, y_proba),
         'Sensitivity (TPR)': (tp / (tp + fn)) if (tp + fn) > 0 else 0.0,
         'Specificity (TNR)': (tn / (tn + fp)) if (tn + fp) > 0 else 0.0,
-        'MCC (Matthews Corr Coef)': matthews_corrcoef(y_true, y_pred)
+        'MCC (Matthews Corr Coef)': matthews_corrcoef(y_true, y_pred),
+        'True Negative': tn,
+        'False Positive': fp,
+        'False Negative': fn,
+        'True Positive': tp
     }
     return metrics
 
@@ -231,6 +229,18 @@ def generate_summary(detailed_file, summary_file):
     print_now(f"Summary metrics saved to: {summary_file}")
     print_now("="*60)
 
+def print_confusion_matrix(detailed_file, matrix_file):
+    print_now("Printing confusion matrix")
+  # Filter confusion matrix values from metrics CSV file
+    metrics_full = pd.read_csv(detailed_file)
+    matrix_values = ['True Negative', 'False Positive', 'False Negative', 'True Positive']
+    metrics_filtered = metrics_full[metrics_full['combination'].isin(matrix_valeus)]
+    
+    # Create the .txt file
+    os.makedirs(os.path.dirname(matrix_file), exist_ok=True)
+    metrics_filtered.to_csv(matrix_file, sep='\t', index=False)
+    print_now(f"Confusion matrix values safed to: {matrix_file}")
+
 def main():
     """Parse arguments and run the classification pipeline."""
     parser = argparse.ArgumentParser(description="Run HistGradientBoosting classification on gene expression data for ER status.")
@@ -348,6 +358,8 @@ def main():
 
     hash_cache._save_hashes()
     generate_summary(args.output, args.summary)
+    print_now("print confusion matrix")
+    print_confusion_matrix(args.output, args.confusion_matrix)
     
     print_now("\nPipeline finished.")
     print_now(f"Detailed results are in: {args.output}")
