@@ -6,4 +6,4 @@ outputs/*.log
 outputs/metrics/archive
 .DS_Store
 *.out
-.sif
+*.sif
