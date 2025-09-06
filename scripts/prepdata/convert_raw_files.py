@@ -305,9 +305,9 @@ def scan_for_datasets(raw_data_dir: Path) -> list[dict]:
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Process raw genomics data into combined datasets.")
     # Add arguments for directories and debug flag
-    parser.add_argument('--raw-dir', type=Path, default=Path("/data/raw_data"),
+    parser.add_argument('--raw-dir', type=Path, required=True,
                         help='Directory containing the raw dataset folders.')
-    parser.add_argument('--target-dir', type=Path, default=Path("/data/gold"),
+    parser.add_argument('--target-dir', type=Path, required=True,
                         help='Directory to save the processed output files.')
     parser.add_argument('--debug', action='store_true', help='Enable detailed debug output.')
     args = parser.parse_args()
