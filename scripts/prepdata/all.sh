@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Exit immediately if a command exits with a non-zero status.
-set -e
+#set -e
 
 osf_datasets="GSE19615,GSE20194,GSE20271,GSE23720,GSE25055,GSE25065,GSE31448,"\
 "GSE45255,GSE58644,GSE62944_Tumor,GSE76275,GSE81538,GSE96058_HiSeq,GSE96058_NextSeq,METABRIC"
@@ -36,7 +36,7 @@ python /scripts/prepdata/organize_downloaded_files.py \
 echo "🔧 Converting files, and fixing if needed..."
 python3 /scripts/prepdata/convert_raw_files.py \
     --raw-dir /data/raw_data \
-    --target-dir /data/converted \
+    --target-dir /data/gold \
     --debug
 
 echo "🔗 Generating all dataset combinations with caching (only the unadjusted files)..."

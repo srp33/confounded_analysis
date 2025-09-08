@@ -61,8 +61,7 @@ for input_file in $(find "${input_base}" -name "*.csv"); do
         --confusion-matrix "${matrix_path}" \
         --adjustment "${adjustment}" \
         --cache-dir "${cache_dir}" \
-        --n-repeats "${n_repeats}" \
-        --force-rerun 
+        --n-repeats "${n_repeats}"
 
 done
 

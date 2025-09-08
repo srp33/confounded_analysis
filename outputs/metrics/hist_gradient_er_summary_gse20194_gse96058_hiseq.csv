@@ -3,14 +3,22 @@ Combined,meta_er_status,HistGradientBoosting,,,0.0000
 Combined on gse20194,meta_er_status,HistGradientBoosting,,,0.0000
 Combined on gse96058_hiseq,meta_er_status,HistGradientBoosting,,,0.0000
 Unadjusted,"Train on gse20194, Test on gse96058_hiseq",Accuracy,0.9378,0.0000,0.0000
+Unadjusted,"Train on gse20194, Test on gse96058_hiseq",False Negative,73.0000,0.0000,0.0000
+Unadjusted,"Train on gse20194, Test on gse96058_hiseq",False Positive,100.0000,0.0000,0.0000
 Unadjusted,"Train on gse20194, Test on gse96058_hiseq",MCC (Matthews Corr Coef),0.5367,0.0000,0.0000
 Unadjusted,"Train on gse20194, Test on gse96058_hiseq",ROC AUC,0.8885,0.0000,0.0000
 Unadjusted,"Train on gse20194, Test on gse96058_hiseq",Sensitivity (TPR),0.9716,0.0000,0.0000
 Unadjusted,"Train on gse20194, Test on gse96058_hiseq",Specificity (TNR),0.5327,0.0000,0.0000
+Unadjusted,"Train on gse20194, Test on gse96058_hiseq",True Negative,114.0000,0.0000,0.0000
+Unadjusted,"Train on gse20194, Test on gse96058_hiseq",True Positive,2496.0000,0.0000,0.0000
 Unadjusted,"Train on gse96058_hiseq, Test on gse20194",Accuracy,0.6175,0.0000,0.0000
+Unadjusted,"Train on gse96058_hiseq, Test on gse20194",False Negative,0.0000,0.0000,0.0000
+Unadjusted,"Train on gse96058_hiseq, Test on gse20194",False Positive,96.0000,0.0000,0.0000
 Unadjusted,"Train on gse96058_hiseq, Test on gse20194",MCC (Matthews Corr Coef),0.0000,0.0000,0.0000
 Unadjusted,"Train on gse96058_hiseq, Test on gse20194",ROC AUC,0.7283,0.0000,0.0000
 Unadjusted,"Train on gse96058_hiseq, Test on gse20194",Sensitivity (TPR),1.0000,0.0000,0.0000
 Unadjusted,"Train on gse96058_hiseq, Test on gse20194",Specificity (TNR),0.0000,0.0000,0.0000
+Unadjusted,"Train on gse96058_hiseq, Test on gse20194",True Negative,0.0000,0.0000,0.0000
+Unadjusted,"Train on gse96058_hiseq, Test on gse20194",True Positive,155.0000,0.0000,0.0000
 gse20194,meta_er_status,HistGradientBoosting,,,0.0000
 gse96058_hiseq,meta_er_status,HistGradientBoosting,,,0.0000
