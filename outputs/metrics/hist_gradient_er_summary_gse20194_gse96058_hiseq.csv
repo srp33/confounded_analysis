@@ -1,7 +1,31 @@
 adjuster,evaluation,metric,mean,std,sem
-Combined,meta_er_status,HistGradientBoosting,,,0.0000
-Combined on gse20194,meta_er_status,HistGradientBoosting,,,0.0000
-Combined on gse96058_hiseq,meta_er_status,HistGradientBoosting,,,0.0000
+Unadjusted,Combined,Accuracy,0.9550,0.0008,0.0002
+Unadjusted,Combined,False Negative,21.6667,0.0000,0.0000
+Unadjusted,Combined,False Positive,23.8333,0.8784,0.2778
+Unadjusted,Combined,MCC (Matthews Corr Coef),0.7534,0.0048,0.0013
+Unadjusted,Combined,ROC AUC,0.9661,0.0009,0.0002
+Unadjusted,Combined,Sensitivity (TPR),0.9761,0.0000,0.0000
+Unadjusted,Combined,Specificity (TNR),0.7693,0.0084,0.0022
+Unadjusted,Combined,True Negative,79.5000,0.8784,0.2778
+Unadjusted,Combined,True Positive,886.3333,0.0000,0.0000
+Unadjusted,Combined on gse20194,Accuracy,0.9216,0.0062,0.0017
+Unadjusted,Combined on gse20194,False Negative,2.5000,0.5270,0.1667
+Unadjusted,Combined on gse20194,False Positive,4.0000,1.0541,0.3333
+Unadjusted,Combined on gse20194,MCC (Matthews Corr Coef),0.8335,0.0123,0.0033
+Unadjusted,Combined on gse20194,ROC AUC,0.9516,0.0013,0.0004
+Unadjusted,Combined on gse20194,Sensitivity (TPR),0.9513,0.0095,0.0026
+Unadjusted,Combined on gse20194,Specificity (TNR),0.8740,0.0307,0.0082
+Unadjusted,Combined on gse20194,True Negative,28.0000,1.0541,0.3333
+Unadjusted,Combined on gse20194,True Positive,49.1667,0.5270,0.1667
+Unadjusted,Combined on gse96058_hiseq,Accuracy,0.9580,0.0015,0.0004
+Unadjusted,Combined on gse96058_hiseq,False Negative,19.1667,0.5270,0.1667
+Unadjusted,Combined on gse96058_hiseq,False Positive,19.8333,1.9325,0.6111
+Unadjusted,Combined on gse96058_hiseq,MCC (Matthews Corr Coef),0.7030,0.0149,0.0040
+Unadjusted,Combined on gse96058_hiseq,ROC AUC,0.9599,0.0018,0.0005
+Unadjusted,Combined on gse96058_hiseq,Sensitivity (TPR),0.9776,0.0006,0.0002
+Unadjusted,Combined on gse96058_hiseq,Specificity (TNR),0.7214,0.0271,0.0072
+Unadjusted,Combined on gse96058_hiseq,True Negative,51.5000,1.9325,0.6111
+Unadjusted,Combined on gse96058_hiseq,True Positive,837.1667,0.5270,0.1667
 Unadjusted,"Train on gse20194, Test on gse96058_hiseq",Accuracy,0.9378,0.0000,0.0000
 Unadjusted,"Train on gse20194, Test on gse96058_hiseq",False Negative,73.0000,0.0000,0.0000
 Unadjusted,"Train on gse20194, Test on gse96058_hiseq",False Positive,100.0000,0.0000,0.0000
@@ -20,5 +44,21 @@ Unadjusted,"Train on gse96058_hiseq, Test on gse20194",Sensitivity (TPR),1.0000,
 Unadjusted,"Train on gse96058_hiseq, Test on gse20194",Specificity (TNR),0.0000,0.0000,0.0000
 Unadjusted,"Train on gse96058_hiseq, Test on gse20194",True Negative,0.0000,0.0000,0.0000
 Unadjusted,"Train on gse96058_hiseq, Test on gse20194",True Positive,155.0000,0.0000,0.0000
-gse20194,meta_er_status,HistGradientBoosting,,,0.0000
-gse96058_hiseq,meta_er_status,HistGradientBoosting,,,0.0000
+Unadjusted,gse20194,Accuracy,0.9202,0.0043,0.0014
+Unadjusted,gse20194,False Negative,3.0000,0.0000,0.0000
+Unadjusted,gse20194,False Positive,3.6666,0.3564,0.1260
+Unadjusted,gse20194,MCC (Matthews Corr Coef),0.8309,0.0095,0.0030
+Unadjusted,gse20194,ROC AUC,0.9491,0.0003,0.0001
+Unadjusted,gse20194,Sensitivity (TPR),0.9419,0.0002,0.0001
+Unadjusted,gse20194,Specificity (TNR),0.8854,0.0110,0.0035
+Unadjusted,gse20194,True Negative,28.3333,0.3564,0.1260
+Unadjusted,gse20194,True Positive,48.6667,0.0000,0.0000
+Unadjusted,gse96058_hiseq,Accuracy,0.9568,0.0004,0.0001
+Unadjusted,gse96058_hiseq,False Negative,17.3333,0.0000,0.0000
+Unadjusted,gse96058_hiseq,False Positive,22.6667,0.3564,0.1260
+Unadjusted,gse96058_hiseq,MCC (Matthews Corr Coef),0.6866,0.0035,0.0011
+Unadjusted,gse96058_hiseq,ROC AUC,0.9599,0.0009,0.0003
+Unadjusted,gse96058_hiseq,Sensitivity (TPR),0.9798,0.0000,0.0000
+Unadjusted,gse96058_hiseq,Specificity (TNR),0.6821,0.0050,0.0016
+Unadjusted,gse96058_hiseq,True Negative,48.6667,0.3564,0.1260
+Unadjusted,gse96058_hiseq,True Positive,839.0000,0.0000,0.0000

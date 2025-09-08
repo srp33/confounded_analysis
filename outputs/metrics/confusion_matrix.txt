@@ -1,185 +1,25 @@
-metric	classifier	adjuster	dataset	column	value
-False Negative	HistGradientBoosting	Unadjusted	Combined	meta_er_status	21.6667	
-False Negative	HistGradientBoosting	Unadjusted	Combined on gse20194	meta_er_status	3.0000	
-False Negative	HistGradientBoosting	Unadjusted	Combined on gse96058_hiseq	meta_er_status	18.6667	
-False Positive	HistGradientBoosting	Unadjusted	Combined	meta_er_status	24.6667	
-False Positive	HistGradientBoosting	Unadjusted	Combined on gse20194	meta_er_status	3.0000	
-False Positive	HistGradientBoosting	Unadjusted	Combined on gse96058_hiseq	meta_er_status	21.6667	
-True Negative	HistGradientBoosting	Unadjusted	Combined	meta_er_status	78.6667	
-True Negative	HistGradientBoosting	Unadjusted	Combined on gse20194	meta_er_status	29.0000	
-True Negative	HistGradientBoosting	Unadjusted	Combined on gse96058_hiseq	meta_er_status	49.6667	
-True Positive	HistGradientBoosting	Unadjusted	Combined	meta_er_status	886.3333	
-True Positive	HistGradientBoosting	Unadjusted	Combined on gse20194	meta_er_status	48.6667	
-True Positive	HistGradientBoosting	Unadjusted	Combined on gse96058_hiseq	meta_er_status	837.6667	
-False Negative	HistGradientBoosting	Unadjusted	Combined	meta_er_status	21.6667	
-False Negative	HistGradientBoosting	Unadjusted	Combined on gse20194	meta_er_status	2.0000	
-False Negative	HistGradientBoosting	Unadjusted	Combined on gse96058_hiseq	meta_er_status	19.6667	
-False Positive	HistGradientBoosting	Unadjusted	Combined	meta_er_status	23.0000	
-False Positive	HistGradientBoosting	Unadjusted	Combined on gse20194	meta_er_status	5.0000	
-False Positive	HistGradientBoosting	Unadjusted	Combined on gse96058_hiseq	meta_er_status	18.0000	
-True Negative	HistGradientBoosting	Unadjusted	Combined	meta_er_status	80.3333	
-True Negative	HistGradientBoosting	Unadjusted	Combined on gse20194	meta_er_status	27.0000	
-True Negative	HistGradientBoosting	Unadjusted	Combined on gse96058_hiseq	meta_er_status	53.3333	
-True Positive	HistGradientBoosting	Unadjusted	Combined	meta_er_status	886.3333	
-True Positive	HistGradientBoosting	Unadjusted	Combined on gse20194	meta_er_status	49.6667	
-True Positive	HistGradientBoosting	Unadjusted	Combined on gse96058_hiseq	meta_er_status	836.6667	
-False Negative	HistGradientBoosting	Unadjusted	gse20194	meta_er_status	3.0000	
-False Positive	HistGradientBoosting	Unadjusted	gse20194	meta_er_status	3.3333	
-True Negative	HistGradientBoosting	Unadjusted	gse20194	meta_er_status	28.6667	
-True Positive	HistGradientBoosting	Unadjusted	gse20194	meta_er_status	48.6667	
-False Negative	HistGradientBoosting	Unadjusted	gse20194	meta_er_status	3.0000	
-False Positive	HistGradientBoosting	Unadjusted	gse20194	meta_er_status	4.0000	
-True Negative	HistGradientBoosting	Unadjusted	gse20194	meta_er_status	28.0000	
-True Positive	HistGradientBoosting	Unadjusted	gse20194	meta_er_status	48.6667	
-False Negative	HistGradientBoosting	Unadjusted	gse96058_hiseq	meta_er_status	17.3333	
-False Positive	HistGradientBoosting	Unadjusted	gse96058_hiseq	meta_er_status	23.0000	
-True Negative	HistGradientBoosting	Unadjusted	gse96058_hiseq	meta_er_status	48.3333	
-True Positive	HistGradientBoosting	Unadjusted	gse96058_hiseq	meta_er_status	839.0000	
-False Negative	HistGradientBoosting	Unadjusted	gse96058_hiseq	meta_er_status	17.3333	
-False Positive	HistGradientBoosting	Unadjusted	gse96058_hiseq	meta_er_status	22.3333	
-True Negative	HistGradientBoosting	Unadjusted	gse96058_hiseq	meta_er_status	49.0000	
-True Positive	HistGradientBoosting	Unadjusted	gse96058_hiseq	meta_er_status	839.0000	
-False Negative	HistGradientBoosting	Unadjusted	Combined	meta_er_status	21.6667	
-False Negative	HistGradientBoosting	Unadjusted	Combined on gse20194	meta_er_status	3.0000	
-False Negative	HistGradientBoosting	Unadjusted	Combined on gse96058_hiseq	meta_er_status	18.6667	
-False Positive	HistGradientBoosting	Unadjusted	Combined	meta_er_status	24.6667	
-False Positive	HistGradientBoosting	Unadjusted	Combined on gse20194	meta_er_status	3.0000	
-False Positive	HistGradientBoosting	Unadjusted	Combined on gse96058_hiseq	meta_er_status	21.6667	
-True Negative	HistGradientBoosting	Unadjusted	Combined	meta_er_status	78.6667	
-True Negative	HistGradientBoosting	Unadjusted	Combined on gse20194	meta_er_status	29.0000	
-True Negative	HistGradientBoosting	Unadjusted	Combined on gse96058_hiseq	meta_er_status	49.6667	
-True Positive	HistGradientBoosting	Unadjusted	Combined	meta_er_status	886.3333	
-True Positive	HistGradientBoosting	Unadjusted	Combined on gse20194	meta_er_status	48.6667	
-True Positive	HistGradientBoosting	Unadjusted	Combined on gse96058_hiseq	meta_er_status	837.6667	
-False Negative	HistGradientBoosting	Unadjusted	Combined	meta_er_status	21.6667	
-False Negative	HistGradientBoosting	Unadjusted	Combined on gse20194	meta_er_status	2.0000	
-False Negative	HistGradientBoosting	Unadjusted	Combined on gse96058_hiseq	meta_er_status	19.6667	
-False Positive	HistGradientBoosting	Unadjusted	Combined	meta_er_status	23.0000	
-False Positive	HistGradientBoosting	Unadjusted	Combined on gse20194	meta_er_status	5.0000	
-False Positive	HistGradientBoosting	Unadjusted	Combined on gse96058_hiseq	meta_er_status	18.0000	
-True Negative	HistGradientBoosting	Unadjusted	Combined	meta_er_status	80.3333	
-True Negative	HistGradientBoosting	Unadjusted	Combined on gse20194	meta_er_status	27.0000	
-True Negative	HistGradientBoosting	Unadjusted	Combined on gse96058_hiseq	meta_er_status	53.3333	
-True Positive	HistGradientBoosting	Unadjusted	Combined	meta_er_status	886.3333	
-True Positive	HistGradientBoosting	Unadjusted	Combined on gse20194	meta_er_status	49.6667	
-True Positive	HistGradientBoosting	Unadjusted	Combined on gse96058_hiseq	meta_er_status	836.6667	
-False Negative	HistGradientBoosting	Unadjusted	gse20194	meta_er_status	3.0000	
-False Positive	HistGradientBoosting	Unadjusted	gse20194	meta_er_status	3.3333	
-True Negative	HistGradientBoosting	Unadjusted	gse20194	meta_er_status	28.6667	
-True Positive	HistGradientBoosting	Unadjusted	gse20194	meta_er_status	48.6667	
-False Negative	HistGradientBoosting	Unadjusted	gse20194	meta_er_status	3.0000	
-False Positive	HistGradientBoosting	Unadjusted	gse20194	meta_er_status	4.0000	
-True Negative	HistGradientBoosting	Unadjusted	gse20194	meta_er_status	28.0000	
-True Positive	HistGradientBoosting	Unadjusted	gse20194	meta_er_status	48.6667	
-False Negative	HistGradientBoosting	Unadjusted	gse96058_hiseq	meta_er_status	17.3333	
-False Positive	HistGradientBoosting	Unadjusted	gse96058_hiseq	meta_er_status	23.0000	
-True Negative	HistGradientBoosting	Unadjusted	gse96058_hiseq	meta_er_status	48.3333	
-True Positive	HistGradientBoosting	Unadjusted	gse96058_hiseq	meta_er_status	839.0000	
-False Negative	HistGradientBoosting	Unadjusted	gse96058_hiseq	meta_er_status	17.3333	
-False Positive	HistGradientBoosting	Unadjusted	gse96058_hiseq	meta_er_status	22.3333	
-True Negative	HistGradientBoosting	Unadjusted	gse96058_hiseq	meta_er_status	49.0000	
-True Positive	HistGradientBoosting	Unadjusted	gse96058_hiseq	meta_er_status	839.0000	
-False Negative	HistGradientBoosting	Unadjusted	Combined	meta_er_status	21.6667	
-False Negative	HistGradientBoosting	Unadjusted	Combined on gse20194	meta_er_status	3.0000	
-False Negative	HistGradientBoosting	Unadjusted	Combined on gse96058_hiseq	meta_er_status	18.6667	
-False Positive	HistGradientBoosting	Unadjusted	Combined	meta_er_status	24.6667	
-False Positive	HistGradientBoosting	Unadjusted	Combined on gse20194	meta_er_status	3.0000	
-False Positive	HistGradientBoosting	Unadjusted	Combined on gse96058_hiseq	meta_er_status	21.6667	
-True Negative	HistGradientBoosting	Unadjusted	Combined	meta_er_status	78.6667	
-True Negative	HistGradientBoosting	Unadjusted	Combined on gse20194	meta_er_status	29.0000	
-True Negative	HistGradientBoosting	Unadjusted	Combined on gse96058_hiseq	meta_er_status	49.6667	
-True Positive	HistGradientBoosting	Unadjusted	Combined	meta_er_status	886.3333	
-True Positive	HistGradientBoosting	Unadjusted	Combined on gse20194	meta_er_status	48.6667	
-True Positive	HistGradientBoosting	Unadjusted	Combined on gse96058_hiseq	meta_er_status	837.6667	
-False Negative	HistGradientBoosting	Unadjusted	Combined	meta_er_status	21.6667	
-False Negative	HistGradientBoosting	Unadjusted	Combined on gse20194	meta_er_status	2.0000	
-False Negative	HistGradientBoosting	Unadjusted	Combined on gse96058_hiseq	meta_er_status	19.6667	
-False Positive	HistGradientBoosting	Unadjusted	Combined	meta_er_status	23.0000	
-False Positive	HistGradientBoosting	Unadjusted	Combined on gse20194	meta_er_status	5.0000	
-False Positive	HistGradientBoosting	Unadjusted	Combined on gse96058_hiseq	meta_er_status	18.0000	
-True Negative	HistGradientBoosting	Unadjusted	Combined	meta_er_status	80.3333	
-True Negative	HistGradientBoosting	Unadjusted	Combined on gse20194	meta_er_status	27.0000	
-True Negative	HistGradientBoosting	Unadjusted	Combined on gse96058_hiseq	meta_er_status	53.3333	
-True Positive	HistGradientBoosting	Unadjusted	Combined	meta_er_status	886.3333	
-True Positive	HistGradientBoosting	Unadjusted	Combined on gse20194	meta_er_status	49.6667	
-True Positive	HistGradientBoosting	Unadjusted	Combined on gse96058_hiseq	meta_er_status	836.6667	
-False Negative	HistGradientBoosting	Unadjusted	gse20194	meta_er_status	3.0000	
-False Positive	HistGradientBoosting	Unadjusted	gse20194	meta_er_status	3.3333	
-True Negative	HistGradientBoosting	Unadjusted	gse20194	meta_er_status	28.6667	
-True Positive	HistGradientBoosting	Unadjusted	gse20194	meta_er_status	48.6667	
-False Negative	HistGradientBoosting	Unadjusted	gse20194	meta_er_status	3.0000	
-False Positive	HistGradientBoosting	Unadjusted	gse20194	meta_er_status	4.0000	
-True Negative	HistGradientBoosting	Unadjusted	gse20194	meta_er_status	28.0000	
-True Positive	HistGradientBoosting	Unadjusted	gse20194	meta_er_status	48.6667	
-False Negative	HistGradientBoosting	Unadjusted	gse96058_hiseq	meta_er_status	17.3333	
-False Positive	HistGradientBoosting	Unadjusted	gse96058_hiseq	meta_er_status	23.0000	
-True Negative	HistGradientBoosting	Unadjusted	gse96058_hiseq	meta_er_status	48.3333	
-True Positive	HistGradientBoosting	Unadjusted	gse96058_hiseq	meta_er_status	839.0000	
-False Negative	HistGradientBoosting	Unadjusted	gse96058_hiseq	meta_er_status	17.3333	
-False Positive	HistGradientBoosting	Unadjusted	gse96058_hiseq	meta_er_status	22.3333	
-True Negative	HistGradientBoosting	Unadjusted	gse96058_hiseq	meta_er_status	49.0000	
-True Positive	HistGradientBoosting	Unadjusted	gse96058_hiseq	meta_er_status	839.0000	
-False Negative	HistGradientBoosting	Unadjusted	Combined	meta_er_status	21.6667	
-False Negative	HistGradientBoosting	Unadjusted	Combined on gse20194	meta_er_status	3.0000	
-False Negative	HistGradientBoosting	Unadjusted	Combined on gse96058_hiseq	meta_er_status	18.6667	
-False Positive	HistGradientBoosting	Unadjusted	Combined	meta_er_status	24.6667	
-False Positive	HistGradientBoosting	Unadjusted	Combined on gse20194	meta_er_status	3.0000	
-False Positive	HistGradientBoosting	Unadjusted	Combined on gse96058_hiseq	meta_er_status	21.6667	
-True Negative	HistGradientBoosting	Unadjusted	Combined	meta_er_status	78.6667	
-True Negative	HistGradientBoosting	Unadjusted	Combined on gse20194	meta_er_status	29.0000	
-True Negative	HistGradientBoosting	Unadjusted	Combined on gse96058_hiseq	meta_er_status	49.6667	
-True Positive	HistGradientBoosting	Unadjusted	Combined	meta_er_status	886.3333	
-True Positive	HistGradientBoosting	Unadjusted	Combined on gse20194	meta_er_status	48.6667	
-True Positive	HistGradientBoosting	Unadjusted	Combined on gse96058_hiseq	meta_er_status	837.6667	
-False Negative	HistGradientBoosting	Unadjusted	Combined	meta_er_status	21.6667	
-False Negative	HistGradientBoosting	Unadjusted	Combined on gse20194	meta_er_status	2.0000	
-False Negative	HistGradientBoosting	Unadjusted	Combined on gse96058_hiseq	meta_er_status	19.6667	
-False Positive	HistGradientBoosting	Unadjusted	Combined	meta_er_status	23.0000	
-False Positive	HistGradientBoosting	Unadjusted	Combined on gse20194	meta_er_status	5.0000	
-False Positive	HistGradientBoosting	Unadjusted	Combined on gse96058_hiseq	meta_er_status	18.0000	
-True Negative	HistGradientBoosting	Unadjusted	Combined	meta_er_status	80.3333	
-True Negative	HistGradientBoosting	Unadjusted	Combined on gse20194	meta_er_status	27.0000	
-True Negative	HistGradientBoosting	Unadjusted	Combined on gse96058_hiseq	meta_er_status	53.3333	
-True Positive	HistGradientBoosting	Unadjusted	Combined	meta_er_status	886.3333	
-True Positive	HistGradientBoosting	Unadjusted	Combined on gse20194	meta_er_status	49.6667	
-True Positive	HistGradientBoosting	Unadjusted	Combined on gse96058_hiseq	meta_er_status	836.6667	
-False Negative	HistGradientBoosting	Unadjusted	gse20194	meta_er_status	3.0000	
-False Positive	HistGradientBoosting	Unadjusted	gse20194	meta_er_status	3.3333	
-True Negative	HistGradientBoosting	Unadjusted	gse20194	meta_er_status	28.6667	
-True Positive	HistGradientBoosting	Unadjusted	gse20194	meta_er_status	48.6667	
-False Negative	HistGradientBoosting	Unadjusted	gse20194	meta_er_status	3.0000	
-False Positive	HistGradientBoosting	Unadjusted	gse20194	meta_er_status	4.0000	
-True Negative	HistGradientBoosting	Unadjusted	gse20194	meta_er_status	28.0000	
-True Positive	HistGradientBoosting	Unadjusted	gse20194	meta_er_status	48.6667	
-False Negative	HistGradientBoosting	Unadjusted	gse96058_hiseq	meta_er_status	17.3333	
-False Positive	HistGradientBoosting	Unadjusted	gse96058_hiseq	meta_er_status	23.0000	
-True Negative	HistGradientBoosting	Unadjusted	gse96058_hiseq	meta_er_status	48.3333	
-True Positive	HistGradientBoosting	Unadjusted	gse96058_hiseq	meta_er_status	839.0000	
-False Negative	HistGradientBoosting	Unadjusted	gse96058_hiseq	meta_er_status	17.3333	
-False Positive	HistGradientBoosting	Unadjusted	gse96058_hiseq	meta_er_status	22.3333	
-True Negative	HistGradientBoosting	Unadjusted	gse96058_hiseq	meta_er_status	49.0000	
-True Positive	HistGradientBoosting	Unadjusted	gse96058_hiseq	meta_er_status	839.0000	
-False Negative	HistGradientBoosting	Unadjusted	Combined	meta_er_status	21.6667	
-False Negative	HistGradientBoosting	Unadjusted	Combined on gse20194	meta_er_status	3.0000	
-False Negative	HistGradientBoosting	Unadjusted	Combined on gse96058_hiseq	meta_er_status	18.6667	
-False Positive	HistGradientBoosting	Unadjusted	Combined	meta_er_status	24.6667	
-False Positive	HistGradientBoosting	Unadjusted	Combined on gse20194	meta_er_status	3.0000	
-False Positive	HistGradientBoosting	Unadjusted	Combined on gse96058_hiseq	meta_er_status	21.6667	
-True Negative	HistGradientBoosting	Unadjusted	Combined	meta_er_status	78.6667	
-True Negative	HistGradientBoosting	Unadjusted	Combined on gse20194	meta_er_status	29.0000	
-True Negative	HistGradientBoosting	Unadjusted	Combined on gse96058_hiseq	meta_er_status	49.6667	
-True Positive	HistGradientBoosting	Unadjusted	Combined	meta_er_status	886.3333	
-True Positive	HistGradientBoosting	Unadjusted	Combined on gse20194	meta_er_status	48.6667	
-True Positive	HistGradientBoosting	Unadjusted	Combined on gse96058_hiseq	meta_er_status	837.6667	
-False Negative	HistGradientBoosting	Unadjusted	Combined	meta_er_status	21.6667	
-False Negative	HistGradientBoosting	Unadjusted	Combined on gse20194	meta_er_status	2.0000	
-False Negative	HistGradientBoosting	Unadjusted	Combined on gse96058_hiseq	meta_er_status	19.6667	
-False Positive	HistGradientBoosting	Unadjusted	Combined	meta_er_status	23.0000	
-False Positive	HistGradientBoosting	Unadjusted	Combined on gse20194	meta_er_status	5.0000	
-False Positive	HistGradientBoosting	Unadjusted	Combined on gse96058_hiseq	meta_er_status	18.0000	
-True Negative	HistGradientBoosting	Unadjusted	Combined	meta_er_status	80.3333	
-True Negative	HistGradientBoosting	Unadjusted	Combined on gse20194	meta_er_status	27.0000	
-True Negative	HistGradientBoosting	Unadjusted	Combined on gse96058_hiseq	meta_er_status	53.3333	
-True Positive	HistGradientBoosting	Unadjusted	Combined	meta_er_status	886.3333	
-True Positive	HistGradientBoosting	Unadjusted	Combined on gse20194	meta_er_status	49.6667	
-True Positive	HistGradientBoosting	Unadjusted	Combined on gse96058_hiseq	meta_er_status	836.6667	
+train	test	metric	value
+gse20194	gse20194	False Negative	3.0
+gse20194	gse20194	False Positive	3.6666499999999997
+gse20194	gse20194	True Negative	28.33335
+gse20194	gse20194	True Positive	48.6667
+gse20194_gse96058_hiseq	gse20194	False Negative	2.5
+gse20194_gse96058_hiseq	gse20194	False Positive	4.0
+gse20194_gse96058_hiseq	gse20194	True Negative	28.0
+gse20194_gse96058_hiseq	gse20194	True Positive	49.1667
+gse20194_gse96058_hiseq	gse20194_gse96058_hiseq	False Negative	30.22225
+gse20194_gse96058_hiseq	gse20194_gse96058_hiseq	False Positive	36.527791666666666
+gse20194_gse96058_hiseq	gse20194_gse96058_hiseq	True Negative	85.25
+gse20194_gse96058_hiseq	gse20194_gse96058_hiseq	True Positive	1154.6110833333335
+gse20194_gse96058_hiseq	gse96058_hiseq	False Negative	19.1667
+gse20194_gse96058_hiseq	gse96058_hiseq	False Positive	19.83335
+gse20194_gse96058_hiseq	gse96058_hiseq	True Negative	51.5
+gse20194_gse96058_hiseq	gse96058_hiseq	True Positive	837.1667
+gse20194_gse96058_hiseq	gse96058_hiseq_gse20194	False Negative	0.0
+gse20194_gse96058_hiseq	gse96058_hiseq_gse20194	False Positive	96.0
+gse20194_gse96058_hiseq	gse96058_hiseq_gse20194	True Negative	0.0
+gse20194_gse96058_hiseq	gse96058_hiseq_gse20194	True Positive	155.0
+gse96058_hiseq	gse96058_hiseq	False Negative	17.3333
+gse96058_hiseq	gse96058_hiseq	False Positive	22.66665
+gse96058_hiseq	gse96058_hiseq	True Negative	48.666650000000004
+gse96058_hiseq	gse96058_hiseq	True Positive	839.0

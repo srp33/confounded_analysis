@@ -96,7 +96,7 @@ def _process_fold(train_index, test_index, X, y, model, eval_sources, dataset_na
             })
     return fold_results
 
-def run_analysis(df, dataset_name, output_file, adjustment_name, n_repeats, n_splits, repeat_offset, evaluate_by_source):
+def run_analysis(df, dataset_name, train_source, test_source, output_file, adjustment_name, n_repeats, n_splits, repeat_offset, evaluate_by_source):
     """
     Run a complete cross-validation analysis for a given dataset.
     
@@ -143,12 +143,14 @@ def run_analysis(df, dataset_name, output_file, adjustment_name, n_repeats, n_sp
 
     # Add metadata columns and format for saving.
     df_repeats.rename(columns={'score': 'value'}, inplace=True)
+    df_repeats['train'] = f"{train_source}"
+    df_repeats['test'] = f"{test_source}"
     df_repeats['classifier'] = 'HistGradientBoosting'
     df_repeats['adjuster'] = adjustment_name
     df_repeats['column'] = 'meta_er_status'
     
     # Reorder columns and append to the output file.
-    output_cols = ['metric', 'classifier', 'adjuster', 'dataset', 'column', 'value']
+    output_cols = ['train', 'test', 'metric', 'classifier', 'adjuster', 'dataset', 'column', 'value']
     df_repeats[output_cols].to_csv(output_file, mode='a', header=False, index=False, float_format='%.4f')
     print_now(f"Classification results for {dataset_name} saved.")
 
@@ -204,13 +206,14 @@ def run_inter_source_analysis(df, train_source, test_source, output_file, adjust
 
     # Format results into a DataFrame for saving.
     df_results = pd.DataFrame(results_list)
-    df_results['train_test'] = f"{train_source}_{test_source}"
+    df_results['train'] = f"{train_source}"
+    df_results['test'] = f"{test_source}"
     df_results['classifier'] = 'HistGradientBoosting'
     df_results['adjuster'] = adjustment_name
     df_results['column'] = 'meta_er_status'
     
     # Reorder columns and append to the output file.
-    output_cols = ['train_test', 'metric', 'classifier', 'adjuster', 'dataset', 'column', 'value']
+    output_cols = ['train', 'test', 'metric', 'classifier', 'adjuster', 'dataset', 'column', 'value']
     df_results[output_cols].to_csv(output_file, mode='a', header=False, index=False, float_format='%.4f')
     print_now(f"Analysis results for {dataset_name} saved.")
 
@@ -235,16 +238,21 @@ def generate_summary(detailed_file, summary_file):
     print_now("="*60)
 
 def print_confusion_matrix(detailed_file, matrix_file):
-    print_now("Printing confusion matrix")
     # Filter confusion matrix values from metrics CSV file
-    metrics_full = pd.read_csv(detailed_file)
+    metrics_full = pd.read_csv(detailed_file, index_col=False)
     matrix_values = ['True Negative', 'False Positive', 'False Negative', 'True Positive']
-    metrics_filtered = metrics_full[metrics_full['combination'].isin(matrix_values)]
+    metrics_filtered = metrics_full[metrics_full['metric'].isin(matrix_values)]
     
     # Create the .txt file
     os.makedirs(os.path.dirname(matrix_file), exist_ok=True)
-    metrics_filtered.to_csv(matrix_file, sep='\t', index=False)
-    print_now(f"Confusion matrix values safed to: {matrix_file}")
+
+    # Average the confusion matrix values between folds
+    metrics_average = metrics_filtered.groupby(['train', 'test', 'metric'], as_index=False)['value'].mean()
+
+    # Save to .txt file
+    metrics_average.to_csv(matrix_file, sep='\t', index=False)
+
+    print_now(f"Confusion matrix values saved to: {matrix_file}")
 
 def main():
     """Parse arguments and run the classification pipeline."""
@@ -269,7 +277,7 @@ def main():
     # Ensure output file exists and has a header.
     os.makedirs(os.path.dirname(args.output), exist_ok=True)
     if not os.path.exists(args.output) or os.path.getsize(args.output) == 0:
-        pd.DataFrame(columns=['combination', 'metric', 'classifier', 'adjuster', 'dataset', 'column', 'value']).to_csv(args.output, index=False)
+        pd.DataFrame(columns=['metric', 'classifier', 'adjuster', 'dataset', 'column', 'value']).to_csv(args.output, index=False)
     
     print_now(f"=== HistGradientBoostingClassifier ER Status Classification ({args.adjustment}) ===")
     
@@ -313,6 +321,8 @@ def main():
             runs.append({
                 "type": "inter_source",
                 "name": run_name,
+                "train": train_src ,
+                "test": test_src,
                 "train_source": train_src,
                 "test_source": test_src,
                 "dataset_names": [dataset_name]
@@ -343,6 +353,8 @@ def main():
     #                 run_analysis(
     #                     df=run['data'],
     #                     dataset_name=run['name'],
+    #                     train_source=run['train'],
+    #                     test_source=run['test'],
     #                     output_file=args.output,
     #                     adjustment_name=args.adjustment,
     #                     n_repeats=n_to_run,
@@ -363,7 +375,6 @@ def main():
 
     # hash_cache._save_hashes()
     generate_summary(args.output, args.summary)
-    print_now("print confusion matrix")
     print_confusion_matrix(args.output, args.confusion_matrix)
     
     print_now("\nPipeline finished.")
