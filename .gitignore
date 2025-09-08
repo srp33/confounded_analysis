@@ -6,3 +6,4 @@ outputs/*.log
 outputs/metrics/archive
 .DS_Store
 *.out
+grp_batch_effects
