@@ -7,3 +7,4 @@ outputs/metrics/archive
 .DS_Store
 *.out
 *.sif
+grp_batch_effects
