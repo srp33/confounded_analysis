@@ -1,4 +1,4 @@
-combination,metric,classifier,adjuster,dataset,column,value
+metric,classifier,adjuster,dataset,column,value
 Accuracy,HistGradientBoosting,Unadjusted,Combined,meta_er_status,0.9542,
 Accuracy,HistGradientBoosting,Unadjusted,Combined on gse20194,meta_er_status,0.9276,
 Accuracy,HistGradientBoosting,Unadjusted,Combined on gse96058_hiseq,meta_er_status,0.9565,
