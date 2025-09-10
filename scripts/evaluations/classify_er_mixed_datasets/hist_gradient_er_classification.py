@@ -74,6 +74,11 @@ def _process_fold(train_index, test_index, X, y, model, eval_sources, dataset_na
             subset_label = f"{dataset_name} on {source_name}"
             subsets_to_evaluate[subset_label] = (X_test[mask], y_test[mask])
 
+    #{
+        #"Combined": [full_x_test (1/3 rows, all gene columns), full y_test true er_status column]
+        #Dataset 1: [subset of x test ()]
+        # Dataset 2: 
+    #}
     # Calculate metrics for each defined subset and return structured dicts.
     fold_results = []
     for name, (X_sub, y_sub) in subsets_to_evaluate.items():
