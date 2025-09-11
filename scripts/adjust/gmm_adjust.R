@@ -49,6 +49,11 @@ bimodal_normalize_cached <- function(data, cache_folder = NULL, force_recalculat
     }
     return(NULL)
   }
+
+  if(debug) {
+    message("DEBUG: Example GMM parameters retrieved:")
+    message(param_result$gmm_params[1])
+  }
   
   # Apply adjustments using cached parameters
   if (debug) {
@@ -363,6 +368,7 @@ gmm_adjust <- function(data, batch, debug = FALSE, log_file = NULL, adjustment_s
     bimodal_adjusted[batch_indices, ] <- batch_adjusted_bimodal
     
     recommended_modes_df[b, ] <- bimodal_result$recommended_modes
+    log_message(debug = debug, "For batch ", b, ", Number of 1 mode recommends: ", sum(recommended_modes_df[b, ] == 1), ", 2 mode recommends: ", sum(recommended_modes_df[b, ] == 2))
   }
   
   adjusted_data <- gmm_batch_adjust(
