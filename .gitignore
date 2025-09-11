@@ -2,6 +2,7 @@ Archive
 data
 __pycache__
 tmp*
+outputs
 outputs/*.log
 outputs/metrics/archive
 .DS_Store
