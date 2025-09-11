@@ -894,7 +894,7 @@ if ("Sample_ID" %in% names(df)) {
 
 message("Starting batch adjustment with method: '", args$adjuster, "'")
 
-start_time = Sys.time()
+initial_start_time = Sys.time()
 adjusted_data <- batch_adjust_tidy(
   df,
   input_file = args$input_file,
@@ -905,7 +905,7 @@ adjusted_data <- batch_adjust_tidy(
   debug = args$debug,
   meta_file = args$meta_file
 )
-message("Adjusting ", args$input_file, " took ", Sys.time() - start_time, " seconds.")
+message("Adjusting ", args$input_file, " took ", Sys.time() - initial_start_time, " seconds.")
 
 start_time = Sys.time()
 message("Writing adjusted data to '", args$output_file, "'")

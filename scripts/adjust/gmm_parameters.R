@@ -572,9 +572,7 @@ extract_gmm_parameters <- function(data, batch_name = NULL, cache_folder = NULL,
     message("DEBUG: Found ", length(cached_genes), " cached genes, need to compute ", length(genes_to_compute), " missing genes")
     if (length(genes_to_compute) > 0 && length(genes_to_compute) <= 10) {
       message("DEBUG: Missing genes: ", paste(genes_to_compute, collapse = ", "))
-    } else if (length(genes_to_compute) > 10) {
-      message("DEBUG: First 10 missing genes: ", paste(head(genes_to_compute, 10), collapse = ", "))
-    }
+    } 
   }
   
   # Extract parameters for missing genes only
