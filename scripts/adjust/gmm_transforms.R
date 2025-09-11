@@ -212,101 +212,6 @@ unimodal_normalize <- function(data, use_parallel = NULL, debug = FALSE, num_wor
   return(unimodal_data)
 }
 
-# ============================================================================
-# BOUNDARY CALCULATION UTILITIES
-# ============================================================================
-
-#' Calculate boundary coefficients for bimodal GMM
-#' 
-#' @param m0 Mean of first component
-#' @param m1 Mean of second component  
-#' @param v0 Variance of first component
-#' @param v1 Variance of second component
-#' @param w0 Weight of first component
-#' @param w1 Weight of second component
-#' @return List with coefficients A, B, C
-calculate_boundary_coefficients <- function(m0, m1, v0, v1, w0, w1) {
-  A <- 1 / (2 * v0) - 1 / (2 * v1)
-  B <- m1 / v1 - m0 / v0
-  C <- (m0^2 / (2 * v0)) - (m1^2 / (2 * v1)) - log(w0 * sqrt(v1) / (w1 * sqrt(v0)))
-  
-  return(list(A = A, B = B, C = C))
-}
-
-#' Calculate decision boundary from coefficients
-#' 
-#' @param A Quadratic coefficient
-#' @param B Linear coefficient
-#' @param C Constant coefficient
-#' @param m0 Mean of first component
-#' @param m1 Mean of second component
-#' @param default_boundary Default boundary if calculation fails
-#' @return List with boundary calculation results
-calculate_decision_boundary <- function(A, B, C, m0, m1, default_boundary) {
-  res = list(
-    variances_equal = abs(A) < 1e-9,
-    numerically_unstable = FALSE,
-    boundary = default_boundary,
-    discriminant = NULL,
-    discriminant_negative = FALSE,
-    boundaries = NULL,
-    no_valid_boundary = FALSE
-  )
-
-  if (res$variances_equal) {
-    if (abs(B) <= 1e-9) {
-      res$numerically_unstable <- TRUE
-    } else {
-      res$boundary <- -C / B
-    }
-  } else {
-    res$discriminant <- B^2 - 4 * A * C
-    if (res$discriminant < 0) {
-      res$discriminant_negative <- TRUE
-    } else {
-      boundaries <- (-B + c(-1, 1) * sqrt(res$discriminant)) / (2 * A)
-      res$boundaries <- boundaries
-      valid_boundaries <- boundaries[boundaries > m0 & boundaries < m1]
-      if (length(valid_boundaries) == 0) {
-        res$no_valid_boundary <- TRUE
-      } else {
-        res$boundary <- valid_boundaries[1]
-      }
-    }
-  }
-  return(res)
-}
-
-#' Log boundary calculation results
-#' 
-#' @param log_file Path to log file
-#' @param iter Iteration number
-#' @param boundary_result Result from calculate_decision_boundary
-#' @param coeffs Boundary coefficients
-#' @param m0 Mean of first component
-#' @param m1 Mean of second component
-#' @param debug Whether to enable debug logging
-log_boundary_result <- function(log_file, iter, boundary_result, coeffs, m0, m1, debug) {
-  if (!debug) return()
-  
-  A = round(coeffs$A, 3)
-  B = round(coeffs$B, 3)
-  C = round(coeffs$C, 3)
-  boundary = round(boundary_result$boundary, 3)
-  m0 = round(m0, 3)
-  m1 = round(m1, 3)
-
-  if(boundary_result$numerically_unstable) {
-    worker_log_message(sprintf("A and B too small for numeric stability. Using mean: %f. A=%f, B=%f.", boundary, coeffs$A, coeffs$B), iter=iter, log_file_path=log_file)
-  } else if(boundary_result$discriminant_negative) {
-    worker_log_message("Discriminant negative: ", round(boundary_result$discriminant, 3), " Using mean: ", boundary, " Boundary equation coefficients: A=", A, ", B=", B, ", C=", C, iter=iter, log_file_path=log_file)
-  } else if(boundary_result$no_valid_boundary) {
-    worker_log_message(sprintf("No valid boundary found between means. Using mean of means: mm=%f. m0=%f, m1=%f. b0=%f, b1=%f.", boundary, m0, m1, boundary_result$boundaries[1], boundary_result$boundaries[2]), iter=iter, log_file_path=log_file)
-  } else {
-    worker_log_message(sprintf("Valid boundary calculated using GMM at: %f, m0: %f, m1: %f.", boundary, m0, m1), iter=iter, log_file_path=log_file)
-  }
-}
-
 # ==========================================================================
 # ADJUSTMENT STRATEGY IMPLEMENTATIONS
 # ============================================================================
@@ -315,12 +220,13 @@ log_boundary_result <- function(log_file, iter, boundary_result, coeffs, m0, m1,
 #' 
 #' @param X Input data vector
 #' @param gene_params GMM parameters for the gene
-#' @param strategy Adjustment strategy ("simple", "boundary", "npn")
+#' @param strategy Adjustment strategy ("simple", "npn")
 #' @param debug Whether to enable debug logging
 #' @param log_file Path to log file
 #' @return Transformed data vector
 apply_adjustment_strategy <- function(X, gene_params, strategy = "simple", debug = FALSE, log_file = NULL) {
-  if (!gene_params$fit_successful || gene_params$n_components < 2) {
+  gene_col <- colnames(gene_params)[1]
+  if (!gene_params["fit_successful", gene_col] || gene_params["n_components", gene_col] < 2) {
     # Fallback to unimodal
     ranks <- rank(X, na.last = "keep", ties.method = "average")
     quantiles <- ranks / (sum(!is.na(X)) + 1)
@@ -328,13 +234,13 @@ apply_adjustment_strategy <- function(X, gene_params, strategy = "simple", debug
     return(unimodal / sd(unimodal, na.rm = TRUE))
   }
   
-  # Extract parameters
-  m0 <- gene_params$means[1]
-  m1 <- gene_params$means[2]
-  v0 <- gene_params$variances[1]
-  v1 <- gene_params$variances[2]
-  w0 <- gene_params$weights[1]
-  w1 <- gene_params$weights[2]
+  # Extract parameters (flattened structure)
+  m0 <- gene_params["mean0", gene_col]
+  m1 <- gene_params["mean1", gene_col]
+  v0 <- gene_params["variance0", gene_col]
+  v1 <- gene_params["variance1", gene_col]
+  w0 <- gene_params["weight0", gene_col]
+  w1 <- gene_params["weight1", gene_col]
   
   # Apply log-shift transformation (same as in parameter extraction)
   min_val <- min(X, na.rm = TRUE)
@@ -367,42 +273,6 @@ apply_adjustment_strategy <- function(X, gene_params, strategy = "simple", debug
     
     return(result)
     
-  } else if (strategy == "boundary") {
-    # Boundary-based transformation
-    coeffs <- gene_params$boundary_coefficients
-    A <- coeffs$A
-    B <- coeffs$B
-    C <- coeffs$C
-    
-    default_boundary <- (m0 + m1) / 2
-    boundary_result <- calculate_decision_boundary(A, B, C, m0, m1, default_boundary)
-    
-    if (debug) {
-      log_boundary_result(log_file, NULL, boundary_result, coeffs, m0, m1, debug)
-    }
-    
-    boundary <- boundary_result$boundary
-    
-    # Classify points and transform
-    low_group <- X_transformed <= boundary
-    high_group <- X_transformed > boundary
-    
-    result <- numeric(length(X_transformed))
-    
-    if (sum(low_group, na.rm = TRUE) > 0) {
-      low_ranks <- rank(X_transformed[low_group], na.last = "keep", ties.method = "average")
-      low_quantiles <- low_ranks / (sum(!is.na(X_transformed[low_group])) + 1)
-      result[low_group] <- qnorm(low_quantiles * 0.5)  # Map to lower half of normal
-    }
-    
-    if (sum(high_group, na.rm = TRUE) > 0) {
-      high_ranks <- rank(X_transformed[high_group], na.last = "keep", ties.method = "average")
-      high_quantiles <- high_ranks / (sum(!is.na(X_transformed[high_group])) + 1)
-      result[high_group] <- qnorm(0.5 + high_quantiles * 0.5)  # Map to upper half of normal
-    }
-    
-    return(result)
-    
   } else if (strategy == "npn") {
     # Non-paranormal transformation
     return(bimodal_npn(X_transformed, m0, m1, v0, v1, w0, w1))
@@ -424,7 +294,8 @@ apply_adjustment_strategy <- function(X, gene_params, strategy = "simple", debug
 #' @return Adjusted gene expression vector
 process_gmm_adjustment_gene <- function(X, gene_name, gene_params, strategy, debug, log_file, iter) {
   tryCatch({
-    if (is.null(gene_params) || !gene_params$fit_successful) {
+    gene_col <- if (is.null(gene_params)) NULL else colnames(gene_params)[1]
+    if (is.null(gene_params) || !gene_params["fit_successful", gene_col]) {
       # Unimodal fallback
       worker_log_message("No valid cached parameters for gene", gene_name, "- using unimodal fallback", iter=iter, log_file_path=log_file)
       ranks <- rank(X, na.last = "keep", ties.method = "average")
@@ -443,7 +314,7 @@ process_gmm_adjustment_gene <- function(X, gene_name, gene_params, strategy, deb
     }
     
     # Use cached strategy functions for fast adjustment
-    if (gene_params$n_components >= 2 && gene_params$recommended_modes == 2) {
+    if (gene_params["n_components", gene_col] >= 2 && gene_params["recommended_modes", gene_col] == 2) {
       result <- apply_adjustment_strategy(X, gene_params, strategy, debug, log_file)
       worker_log_message("Applied", strategy, "adjustment for gene", gene_name, iter=iter, log_file_path=log_file)
       return(result)
@@ -520,8 +391,7 @@ apply_gmm_adjustment <- function(data, gmm_params, strategy = "simple", debug = 
       
       # Export functions to workers
       clusterExport(cl, c("process_gmm_adjustment_gene", "apply_adjustment_strategy", 
-                         "inverse_cdf_gmm_R", "bimodal_npn", "calculate_boundary_coefficients",
-                         "calculate_decision_boundary", "log_boundary_result", "worker_log_message"), 
+                         "inverse_cdf_gmm_R", "bimodal_npn", "worker_log_message"), 
                    envir = .GlobalEnv)
 
       if (debug) {

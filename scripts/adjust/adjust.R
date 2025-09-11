@@ -545,6 +545,75 @@ adjust_fastMNN <- function(df_, batch, data_are_counts, debug = FALSE) {
 }
 
 
+# GMM Parameter Caching Functions -----------------------------------------------
+
+save_gmm_parameters_to_csv <- function(gmm_params, batch_name, cache_folder) {
+  #' Save GMM parameters to CSV file using flattened format
+  #' @param gmm_params Dataframe with GMM parameters (genes as columns, parameters as rows)
+  #' @param batch_name Name of the batch for the cache file
+  #' @param cache_folder Directory to store cache files
+  
+  cache_file <- file.path(cache_folder, paste0(batch_name, "_gmm_params.csv"))
+  
+  # Use flattened format directly - no list conversion needed
+  # Parameters should already be in flattened format: mean0, mean1, variance0, variance1, weight0, weight1
+  write.csv(gmm_params, cache_file, row.names = TRUE)
+  message("Saved GMM parameters for batch '", batch_name, "' to: ", cache_file)
+}
+
+load_gmm_parameters_from_csv <- function(batch_name, cache_folder) {
+  #' Load GMM parameters from CSV file in flattened format
+  #' @param batch_name Name of the batch for the cache file
+  #' @param cache_folder Directory containing cache files
+  #' @return Dataframe with GMM parameters in flattened format or NULL if not found
+  
+  cache_file <- file.path(cache_folder, paste0(batch_name, "_gmm_params.csv"))
+  
+  if (!file.exists(cache_file)) return(NULL)
+  
+  params <- read.csv(cache_file, row.names = 1, stringsAsFactors = FALSE, check.names = FALSE)
+  
+  # Convert logical and numeric columns back to proper types
+  if ("fit_successful" %in% rownames(params)) {
+    params["fit_successful", ] <- as.logical(params["fit_successful", ])
+  }
+  if ("recommended_modes" %in% rownames(params)) {
+    params["recommended_modes", ] <- as.numeric(params["recommended_modes", ])
+  }
+  if ("n_components" %in% rownames(params)) {
+    params["n_components", ] <- as.numeric(params["n_components", ])
+  }
+  
+  # Ensure numeric parameter rows are numeric
+  numeric_rows <- c("mean0", "mean1", "variance0", "variance1", "weight0", "weight1")
+  for (row_name in numeric_rows) {
+    if (row_name %in% rownames(params)) {
+      params[row_name, ] <- as.numeric(params[row_name, ])
+    }
+  }
+  
+  return(params)
+}
+
+validate_cached_parameters <- function(cached_params, current_genes) {
+  #' Validate that cached parameters match current gene set
+  #' @param cached_params Cached parameter dataframe
+  #' @param current_genes Vector of current gene names
+  #' @return Logical indicating if cache is valid
+  
+  if (is.null(cached_params)) return(FALSE)
+  
+  # Check if all current genes have cached parameters
+  if (!all(current_genes %in% colnames(cached_params))) {
+    missing_genes <- setdiff(current_genes, colnames(cached_params))
+    message("Cache invalid: missing parameters for ", length(missing_genes), " genes")
+    return(FALSE)
+  }
+  
+  return(TRUE)
+}
+
+
 adjust_gmm_common <- function(matrix_, batch, adjustment_strategy, strategy_name, debug = FALSE, meta_file = NULL) {
   #' Common implementation for all GMM-based adjustment methods.
   #' Wrapper for gmm_adjust to fit into the main adjustment pipeline with caching support.
@@ -560,44 +629,81 @@ adjust_gmm_common <- function(matrix_, batch, adjustment_strategy, strategy_name
   message("Adjusting with GMM-based adjustment (", strategy_name, ", with caching support).")
 
   genes_df <- as.data.frame(t(matrix_))
-
-  cache_folder = "/data/.cache/gmm_cache"
+  cache_folder <- "data/.cache/gmm_cache"
   if (!dir.exists(cache_folder)) {
     dir.create(cache_folder, recursive = TRUE)
   }
-  force_recalculate = FALSE
 
-  if (is.null(batch)){
-    # Use cached bimodal normalize for single batch processing
-    result <- bimodal_normalize_cached(
-      genes_df, 
-      cache_folder = cache_folder,
-      force_recalculate = force_recalculate,
-      debug = debug, 
-      log_file = "/outputs/bimodal_parallel.log", 
-      adjustment_strategy = adjustment_strategy, 
-      num_workers = -1
-    )
+  if (is.null(batch)) {
+    # Single batch processing with caching
+    batch_name <- "single_batch"
+    cached_params <- load_gmm_parameters_from_csv(batch_name, cache_folder)
     
+    if (validate_cached_parameters(cached_params, colnames(genes_df))) {
+      message("Using cached GMM parameters for single batch (", ncol(cached_params), " genes)")
+      # Use flattened parameters directly - no conversion needed
+      gmm_params <- cached_params[, colnames(genes_df), drop = FALSE]
+    } else {
+      message("Computing new GMM parameters for single batch (", ncol(genes_df), " genes)")
+      result <- bimodal_normalize(genes_df, debug = debug, adjustment_strategy = adjustment_strategy, num_workers = -1)
+      gmm_params <- result$gmm_parameters
+      
+      # Save flattened parameters to cache
+      save_gmm_parameters_to_csv(gmm_params, batch_name, cache_folder)
+    }
+    
+    # Apply adjustment using cached/computed parameters
+    result <- bimodal_normalize(genes_df, gmm_params, debug = debug, adjustment_strategy = adjustment_strategy, num_workers = -1)
     adjusted_genes_df <- result$bimodal_data
+    
     if (!is.null(meta_file)) {
       recommended_modes <- result$recommended_modes
-      # Format has gene names as the column names, batch names as the row names, and 1 or 2 as values.
-      write.csv(recommended_modes, file=meta_file, row.names=TRUE)
+      write.csv(data.frame(single_batch = recommended_modes), file = meta_file, row.names = TRUE)
     }
-  }
-  else {
-    # Use cached gmm_adjust for multi-batch processing
-    adjusted_genes_df <- gmm_adjust_cached(
-      genes_df, 
-      batch, 
-      debug = debug, 
-      log_file = "/outputs/gmm_parallel.log", 
-      adjustment_strategy = adjustment_strategy,
-      cache_folder = cache_folder,
-      force_recalculate = force_recalculate,
-      num_workers = -1
-    )
+    
+  } else {
+    # Multi-batch processing with per-batch caching
+    gmm_parameters <- list()
+    batch_levels <- unique(batch)
+    
+    for (b in batch_levels) {
+      cached_params <- load_gmm_parameters_from_csv(as.character(b), cache_folder)
+      batch_indices <- which(batch == b)
+      batch_genes <- colnames(genes_df)
+      
+      if (validate_cached_parameters(cached_params, batch_genes)) {
+        message("Using cached GMM parameters for batch '", b, "' (", ncol(cached_params), " genes)")
+        # Use flattened parameters directly - no conversion needed
+        gmm_parameters[[as.character(b)]] <- cached_params[, batch_genes, drop = FALSE]
+      } else {
+        message("Computing new GMM parameters for batch '", b, "' (", length(batch_genes), " genes)")
+        batch_data <- genes_df[batch_indices, , drop = FALSE]
+        result <- bimodal_normalize(batch_data, debug = debug, adjustment_strategy = adjustment_strategy, num_workers = -1)
+        gmm_parameters[[as.character(b)]] <- result$gmm_parameters
+        
+        # Save flattened parameters to cache
+        save_gmm_parameters_to_csv(result$gmm_parameters, as.character(b), cache_folder)
+      }
+    }
+    
+    # Apply adjustment using cached/computed parameters
+    adjusted_genes_df <- gmm_adjust(genes_df, batch, gmm_parameters, debug = debug, adjustment_strategy = adjustment_strategy, num_workers = -1)
+    
+    if (!is.null(meta_file)) {
+      # Extract recommended modes from gmm_parameters
+      recommended_modes_df <- data.frame(
+        matrix(NA, nrow = length(batch_levels), ncol = ncol(genes_df)),
+        row.names = batch_levels
+      )
+      colnames(recommended_modes_df) <- colnames(genes_df)
+      
+      for (b in batch_levels) {
+        if (!is.null(gmm_parameters[[as.character(b)]])) {
+          recommended_modes_df[as.character(b), ] <- as.numeric(gmm_parameters[[as.character(b)]]["recommended_modes", ])
+        }
+      }
+      write.csv(recommended_modes_df, file = meta_file, row.names = TRUE)
+    }
   }
 
   return(t(as.matrix(adjusted_genes_df)))
