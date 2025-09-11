@@ -10,6 +10,63 @@ suppressPackageStartupMessages({
 })
 
 # ============================================================================
+# CONSTANTS AND HELPER FUNCTIONS
+# ============================================================================
+
+# Define parameter structure once to avoid duplication
+GMM_PARAM_ROWS <- c(
+  "gene_name",
+  "n_components", 
+  "mean0",
+  "mean1", 
+  "variance0",
+  "variance1",
+  "weight0",
+  "weight1",
+  "recommended_modes",
+  "fit_successful",
+  "error_message"
+)
+
+# Define which rows should be numeric for type conversion
+NUMERIC_PARAM_ROWS <- c("n_components", "mean0", "mean1", "variance0", "variance1", "weight0", "weight1", "recommended_modes")
+
+#' Create default parameter dataframe for a gene
+#' 
+#' @param gene_name Character string, name of the gene
+#' @param error_msg Optional error message
+#' @return Dataframe with default parameters
+create_default_gene_params <- function(gene_name, error_msg = NA) {
+  gene_params <- data.frame(
+    c(gene_name, 1, NA, NA, NA, NA, NA, NA, 1, FALSE, error_msg),
+    row.names = GMM_PARAM_ROWS,
+    stringsAsFactors = FALSE
+  )
+  colnames(gene_params) <- gene_name
+  return(gene_params)
+}
+
+#' Convert parameter dataframe columns to proper types
+#' 
+#' @param params Parameter dataframe to convert
+#' @return Dataframe with properly typed columns
+convert_param_types <- function(params) {
+  # Convert logical columns
+  if ("fit_successful" %in% rownames(params)) {
+    params["fit_successful", ] <- as.logical(params["fit_successful", ])
+  }
+  
+  # Convert numeric columns
+  for (row_name in NUMERIC_PARAM_ROWS) {
+    if (row_name %in% rownames(params)) {
+      params[row_name, ] <- as.numeric(params[row_name, ])
+    }
+  }
+  
+  return(params)
+}
+
+# ============================================================================
 # HELPER FUNCTIONS FOR PARAMETER EXTRACTION
 # ============================================================================
 
@@ -24,25 +81,8 @@ suppressPackageStartupMessages({
 process_single_gene_parameters <- function(X, gene_name, debug = FALSE, 
                                          log_func = function(..., iter = NULL) if(debug) message(...), 
                                          iter = NULL) {
-  # Initialize default parameters as dataframe with single column (flattened structure)
-  gene_params <- data.frame(
-    c(gene_name,1,NA,NA,NA,NA,NA,NA,1,FALSE,NA),
-    row.names = c(
-      "gene_name",
-      "n_components", 
-      "mean0",
-      "mean1", 
-      "variance0",
-      "variance1",
-      "weight0",
-      "weight1",
-      "recommended_modes",
-      "fit_successful",
-      "error_message"
-    ),
-    stringsAsFactors = FALSE
-  )
-  colnames(gene_params) <- gene_name
+  # Initialize default parameters using helper function
+  gene_params <- create_default_gene_params(gene_name)
   
   tryCatch({
     # Ensure X is numeric
@@ -77,7 +117,6 @@ process_single_gene_parameters <- function(X, gene_name, debug = FALSE,
     }
     
     # Fit GMM with 1 or 2 components
-    log_func("Fitting GMM for gene", gene_name, iter = iter)
     gmm <- Mclust(X_transformed, G = 1:2, modelNames = "V", verbose = FALSE)
     
     if (is.null(gmm)) {
@@ -160,46 +199,7 @@ worker_log_message <- function(..., iter = NULL, log_file_path = NULL) {
   })
 }
 
-#' Setup parallel processing for parameter extraction
-#' 
-#' @param debug Logical, whether to enable debug logging
-#' @param num_workers Number of workers to use. If NULL or 1, uses sequential processing.
-#'                    If -1, uses all available cores. Otherwise uses minimum of specified number and available cores.
-#' @return Cluster object
-setup_parallel <- function(debug = FALSE, num_workers = NULL) {
-  # Determine number of workers
-  available_cores <- detectCores()
-  
-  if (is.null(num_workers) || num_workers == 1) {
-    if (debug) message("Since num_workers is: ", num_workers, " using sequential version.")
-    return(NULL)  # Use sequential processing
-  } else if (num_workers == -1) {
-    num_cores <- available_cores
-  } else {
-    num_cores <- min(num_workers, available_cores)
-  }
-  
-  if (debug) {
-    message("DEBUG: Setting up parallel processing with ", num_cores, " cores (", available_cores, " available)")
-  }
-  
-  tryCatch({
-    cl <- makeCluster(num_cores)
-    registerDoParallel(cl)
-    # Export required functions and libraries to workers
-    cluster_result <- clusterEvalQ(cl, {
-      library(mclust)
-      return("mclust loaded")
-    })
-    
-    # Export the parameter processing function and logging to workers
-    clusterExport(cl, c("process_single_gene_parameters", "worker_log_message"), envir = .GlobalEnv)
-    
-    return(cl)
-  }, error = function(e) {
-    stop("Failed to setup parallel cluster: ", e$message)
-  })
-}
+
 
 # ============================================================================
 # PARAMETER CACHING FUNCTIONS
@@ -235,37 +235,91 @@ load_gmm_parameters_from_csv <- function(batch_name, cache_folder) {
   
   params <- read.csv(cache_file, row.names = 1, stringsAsFactors = FALSE, check.names = FALSE)
   
-  # Convert columns back to proper types
-  if ("fit_successful" %in% rownames(params)) {
-    params["fit_successful", ] <- as.logical(params["fit_successful", ])
-  }
-  
-  numeric_rows <- c("n_components", "mean0", "mean1", "variance0", "variance1", "weight0", "weight1", "recommended_modes")
-  for (row_name in numeric_rows) {
-    if (row_name %in% rownames(params)) {
-      params[row_name, ] <- as.numeric(params[row_name, ])
-    }
-  }
-  
-  return(params)
+  # Convert columns back to proper types using helper function
+  return(convert_param_types(params))
 }
 
 #' Validate cached parameters against current gene set
 #' 
 #' @param cached_params Cached parameter dataframe
 #' @param current_genes Vector of current gene names
-#' @return Logical indicating if cache is valid
+#' @return List with 'valid' (logical), 'missing_genes' (character vector), 'cached_genes' (character vector)
 validate_cached_parameters <- function(cached_params, current_genes) {
   if (is.null(cached_params)) {
-    return(FALSE)
+    return(list(
+      valid = FALSE,
+      missing_genes = current_genes,
+      cached_genes = character(0)
+    ))
   }
   
-  # Check if all current genes have cached parameters
-  if (!all(current_genes %in% colnames(cached_params))) {
-    return(FALSE)
+  cached_genes <- intersect(current_genes, colnames(cached_params))
+  missing_genes <- setdiff(current_genes, colnames(cached_params))
+  
+  return(list(
+    valid = length(missing_genes) == 0,
+    missing_genes = missing_genes,
+    cached_genes = cached_genes
+  ))
+}
+
+#' Merge cached parameters with newly computed parameters
+#' 
+#' @param cached_params Existing cached parameter dataframe (can be NULL)
+#' @param new_params Newly computed parameter list or dataframe
+#' @param gene_order Vector specifying the desired gene order in final result
+#' @return Merged parameter dataframe with genes in specified order
+merge_gmm_parameters <- function(cached_params, new_params, gene_order) {
+  # Convert new_params list to dataframe if needed
+  if (is.list(new_params) && !is.data.frame(new_params)) {
+    if (length(new_params) > 0) {
+      new_params_df <- do.call(cbind, new_params)
+    } else {
+      new_params_df <- NULL
+    }
+  } else {
+    new_params_df <- new_params
   }
   
-  return(TRUE)
+  # Handle case where we only have cached params
+  if (is.null(new_params_df)) {
+    if (is.null(cached_params)) {
+      return(NULL)
+    }
+    return(cached_params[, intersect(gene_order, colnames(cached_params)), drop = FALSE])
+  }
+  
+  # Handle case where we only have new params
+  if (is.null(cached_params)) {
+    return(new_params_df[, intersect(gene_order, colnames(new_params_df)), drop = FALSE])
+  }
+  
+  # Merge both cached and new parameters
+  all_genes <- union(colnames(cached_params), colnames(new_params_df))
+  
+  # Create template with all parameter rows using constant
+  merged_params <- data.frame(
+    matrix(NA, nrow = length(GMM_PARAM_ROWS), ncol = length(all_genes)),
+    row.names = GMM_PARAM_ROWS,
+    stringsAsFactors = FALSE
+  )
+  colnames(merged_params) <- all_genes
+  
+  # Copy cached parameters
+  cached_genes <- intersect(all_genes, colnames(cached_params))
+  if (length(cached_genes) > 0) {
+    merged_params[, cached_genes] <- cached_params[, cached_genes, drop = FALSE]
+  }
+  
+  # Copy new parameters (these take precedence over cached)
+  new_genes <- intersect(all_genes, colnames(new_params_df))
+  if (length(new_genes) > 0) {
+    merged_params[, new_genes] <- new_params_df[, new_genes, drop = FALSE]
+  }
+  
+  # Return only genes in the specified order
+  final_genes <- intersect(gene_order, colnames(merged_params))
+  return(merged_params[, final_genes, drop = FALSE])
 }
 
 
@@ -299,34 +353,26 @@ extract_gmm_parameters_parallel <- function(data, debug = FALSE, log_file = NULL
     message("DEBUG: Extracting GMM parameters for ", n_genes, " genes using parallel processing")
   }
   
-  # Setup parallel processing
-  cl <- tryCatch({
-    setup_parallel(debug, num_workers)
-  }, error = function(e) {
+  # Setup parallel processing - let foreach handle the details
+  if (num_workers != 1) {
+    available_cores <- detectCores()
+    num_cores <- if (num_workers == -1) available_cores else min(num_workers, available_cores)
+    
     if (debug) {
-      message("DEBUG: Failed to setup parallel processing: ", e$message)
-      message("DEBUG: Error details: ", toString(e))
+      message("Setting up parallel processing with ", num_cores, " cores")
     }
-    return(NULL)
-  })
-  
-  if (is.null(cl)) {
+    
+    cl <- makeCluster(num_cores)
+    registerDoParallel(cl)
+    on.exit(stopCluster(cl), add = TRUE)
+  } else {
+    if (debug) message("Using sequential processing")
     return(NULL)
   }
   
-  on.exit({
-    if (debug) {
-      message("Stopping parallel cluster")
-    }
-    stopCluster(cl)
-  }, add = TRUE)
-  
-  if (debug) {
-    message("DEBUG: Starting parallel parameter extraction...")
-  }
   start_time <- Sys.time()
   if (debug) {
-    message("DEBUG: Start time: ", format(start_time, "%m-%d %H:%M:%S"))
+    message("DEBUG: Starting parallel parameter extraction at ", format(start_time, "%m-%d %H:%M:%S"))
   }
   
   # Process genes in parallel
@@ -340,8 +386,9 @@ extract_gmm_parameters_parallel <- function(data, debug = FALSE, log_file = NULL
       i = seq_along(gene_names),
       .combine = 'c',
       .multicombine = TRUE,
-      .errorhandling = 'remove',  # Remove failed tasks but continue with others
-      .packages = c('mclust')
+      .errorhandling = 'stop',
+      .packages = c('mclust'),
+      .export = c('process_single_gene_parameters', 'worker_log_message')
     ) %dopar% {
       tryCatch({
         # Log start of gene processing
@@ -376,25 +423,8 @@ extract_gmm_parameters_parallel <- function(data, debug = FALSE, log_file = NULL
         worker_log_message("ERROR: Worker failed for gene ", gene_name, ": ", e$message, 
                          iter = i, log_file_path = parallel_log_file)
         
-        # Create error result (flattened structure)
-        error_result <- data.frame(
-          c(gene_name,1,NA,NA,NA,NA,NA,NA,1,FALSE,paste("Parallel worker error:", e$message)),
-          row.names = c(
-            "gene_name",
-            "n_components", 
-            "mean0",
-            "mean1", 
-            "variance0",
-            "variance1",
-            "weight0",
-            "weight1",
-            "recommended_modes",
-            "fit_successful",
-            "error_message"
-          ),
-          stringsAsFactors = FALSE
-        )
-        colnames(error_result) <- gene_name
+        # Create error result using helper function
+        error_result <- create_default_gene_params(gene_name, paste("Parallel worker error:", e$message))
         
         result <- list(error_result)
         names(result) <- gene_name
@@ -417,11 +447,7 @@ extract_gmm_parameters_parallel <- function(data, debug = FALSE, log_file = NULL
   })
   
   end_time <- Sys.time()
-  if (debug) {
-    processing_time <- round(difftime(end_time, start_time, units = "secs"), 1)
-    message("DEBUG: Parallel parameter extraction completed in ", processing_time, " seconds")
-  }
-  start_time <- Sys.time()
+  processing_time <- round(difftime(end_time, start_time, units = "secs"), 1)
   
   # Handle partial results from parallel processing
   if (is.null(results_by_gene)) {
@@ -432,7 +458,8 @@ extract_gmm_parameters_parallel <- function(data, debug = FALSE, log_file = NULL
   }
   
   if (debug) {
-    message("Parallel parameter processing completed, got ", length(results_by_gene), " results for ", n_genes, " genes")
+    message("DEBUG: Parallel parameter extraction completed in ", processing_time, " seconds")
+    message("DEBUG: Got ", length(results_by_gene), " results for ", n_genes, " genes")
     if (length(results_by_gene) > 0) {
       message("DEBUG: Result names (first 10): ", paste(head(names(results_by_gene), 10), collapse = ", "))
     }
@@ -448,13 +475,6 @@ extract_gmm_parameters_parallel <- function(data, debug = FALSE, log_file = NULL
       message("DEBUG: First 10 missing genes: ", paste(head(missing_genes, 10), collapse = ", "))
     }
     return(NULL)
-  }
-  
-  end_time <- Sys.time()
-  processing_time <- round(difftime(end_time, start_time, units = "secs"), 1)
-  
-  if (debug) {
-    message("DEBUG: Parallel parameter processing completed in ", processing_time, " seconds")
   }
   
   return(results_by_gene)
@@ -501,18 +521,21 @@ extract_gmm_parameters_sequential <- function(data, debug = FALSE, log_file = NU
   return(gmm_params)
 }
 
-#' Extract GMM parameters from data (main function)
+#' Extract GMM parameters from data with intelligent caching
 #' 
 #' Fits GMM models once per gene and extracts all parameters needed for
-#' different adjustment strategies. 
+#' different adjustment strategies. Uses cached parameters when available
+#' and only computes parameters for missing genes.
 #' 
 #' @param data Matrix or data frame with samples as rows, genes as columns
+#' @param batch_name Name of the batch for caching (optional)
+#' @param cache_folder Path to cache directory (optional)
 #' @param debug Logical, whether to enable debug logging
 #' @param log_file Path to log file for debug output
-#' @param num_workers Number of workers to use. If NULL or 1, uses sequential processing.
+#' @param num_workers Number of workers to use. If 1, uses sequential processing.
 #'                    If -1, uses all available cores. Otherwise uses minimum of specified number and available cores.
-#' @return List containing GMM parameters for each gene
-extract_gmm_parameters <- function(data, debug = FALSE, log_file = NULL, num_workers = 1) {
+#' @return Dataframe containing GMM parameters for each gene (genes as columns)
+extract_gmm_parameters <- function(data, batch_name = NULL, cache_folder = NULL, debug = FALSE, log_file = NULL, num_workers = 1) {
   if (!is.data.frame(data) && !is.matrix(data)) {
     stop("Input 'data' must be a data frame or matrix.")
   }
@@ -522,22 +545,77 @@ extract_gmm_parameters <- function(data, debug = FALSE, log_file = NULL, num_wor
     file.remove(log_file)
   }
   
-  gene_names <- colnames(data)
-  n_genes <- length(gene_names)
+  current_genes <- colnames(data)
+  cached_params <- NULL
   
-  # Try parallel processing first if requested
-  if (num_workers != 1) {
-    parallel_result <- extract_gmm_parameters_parallel(data, debug, log_file, num_workers)
+  # Try to load cached parameters if cache info provided
+  if (!is.null(batch_name) && !is.null(cache_folder)) {
+    cached_params <- load_gmm_parameters_from_csv(batch_name, cache_folder)
     
-    if (!is.null(parallel_result)) {
-      return(parallel_result)
-    } else {
+    if (!is.null(cached_params) && debug) {
+      message("DEBUG: Loaded cached parameters for ", ncol(cached_params), " genes")
+    }
+  }
+  
+  # Validate cache and identify missing genes
+  cache_status <- validate_cached_parameters(cached_params, current_genes)
+  
+  if (cache_status$valid) {
+    if (debug) {
+      message("DEBUG: All ", length(current_genes), " genes found in cache")
+    }
+    return(cached_params[, current_genes, drop = FALSE])
+  }
+  
+  # Determine which genes need computation
+  genes_to_compute <- cache_status$missing_genes
+  cached_genes <- cache_status$cached_genes
+  
+  if (debug) {
+    message("DEBUG: Found ", length(cached_genes), " cached genes, need to compute ", length(genes_to_compute), " missing genes")
+    if (length(genes_to_compute) > 0 && length(genes_to_compute) <= 10) {
+      message("DEBUG: Missing genes: ", paste(genes_to_compute, collapse = ", "))
+    } else if (length(genes_to_compute) > 10) {
+      message("DEBUG: First 10 missing genes: ", paste(head(genes_to_compute, 10), collapse = ", "))
+    }
+  }
+  
+  # Extract parameters for missing genes only
+  new_params <- NULL
+  if (length(genes_to_compute) > 0) {
+    data_subset <- data[, genes_to_compute, drop = FALSE]
+    
+    if (debug) {
+      message("DEBUG: Computing parameters for ", length(genes_to_compute), " genes")
+    }
+    
+    # Try parallel processing first if requested, fall back to sequential
+    if (num_workers != 1) {
+      new_params <- extract_gmm_parameters_parallel(data_subset, debug, log_file, num_workers)
+      if (is.null(new_params) && debug) {
+        message("DEBUG: Parallel processing failed, falling back to sequential")
+      }
+    }
+    
+    # Use sequential processing if parallel failed or not requested
+    if (is.null(new_params)) {
+      new_params <- extract_gmm_parameters_sequential(data_subset, debug, log_file)
+    }
+  }
+  
+  # Merge cached and new parameters
+  merged_params <- merge_gmm_parameters(cached_params, new_params, current_genes)
+  
+  # Save updated parameters to cache if cache info provided
+  if (!is.null(batch_name) && !is.null(cache_folder) && !is.null(merged_params)) {
+    # Only save if we computed new parameters
+    if (length(genes_to_compute) > 0) {
+      save_gmm_parameters_to_csv(merged_params, batch_name, cache_folder)
       if (debug) {
-        message("DEBUG: Parallel parameter processing failed, falling back to sequential processing")
+        message("DEBUG: Saved updated cache with ", ncol(merged_params), " genes")
       }
     }
   }
   
-  # Use sequential processing (either requested or as fallback)
-  return(extract_gmm_parameters_sequential(data, debug, log_file))
+  return(merged_params)
 }

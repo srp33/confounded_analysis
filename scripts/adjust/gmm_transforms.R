@@ -154,44 +154,38 @@ unimodal_normalize <- function(data, use_parallel = NULL, debug = FALSE, num_wor
     }
     
     # Setup parallel processing
-    cl <- tryCatch({
-      setup_parallel(debug, num_workers)
+    available_cores <- detectCores()
+    num_cores <- if (num_workers == -1) available_cores else min(num_workers, available_cores)
+    
+    cl <- makeCluster(num_cores)
+    registerDoParallel(cl)
+    on.exit(stopCluster(cl), add = TRUE)
+    
+    # Export function to workers
+    clusterExport(cl, c("process_unimodal_gene"), envir = .GlobalEnv)
+      
+    # Process genes in parallel
+    results_list <- tryCatch({
+      foreach(
+        gene_name = gene_names,
+        .combine = 'cbind',
+        .multicombine = TRUE,
+        .errorhandling = 'stop'
+      ) %dopar% {
+        X <- data[, gene_name]
+        process_unimodal_gene(X, gene_name)
+      }
     }, error = function(e) {
       if (debug) {
-        message("DEBUG: Failed to setup parallel processing, falling back to sequential: ", e$message)
+        message("Parallel unimodal processing failed: ", e$message)
       }
       return(NULL)
     })
     
-    if (!is.null(cl)) {
-      on.exit(stopCluster(cl), add = TRUE)
-      
-      # Export function to workers
-      clusterExport(cl, c("process_unimodal_gene"), envir = .GlobalEnv)
-      
-      # Process genes in parallel
-      results_list <- tryCatch({
-        foreach(
-          gene_name = gene_names,
-          .combine = 'cbind',
-          .multicombine = TRUE,
-          .errorhandling = 'stop'
-        ) %dopar% {
-          X <- data[, gene_name]
-          process_unimodal_gene(X, gene_name)
-        }
-      }, error = function(e) {
-        if (debug) {
-          message("DEBUG: Parallel unimodal processing failed: ", e$message)
-        }
-        return(NULL)
-      })
-      
-      if (!is.null(results_list)) {
-        colnames(results_list) <- gene_names
-        rownames(results_list) <- rownames(data)
-        return(results_list)
-      }
+    if (!is.null(results_list)) {
+      colnames(results_list) <- gene_names
+      rownames(results_list) <- rownames(data)
+      return(results_list)
     }
   }
   
@@ -226,7 +220,9 @@ unimodal_normalize <- function(data, use_parallel = NULL, debug = FALSE, num_wor
 #' @return Transformed data vector
 apply_adjustment_strategy <- function(X, gene_params, strategy = "simple", debug = FALSE, log_file = NULL) {
   gene_col <- colnames(gene_params)[1]
-  if (!gene_params["fit_successful", gene_col] || gene_params["n_components", gene_col] < 2) {
+  fit_successful <- as.logical(gene_params["fit_successful", gene_col])
+  n_components <- as.numeric(gene_params["n_components", gene_col])
+  if (is.na(fit_successful) || !fit_successful || n_components < 2) {
     # Fallback to unimodal
     ranks <- rank(X, na.last = "keep", ties.method = "average")
     quantiles <- ranks / (sum(!is.na(X)) + 1)
@@ -235,12 +231,12 @@ apply_adjustment_strategy <- function(X, gene_params, strategy = "simple", debug
   }
   
   # Extract parameters (flattened structure)
-  m0 <- gene_params["mean0", gene_col]
-  m1 <- gene_params["mean1", gene_col]
-  v0 <- gene_params["variance0", gene_col]
-  v1 <- gene_params["variance1", gene_col]
-  w0 <- gene_params["weight0", gene_col]
-  w1 <- gene_params["weight1", gene_col]
+  m0 <- as.numeric(gene_params["mean0", gene_col])
+  m1 <- as.numeric(gene_params["mean1", gene_col])
+  v0 <- as.numeric(gene_params["variance0", gene_col])
+  v1 <- as.numeric(gene_params["variance1", gene_col])
+  w0 <- as.numeric(gene_params["weight0", gene_col])
+  w1 <- as.numeric(gene_params["weight1", gene_col])
   
   # Apply log-shift transformation (same as in parameter extraction)
   min_val <- min(X, na.rm = TRUE)
@@ -377,25 +373,20 @@ apply_gmm_adjustment <- function(data, gmm_params, strategy = "simple", debug = 
   
   if (use_parallel && n_genes > 1) {  
     # Setup parallel processing
-    cl <- tryCatch({
-      setup_parallel(debug, num_workers)
-    }, error = function(e) {
-      if (debug) {
-        message("DEBUG: Failed to setup parallel processing, falling back to sequential: ", e$message)
-      }
-      return(NULL)
-    })
+    available_cores <- detectCores()
+    num_cores <- if (num_workers == -1) available_cores else min(num_workers, available_cores)
     
-    if (!is.null(cl)) {
-      on.exit(stopCluster(cl), add = TRUE)
-      
-      # Export functions to workers
-      clusterExport(cl, c("process_gmm_adjustment_gene", "apply_adjustment_strategy", 
-                         "inverse_cdf_gmm_R", "bimodal_npn", "worker_log_message"), 
-                   envir = .GlobalEnv)
+    cl <- makeCluster(num_cores)
+    registerDoParallel(cl)
+    on.exit(stopCluster(cl), add = TRUE)
+    
+    # Export functions to workers
+    clusterExport(cl, c("process_gmm_adjustment_gene", "apply_adjustment_strategy", 
+                       "inverse_cdf_gmm_R", "bimodal_npn", "worker_log_message"), 
+                 envir = .GlobalEnv)
 
       if (debug) {
-        message("DEBUG: Starting parallel gmm adjustment")
+        message("Starting parallel gmm adjustment")
       }
       
       # Process genes in parallel
@@ -413,7 +404,7 @@ apply_gmm_adjustment <- function(data, gmm_params, strategy = "simple", debug = 
         }
       }, error = function(e) {
         if (debug) {
-          message("DEBUG: Parallel GMM adjustment failed: ", e$message)
+          message("Parallel GMM adjustment failed: ", e$message)
         }
         return(NULL)
       })
@@ -423,7 +414,6 @@ apply_gmm_adjustment <- function(data, gmm_params, strategy = "simple", debug = 
         rownames(results_list) <- rownames(data)
         return(results_list)
       }
-    }
   }
   
   # Sequential processing (fallback or requested)

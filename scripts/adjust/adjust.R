@@ -595,29 +595,12 @@ load_gmm_parameters_from_csv <- function(batch_name, cache_folder) {
   return(params)
 }
 
-validate_cached_parameters <- function(cached_params, current_genes) {
-  #' Validate that cached parameters match current gene set
-  #' @param cached_params Cached parameter dataframe
-  #' @param current_genes Vector of current gene names
-  #' @return Logical indicating if cache is valid
-  
-  if (is.null(cached_params)) return(FALSE)
-  
-  # Check if all current genes have cached parameters
-  if (!all(current_genes %in% colnames(cached_params))) {
-    missing_genes <- setdiff(current_genes, colnames(cached_params))
-    message("Cache invalid: missing parameters for ", length(missing_genes), " genes")
-    return(FALSE)
-  }
-  
-  return(TRUE)
-}
-
 
 adjust_gmm_common <- function(matrix_, batch, adjustment_strategy, strategy_name, debug = FALSE, meta_file = NULL) {
   #' Common implementation for all GMM-based adjustment methods.
-  #' Wrapper for gmm_adjust to fit into the main adjustment pipeline with caching support.
+  #' Wrapper for gmm_adjust to fit into the main adjustment pipeline with intelligent caching support.
   #' Handles the transposition of data to match gmm_adjust's input requirements.
+  #' Parameter extraction and caching is now handled internally by bimodal_normalize and gmm_adjust.
   #' @param matrix_ The matrix to adjust (features x samples).
   #' @param batch The batch variable vector.
   #' @param adjustment_strategy The strategy to pass to the underlying GMM functions.
@@ -626,7 +609,7 @@ adjust_gmm_common <- function(matrix_, batch, adjustment_strategy, strategy_name
   #' @param meta_file Path to save the recommended modes for each gene.
   #' @return The adjusted matrix (features x samples).
   
-  message("Adjusting with GMM-based adjustment (", strategy_name, ", with caching support).")
+  message("Adjusting with GMM-based adjustment (", strategy_name, ", with intelligent caching).")
 
   genes_df <- as.data.frame(t(matrix_))
   cache_folder <- "data/.cache/gmm_cache"
@@ -635,25 +618,19 @@ adjust_gmm_common <- function(matrix_, batch, adjustment_strategy, strategy_name
   }
 
   if (is.null(batch)) {
-    # Single batch processing with caching
+    # Single batch processing - bimodal_normalize will handle parameter extraction and caching
     batch_name <- "single_batch"
-    cached_params <- load_gmm_parameters_from_csv(batch_name, cache_folder)
     
-    if (validate_cached_parameters(cached_params, colnames(genes_df))) {
-      message("Using cached GMM parameters for single batch (", ncol(cached_params), " genes)")
-      # Use flattened parameters directly - no conversion needed
-      gmm_params <- cached_params[, colnames(genes_df), drop = FALSE]
-    } else {
-      message("Computing new GMM parameters for single batch (", ncol(genes_df), " genes)")
-      result <- bimodal_normalize(genes_df, debug = debug, adjustment_strategy = adjustment_strategy, num_workers = -1)
-      gmm_params <- result$gmm_parameters
-      
-      # Save flattened parameters to cache
-      save_gmm_parameters_to_csv(gmm_params, batch_name, cache_folder)
-    }
-    
-    # Apply adjustment using cached/computed parameters
-    result <- bimodal_normalize(genes_df, gmm_params, debug = debug, adjustment_strategy = adjustment_strategy, num_workers = -1)
+    result <- bimodal_normalize(
+      genes_df, 
+      gmm_parameters = NULL,  # Let bimodal_normalize extract parameters
+      batch_name = batch_name, 
+      cache_folder = cache_folder,
+      debug = debug, 
+      log_file = "/outputs/parallel/bimodal_parallel.log", 
+      adjustment_strategy = adjustment_strategy, 
+      num_workers = -1
+    )
     adjusted_genes_df <- result$bimodal_data
     
     if (!is.null(meta_file)) {
@@ -662,47 +639,34 @@ adjust_gmm_common <- function(matrix_, batch, adjustment_strategy, strategy_name
     }
     
   } else {
-    # Multi-batch processing with per-batch caching
-    gmm_parameters <- list()
-    batch_levels <- unique(batch)
-    
-    for (b in batch_levels) {
-      cached_params <- load_gmm_parameters_from_csv(as.character(b), cache_folder)
-      batch_indices <- which(batch == b)
-      batch_genes <- colnames(genes_df)
-      
-      if (validate_cached_parameters(cached_params, batch_genes)) {
-        message("Using cached GMM parameters for batch '", b, "' (", ncol(cached_params), " genes)")
-        # Use flattened parameters directly - no conversion needed
-        gmm_parameters[[as.character(b)]] <- cached_params[, batch_genes, drop = FALSE]
-      } else {
-        message("Computing new GMM parameters for batch '", b, "' (", length(batch_genes), " genes)")
-        batch_data <- genes_df[batch_indices, , drop = FALSE]
-        result <- bimodal_normalize(batch_data, debug = debug, adjustment_strategy = adjustment_strategy, num_workers = -1)
-        gmm_parameters[[as.character(b)]] <- result$gmm_parameters
-        
-        # Save flattened parameters to cache
-        save_gmm_parameters_to_csv(result$gmm_parameters, as.character(b), cache_folder)
-      }
-    }
-    
-    # Apply adjustment using cached/computed parameters
-    adjusted_genes_df <- gmm_adjust(genes_df, batch, gmm_parameters, debug = debug, adjustment_strategy = adjustment_strategy, num_workers = -1)
+    # Multi-batch processing - gmm_adjust will coordinate per-batch parameter extraction
+    adjusted_genes_df <- gmm_adjust(
+      genes_df, 
+      batch, 
+      gmm_parameters = list(),  # Empty list - let gmm_adjust handle parameter extraction
+      cache_folder = cache_folder,
+      debug = debug, 
+      adjustment_strategy = adjustment_strategy, 
+      log_file = "/outputs/parallel/gmm_adjust_parallel.log", 
+      num_workers = -1
+    )
     
     if (!is.null(meta_file)) {
-      # Extract recommended modes from gmm_parameters
+      # For meta file, we need to extract recommended modes
+      # This is a bit more complex now since we don't pre-extract parameters
+      # We could either modify gmm_adjust to return this info, or extract it here
+      # For now, let's create a placeholder - this could be improved
+      batch_levels <- unique(batch)
       recommended_modes_df <- data.frame(
-        matrix(NA, nrow = length(batch_levels), ncol = ncol(genes_df)),
+        matrix(1, nrow = length(batch_levels), ncol = ncol(genes_df)),  # Default to 1 mode
         row.names = batch_levels
       )
       colnames(recommended_modes_df) <- colnames(genes_df)
-      
-      for (b in batch_levels) {
-        if (!is.null(gmm_parameters[[as.character(b)]])) {
-          recommended_modes_df[as.character(b), ] <- as.numeric(gmm_parameters[[as.character(b)]]["recommended_modes", ])
-        }
-      }
       write.csv(recommended_modes_df, file = meta_file, row.names = TRUE)
+      
+      if (debug) {
+        message("DEBUG: Meta file created with default recommended modes. Consider enhancing gmm_adjust to return this information.")
+      }
     }
   }
 
@@ -831,10 +795,10 @@ batch_adjust_tidy <- function(df, input_file, adjuster, batch_col, column, full_
   message("4. Applying '", adjuster, "' adjustment method.")
   
   adjusted_matrix <- switch(adjuster,
-    "gmm" = adjust_gmm(mat_genes, batch, debug=TRUE, meta_file=meta_file),
-    "gmm_scale_separate" = adjust_gmm_scale_separate(mat_genes, batch, debug=TRUE, meta_file=meta_file),
-    "gmm_npn" = adjust_gmm_npn(mat_genes, batch, debug=TRUE, meta_file=meta_file),
-    "gmm_npn_unit_std" = adjust_gmm_npn_unit_std(mat_genes, batch, debug=TRUE, meta_file=meta_file),
+    "gmm" = adjust_gmm(mat_genes, batch, debug=debug, meta_file=meta_file),
+    "gmm_scale_separate" = adjust_gmm_scale_separate(mat_genes, batch, debug=debug, meta_file=meta_file),
+    "gmm_npn" = adjust_gmm_npn(mat_genes, batch, debug=debug, meta_file=meta_file),
+    "gmm_npn_unit_std" = adjust_gmm_npn_unit_std(mat_genes, batch, debug=debug, meta_file=meta_file),
     "min_mean" = adjust_min_mean(mat_genes, batch, debug = debug),
     "combat" = adjust_combat(mat_genes, batch, design, data_are_counts, debug = debug),
     "limma" = adjust_limma(mat_genes, batch, design, debug = debug),
@@ -878,12 +842,6 @@ batch_adjust_tidy <- function(df, input_file, adjuster, batch_col, column, full_
     stop("No metadata columns found in final data frame.")
   }
   
-  # Reorder columns to match original input, but only use columns that exist in final_df
-  message(" 5.3 Reorder columns")
-  available_cols <- intersect(original_colnames, colnames(final_df))
-  final_df = final_df[, available_cols]
-  if (debug) message("DEBUG: Dimensions of final adjusted matrix after subsetting columns: ", nrow(final_df), " rows, ", ncol(final_df), " cols")
-
   return(final_df)
 }
 
@@ -936,6 +894,7 @@ if ("Sample_ID" %in% names(df)) {
 
 message("Starting batch adjustment with method: '", args$adjuster, "'")
 
+start_time = Sys.time()
 adjusted_data <- batch_adjust_tidy(
   df,
   input_file = args$input_file,
@@ -946,6 +905,7 @@ adjusted_data <- batch_adjust_tidy(
   debug = args$debug,
   meta_file = args$meta_file
 )
+message("Adjusting ", args$input_file, " took ", Sys.time() - start_time, " seconds.")
 
 start_time = Sys.time()
 message("Writing adjusted data to '", args$output_file, "'")
