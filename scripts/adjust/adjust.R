@@ -682,6 +682,7 @@ batch_adjust_tidy <- function(df, input_file, adjuster, batch_col, column, full_
   metadata_cols <- df[, startsWith(colnames(df), "meta_"), drop = FALSE]
   message("Metadata cols: ", paste(colnames(metadata_cols), collapse = ", "))
   
+  gene_col_names = colnames(df)[!startsWith(colnames(df), "meta_")]
   genes <- df[, !startsWith(colnames(df), "meta_")]
   
   # Verify all gene columns are numeric
@@ -747,6 +748,8 @@ batch_adjust_tidy <- function(df, input_file, adjuster, batch_col, column, full_
   message("5. Reconstructing the tidy data frame.")
   adjusted_df <- as.data.frame(t(adjusted_matrix))
 
+  colnames(adjusted_df) <- gene_col_names
+
   if (debug) message("DEBUG: Dimensions of final adjusted matrix after transposing: ", nrow(adjusted_df), " rows, ", ncol(adjusted_df), " cols")
 
   # Restore other columns if reduced
@@ -772,7 +775,10 @@ batch_adjust_tidy <- function(df, input_file, adjuster, batch_col, column, full_
   # Reorder columns to match original input, but only use columns that exist in final_df
   message(" 5.3 Reorder columns")
   available_cols <- intersect(original_colnames, colnames(final_df))
-  return(final_df[, available_cols])
+  final_df = final_df[, available_cols]
+  if (debug) message("DEBUG: Dimensions of final adjusted matrix after subsetting columns: ", nrow(final_df), " rows, ", ncol(final_df), " cols")
+
+  return(final_df)
 }
 
 
