@@ -219,9 +219,8 @@ unimodal_normalize <- function(data, use_parallel = NULL, debug = FALSE, num_wor
 #' @param log_file Path to log file
 #' @return Transformed data vector
 apply_adjustment_strategy <- function(X, gene_params, strategy = "simple", debug = FALSE, log_file = NULL) {
-  gene_col <- colnames(gene_params)[1]
-  fit_successful <- as.logical(gene_params["fit_successful", gene_col])
-  n_components <- as.numeric(gene_params["n_components", gene_col])
+  fit_successful <- as.logical(gene_params$fit_successful)
+  n_components <- as.numeric(gene_params$n_components)
   if (is.na(fit_successful) || !fit_successful || n_components < 2) {
     # Fallback to unimodal
     ranks <- rank(X, na.last = "keep", ties.method = "average")
@@ -230,13 +229,13 @@ apply_adjustment_strategy <- function(X, gene_params, strategy = "simple", debug
     return(unimodal / sd(unimodal, na.rm = TRUE))
   }
   
-  # Extract parameters (flattened structure)
-  m0 <- as.numeric(gene_params["mean0", gene_col])
-  m1 <- as.numeric(gene_params["mean1", gene_col])
-  v0 <- as.numeric(gene_params["variance0", gene_col])
-  v1 <- as.numeric(gene_params["variance1", gene_col])
-  w0 <- as.numeric(gene_params["weight0", gene_col])
-  w1 <- as.numeric(gene_params["weight1", gene_col])
+  # Extract parameters
+  m0 <- as.numeric(gene_params$mean0)
+  m1 <- as.numeric(gene_params$mean1)
+  v0 <- as.numeric(gene_params$variance0)
+  v1 <- as.numeric(gene_params$variance1)
+  w0 <- as.numeric(gene_params$weight0)
+  w1 <- as.numeric(gene_params$weight1)
   
   # Apply log-shift transformation (same as in parameter extraction)
   min_val <- min(X, na.rm = TRUE)
@@ -290,8 +289,7 @@ apply_adjustment_strategy <- function(X, gene_params, strategy = "simple", debug
 #' @return Adjusted gene expression vector
 process_gmm_adjustment_gene <- function(X, gene_name, gene_params, strategy, debug, log_file, iter) {
   tryCatch({
-    gene_col <- if (is.null(gene_params)) NULL else colnames(gene_params)[1]
-    if (is.null(gene_params) || !gene_params["fit_successful", gene_col]) {
+    if (is.null(gene_params) || !gene_params$fit_successful) {
       # Unimodal fallback
       worker_log_message("No valid cached parameters for gene", gene_name, "- using unimodal fallback", iter=iter, log_file_path=log_file)
       ranks <- rank(X, na.last = "keep", ties.method = "average")
@@ -310,7 +308,7 @@ process_gmm_adjustment_gene <- function(X, gene_name, gene_params, strategy, deb
     }
     
     # Use cached strategy functions for fast adjustment
-    if (gene_params["n_components", gene_col] >= 2 && gene_params["recommended_modes", gene_col] == 2) {
+    if (gene_params$n_components >= 2 && gene_params$recommended_modes == 2) {
       result <- apply_adjustment_strategy(X, gene_params, strategy, debug, log_file)
       worker_log_message("Applied", strategy, "adjustment for gene", gene_name, iter=iter, log_file_path=log_file)
       return(result)

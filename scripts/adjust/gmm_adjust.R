@@ -40,11 +40,23 @@ log_message <- function(..., log_file_path = NULL, iter = NULL, debug = TRUE) {
 #' @param log_file Path to log file
 #' @param gmm_params Pre-extracted GMM parameters (required)
 process_single_gene <- function(X, iter, gene_id, debug, log_file, strategy, gmm_params= NULL) {
-  if (is.null(gmm_params) || !gene_id %in% colnames(gmm_params)) {
-    stop("GMM parameters not found for gene '", gene_id, "'. This should not happen, all parameters should have been extracted.")
+  if (is.null(gmm_params)) {
+    stop("GMM parameters are NULL for gene '", gene_id, "'. This should not happen with the new parameter extraction approach.")
   }
   
-  gene_params <- gmm_params[, gene_id, drop = FALSE]
+  if (!"gene_name" %in% colnames(gmm_params)) {
+    stop("GMM parameters missing 'gene_name' column. Structure: ", paste(colnames(gmm_params), collapse = ", "))
+  }
+  
+  if (!gene_id %in% gmm_params$gene_name) {
+    stop("GMM parameters not found for gene '", gene_id, "'. Available genes: ", length(unique(gmm_params$gene_name)), ", First few: ", paste(head(gmm_params$gene_name, 5), collapse = ", "))
+  }
+  
+  gene_params <- gmm_params[gmm_params$gene_name == gene_id, , drop = FALSE]
+  
+  if (nrow(gene_params) == 0) {
+    stop("No parameters returned for gene '", gene_id, "' after filtering.")
+  }
 
   if (!is.numeric(X)) {
     X <- as.numeric(as.character(X))
@@ -61,16 +73,16 @@ process_single_gene <- function(X, iter, gene_id, debug, log_file, strategy, gmm
   unimodal = unimodal/sd(unimodal, na.rm = TRUE)
 
   # If parameter extraction failed, return unimodal
-  fit_successful <- as.logical(gene_params["fit_successful", colnames(gene_params)[1]])
+  fit_successful <- as.logical(gene_params$fit_successful)
   if (is.na(fit_successful) || !fit_successful) {
-    recommended_modes <- as.numeric(gene_params["recommended_modes", colnames(gene_params)[1]])
+    recommended_modes <- as.numeric(gene_params$recommended_modes)
     return(list(unimodal = unimodal, bimodal = unimodal, recommended_modes = recommended_modes, gene_params=gene_params))
   }
   
   # Apply strategy using cached parameters
   tryCatch({
     bimodal_result <- apply_adjustment_strategy(X, gene_params, strategy, debug, log_file)
-    recommended_modes <- as.numeric(gene_params["recommended_modes", colnames(gene_params)[1]])
+    recommended_modes <- as.numeric(gene_params$recommended_modes)
     list(unimodal = unimodal, bimodal = bimodal_result, recommended_modes = recommended_modes, gene_params=gene_params)
   }, error = function(e) {
     log_message(log_file_path=log_file, iter=iter, paste0("Error in process_single_gene for '", gene_id, "' with strategy '", strategy, "': ", e), debug = debug)
@@ -113,9 +125,9 @@ bimodal_normalize <- function(data, gmm_parameters=NULL, batch_name=NULL, cache_
       log_file = log_file,
       num_workers = num_workers
     )
-    log_message(debug = debug, "GMM parameters extracted for", if(is.null(gmm_parameters)) 0 else ncol(gmm_parameters), "genes")
+    log_message(debug = debug, "GMM parameters extracted for", if(is.null(gmm_parameters)) 0 else nrow(gmm_parameters), "genes")
   } else {
-    log_message(debug = debug, "Using provided GMM parameters for", ncol(gmm_parameters), "genes")
+    log_message(debug = debug, "Using provided GMM parameters for", nrow(gmm_parameters), "genes")
   }
   
   start_time <- Sys.time()
@@ -193,10 +205,7 @@ bimodal_normalize <- function(data, gmm_parameters=NULL, batch_name=NULL, cache_
     gmm_params_list <- gmm_params_list[!sapply(gmm_params_list, is.null)]
     
     if (length(gmm_params_list) > 0) {
-      gmm_parameters <- do.call(cbind, gmm_params_list)
-      if (is.matrix(gmm_parameters) || is.data.frame(gmm_parameters)) {
-        colnames(gmm_parameters) <- gene_names[1:ncol(gmm_parameters)]
-      }
+      gmm_parameters <- do.call(rbind, gmm_params_list)
     }
   } else {
     # When using cached parameters, we might need to update with any newly computed ones
@@ -207,13 +216,16 @@ bimodal_normalize <- function(data, gmm_parameters=NULL, batch_name=NULL, cache_
     new_params_list <- new_params_list[!sapply(new_params_list, is.null)]
     
     if (length(new_params_list) > 0) {
-      new_params <- do.call(cbind, new_params_list)
-      if (is.matrix(new_params) || is.data.frame(new_params)) {
-        colnames(new_params) <- names(new_params_list)
-        
-        # Update gmm_parameters with any newly computed parameters
-        for (gene in colnames(new_params)) {
-          gmm_parameters[, gene] <- new_params[, gene]
+      new_params <- do.call(rbind, new_params_list)
+      
+      # Update gmm_parameters with any newly computed parameters
+      for (gene in new_params$gene_name) {
+        if (gene %in% gmm_parameters$gene_name) {
+          # Update existing gene
+          gmm_parameters[gmm_parameters$gene_name == gene, ] <- new_params[new_params$gene_name == gene, ]
+        } else {
+          # Add new gene
+          gmm_parameters <- rbind(gmm_parameters, new_params[new_params$gene_name == gene, ])
         }
       }
     }

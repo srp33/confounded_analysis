@@ -1,6 +1,8 @@
 # GMM Parameter Extraction and Caching Infrastructure
 # This module provides functions to extract, save, and load GMM parameters
 # to eliminate redundant model fitting across different adjustment strategies.
+# 
+# NEW STRUCTURE: Genes as rows, parameters as columns (more intuitive)
 
 suppressPackageStartupMessages({
   library(mclust)
@@ -14,7 +16,7 @@ suppressPackageStartupMessages({
 # ============================================================================
 
 # Define parameter structure once to avoid duplication
-GMM_PARAM_ROWS <- c(
+GMM_PARAM_COLS <- c(
   "gene_name",
   "n_components", 
   "mean0",
@@ -28,21 +30,30 @@ GMM_PARAM_ROWS <- c(
   "error_message"
 )
 
-# Define which rows should be numeric for type conversion
-NUMERIC_PARAM_ROWS <- c("n_components", "mean0", "mean1", "variance0", "variance1", "weight0", "weight1", "recommended_modes")
+# Define which columns should be numeric for type conversion
+NUMERIC_PARAM_COLS <- c("n_components", "mean0", "mean1", "variance0", "variance1", "weight0", "weight1", "recommended_modes")
 
 #' Create default parameter dataframe for a gene
 #' 
 #' @param gene_name Character string, name of the gene
 #' @param error_msg Optional error message
-#' @return Dataframe with default parameters
+#' @return Dataframe with default parameters (gene as row, parameters as columns)
 create_default_gene_params <- function(gene_name, error_msg = NA) {
   gene_params <- data.frame(
-    c(gene_name, 1, NA, NA, NA, NA, NA, NA, 1, FALSE, error_msg),
-    row.names = GMM_PARAM_ROWS,
+    gene_name = gene_name,
+    n_components = 1,
+    mean0 = NA_real_,
+    mean1 = NA_real_,
+    variance0 = NA_real_,
+    variance1 = NA_real_,
+    weight0 = NA_real_,
+    weight1 = NA_real_,
+    recommended_modes = 1,
+    fit_successful = FALSE,
+    error_message = as.character(error_msg),
     stringsAsFactors = FALSE
   )
-  colnames(gene_params) <- gene_name
+  rownames(gene_params) <- gene_name
   return(gene_params)
 }
 
@@ -52,14 +63,14 @@ create_default_gene_params <- function(gene_name, error_msg = NA) {
 #' @return Dataframe with properly typed columns
 convert_param_types <- function(params) {
   # Convert logical columns
-  if ("fit_successful" %in% rownames(params)) {
-    params["fit_successful", ] <- as.logical(params["fit_successful", ])
+  if ("fit_successful" %in% colnames(params)) {
+    params$fit_successful <- as.logical(params$fit_successful)
   }
   
   # Convert numeric columns
-  for (row_name in NUMERIC_PARAM_ROWS) {
-    if (row_name %in% rownames(params)) {
-      params[row_name, ] <- as.numeric(params[row_name, ])
+  for (col_name in NUMERIC_PARAM_COLS) {
+    if (col_name %in% colnames(params)) {
+      params[[col_name]] <- as.numeric(params[[col_name]])
     }
   }
   
@@ -77,7 +88,7 @@ convert_param_types <- function(params) {
 #' @param debug Logical, whether to enable debug logging
 #' @param log_func Logging function for worker processes (defaults to message-based logging)
 #' @param iter Optional iteration number for logging
-#' @return List containing GMM parameters for the gene
+#' @return Dataframe with GMM parameters for the gene (1 row)
 process_single_gene_parameters <- function(X, gene_name, debug = FALSE, 
                                          log_func = function(..., iter = NULL) if(debug) message(...), 
                                          iter = NULL) {
@@ -93,7 +104,7 @@ process_single_gene_parameters <- function(X, gene_name, debug = FALSE,
     
     # Check for all NA values
     if (all(is.na(X))) {
-      gene_params["error_message", gene_name] <- "All values are NA"
+      gene_params$error_message <- "All values are NA"
       log_func("Gene", gene_name, "has all NA values", iter = iter)
       return(gene_params)
     }
@@ -104,14 +115,14 @@ process_single_gene_parameters <- function(X, gene_name, debug = FALSE,
     
     # Check for identical values
     if (all(X_transformed == X_transformed[1])) {
-      gene_params["error_message", gene_name] <- "All values are identical"
+      gene_params$error_message <- "All values are identical"
       log_func("Gene", gene_name, "has all identical values", iter = iter)
       return(gene_params)
     }
     
     # Check minimum data points
     if (sum(is.finite(X_transformed)) < 10) {
-      gene_params["error_message", gene_name] <- "Insufficient finite values (< 10)"
+      gene_params$error_message <- "Insufficient finite values (< 10)"
       log_func("Gene", gene_name, "has insufficient finite values (<10)", iter = iter)
       return(gene_params)
     }
@@ -120,14 +131,14 @@ process_single_gene_parameters <- function(X, gene_name, debug = FALSE,
     gmm <- Mclust(X_transformed, G = 1:2, modelNames = "V", verbose = FALSE)
     
     if (is.null(gmm)) {
-      gene_params["error_message", gene_name] <- "Mclust failed"
+      gene_params$error_message <- "Mclust failed"
       log_func("Mclust failed for gene", gene_name, iter = iter)
       return(gene_params)
     }
     
     # Extract basic parameters
-    gene_params["recommended_modes", gene_name] <- gmm$G
-    gene_params["fit_successful", gene_name] <- TRUE
+    gene_params$recommended_modes <- gmm$G
+    gene_params$fit_successful <- TRUE
     
     log_func("GMM fit successful for gene", gene_name, "- components:", gmm$G, iter = iter)
     
@@ -139,11 +150,11 @@ process_single_gene_parameters <- function(X, gene_name, debug = FALSE,
       }
     }
     
-    # Extract and sort parameters (flattened structure)
+    # Extract and sort parameters
     params <- gmm$parameters
     sort_idx <- order(params$mean)
     
-    gene_params["n_components", gene_name] <- length(params$mean)
+    gene_params$n_components <- length(params$mean)
     
     # Handle variances (can be list or vector)
     covs <- if (is.list(params$variance$sigmasq)) {
@@ -152,22 +163,22 @@ process_single_gene_parameters <- function(X, gene_name, debug = FALSE,
       params$variance$sigmasq
     }
     
-    # Store flattened parameters
+    # Store sorted parameters
     sorted_means <- params$mean[sort_idx]
     sorted_variances <- covs[sort_idx]
     sorted_weights <- params$pro[sort_idx]
     
-    gene_params["mean0", gene_name] <- sorted_means[1]
-    gene_params["mean1", gene_name] <- if(length(sorted_means) > 1) sorted_means[2] else NA
-    gene_params["variance0", gene_name] <- sorted_variances[1]
-    gene_params["variance1", gene_name] <- if(length(sorted_variances) > 1) sorted_variances[2] else NA
-    gene_params["weight0", gene_name] <- sorted_weights[1]
-    gene_params["weight1", gene_name] <- if(length(sorted_weights) > 1) sorted_weights[2] else NA
+    gene_params$mean0 <- sorted_means[1]
+    gene_params$mean1 <- if(length(sorted_means) > 1) sorted_means[2] else NA
+    gene_params$variance0 <- sorted_variances[1]
+    gene_params$variance1 <- if(length(sorted_variances) > 1) sorted_variances[2] else NA
+    gene_params$weight0 <- sorted_weights[1]
+    gene_params$weight1 <- if(length(sorted_weights) > 1) sorted_weights[2] else NA
     
     return(gene_params)
     
   }, error = function(e) {
-    gene_params["error_message", gene_name] <- as.character(e)
+    gene_params$error_message <- as.character(e)
     return(gene_params)
   })
 }
@@ -199,15 +210,13 @@ worker_log_message <- function(..., iter = NULL, log_file_path = NULL) {
   })
 }
 
-
-
 # ============================================================================
 # PARAMETER CACHING FUNCTIONS
 # ============================================================================
 
 #' Save GMM parameters to CSV file
 #' 
-#' @param gmm_params Dataframe with genes as columns and parameters as rows
+#' @param gmm_params Dataframe with genes as rows and parameters as columns
 #' @param batch_name Name of the batch (used in filename)
 #' @param cache_folder Path to cache directory
 save_gmm_parameters_to_csv <- function(gmm_params, batch_name, cache_folder) {
@@ -253,8 +262,8 @@ validate_cached_parameters <- function(cached_params, current_genes) {
     ))
   }
   
-  cached_genes <- intersect(current_genes, colnames(cached_params))
-  missing_genes <- setdiff(current_genes, colnames(cached_params))
+  cached_genes <- intersect(current_genes, cached_params$gene_name)
+  missing_genes <- setdiff(current_genes, cached_params$gene_name)
   
   return(list(
     valid = length(missing_genes) == 0,
@@ -273,7 +282,7 @@ merge_gmm_parameters <- function(cached_params, new_params, gene_order) {
   # Convert new_params list to dataframe if needed
   if (is.list(new_params) && !is.data.frame(new_params)) {
     if (length(new_params) > 0) {
-      new_params_df <- do.call(cbind, new_params)
+      new_params_df <- do.call(rbind, new_params)
     } else {
       new_params_df <- NULL
     }
@@ -286,54 +295,96 @@ merge_gmm_parameters <- function(cached_params, new_params, gene_order) {
     if (is.null(cached_params)) {
       return(NULL)
     }
-    return(cached_params[, intersect(gene_order, colnames(cached_params)), drop = FALSE])
+    return(cached_params[cached_params$gene_name %in% gene_order, , drop = FALSE])
   }
   
   # Handle case where we only have new params
   if (is.null(cached_params)) {
-    return(new_params_df[, intersect(gene_order, colnames(new_params_df)), drop = FALSE])
+    return(new_params_df[new_params_df$gene_name %in% gene_order, , drop = FALSE])
   }
   
   # Merge both cached and new parameters
-  all_genes <- union(colnames(cached_params), colnames(new_params_df))
+  # New parameters take precedence over cached ones
+  all_genes <- union(cached_params$gene_name, new_params_df$gene_name)
   
-  # Create template with all parameter rows using constant
-  merged_params <- data.frame(
-    matrix(NA, nrow = length(GMM_PARAM_ROWS), ncol = length(all_genes)),
-    row.names = GMM_PARAM_ROWS,
-    stringsAsFactors = FALSE
-  )
-  colnames(merged_params) <- all_genes
+  # Start with cached parameters
+  merged_params <- cached_params
   
-  # Copy cached parameters
-  cached_genes <- intersect(all_genes, colnames(cached_params))
-  if (length(cached_genes) > 0) {
-    merged_params[, cached_genes] <- cached_params[, cached_genes, drop = FALSE]
-  }
-  
-  # Copy new parameters (these take precedence over cached)
-  new_genes <- intersect(all_genes, colnames(new_params_df))
-  if (length(new_genes) > 0) {
-    merged_params[, new_genes] <- new_params_df[, new_genes, drop = FALSE]
+  # Update/add new parameters
+  for (gene in new_params_df$gene_name) {
+    if (gene %in% cached_params$gene_name) {
+      # Update existing gene
+      merged_params[merged_params$gene_name == gene, ] <- new_params_df[new_params_df$gene_name == gene, ]
+    } else {
+      # Add new gene
+      merged_params <- rbind(merged_params, new_params_df[new_params_df$gene_name == gene, ])
+    }
   }
   
   # Return only genes in the specified order
-  final_genes <- intersect(gene_order, colnames(merged_params))
-  return(merged_params[, final_genes, drop = FALSE])
+  final_genes <- intersect(gene_order, merged_params$gene_name)
+  result <- merged_params[merged_params$gene_name %in% final_genes, , drop = FALSE]
+  
+  # Reorder to match gene_order
+  result <- result[match(final_genes, result$gene_name), , drop = FALSE]
+  
+  return(result)
 }
-
-
 
 # ============================================================================
 # MAIN PARAMETER EXTRACTION FUNCTIONS
 # ============================================================================
+
+#' Extract GMM parameters using sequential processing (helper function)
+#' 
+#' @param data Matrix or data frame with samples as rows, genes as columns
+#' @param debug Logical, whether to enable debug logging
+#' @param log_file Path to log file for debug output
+#' @return Dataframe containing GMM parameters for each gene
+extract_gmm_parameters_sequential <- function(data, debug = FALSE, log_file = NULL) {
+  gene_names <- colnames(data)
+  n_genes <- length(gene_names)
+  
+  if (debug) {
+    message("DEBUG: Extracting GMM parameters for ", n_genes, " genes using sequential processing")
+  }
+  
+  start_time <- Sys.time()
+  gmm_params_list <- list()
+  
+  for (i in seq_along(gene_names)) {
+    gene_name <- gene_names[i]
+    X <- data[, gene_name]
+    
+    if (debug && i %% 100 == 0) {
+      message("DEBUG: Processing gene ", i, "/", n_genes, ": ", gene_name)
+    }
+    
+    gene_params <- process_single_gene_parameters(X, gene_name, debug = debug, iter = i)
+    gmm_params_list[[i]] <- gene_params
+  }
+  
+  # Combine all gene parameters into single dataframe
+  gmm_params <- do.call(rbind, gmm_params_list)
+  
+  end_time <- Sys.time()
+  processing_time <- round(difftime(end_time, start_time, units = "secs"), 1)
+  
+  if (debug) {
+    message("DEBUG: Sequential parameter extraction completed in ", processing_time, " seconds")
+    successful_fits <- sum(gmm_params$fit_successful)
+    message("DEBUG: Successfully fitted GMM for ", successful_fits, "/", n_genes, " genes")
+  }
+  
+  return(gmm_params)
+}
 
 #' Extract GMM parameters using parallel processing (helper function)
 #' 
 #' @param data Matrix or data frame with samples as rows, genes as columns
 #' @param debug Logical, whether to enable debug logging
 #' @param num_workers Number of workers to use for parallel processing
-#' @return List containing GMM parameters for each gene, or NULL if parallel processing fails
+#' @return Dataframe containing GMM parameters for each gene, or NULL if parallel processing fails
 extract_gmm_parameters_parallel <- function(data, debug = FALSE, log_file = NULL, num_workers = NULL) {
   # Create parallel-specific log file
   parallel_log_file <- if (!is.null(log_file)) {
@@ -353,7 +404,7 @@ extract_gmm_parameters_parallel <- function(data, debug = FALSE, log_file = NULL
     message("DEBUG: Extracting GMM parameters for ", n_genes, " genes using parallel processing")
   }
   
-  # Setup parallel processing - let foreach handle the details
+  # Setup parallel processing
   if (num_workers != 1) {
     available_cores <- detectCores()
     num_cores <- if (num_workers == -1) available_cores else min(num_workers, available_cores)
@@ -384,11 +435,11 @@ extract_gmm_parameters_parallel <- function(data, debug = FALSE, log_file = NULL
     foreach_result <- foreach(
       gene_name = gene_names,
       i = seq_along(gene_names),
-      .combine = 'c',
+      .combine = 'rbind',
       .multicombine = TRUE,
       .errorhandling = 'stop',
       .packages = c('mclust'),
-      .export = c('process_single_gene_parameters', 'worker_log_message')
+      .export = c('process_single_gene_parameters', 'worker_log_message', 'create_default_gene_params')
     ) %dopar% {
       tryCatch({
         # Log start of gene processing
@@ -405,18 +456,15 @@ extract_gmm_parameters_parallel <- function(data, debug = FALSE, log_file = NULL
                                                     log_func = worker_log_func, iter = i)
         
         # Log completion
-        if (gene_params["fit_successful", gene_name]) {
-          worker_log_message("Successfully processed gene ", gene_name, " - modes: ", gene_params["recommended_modes", gene_name], 
+        if (gene_params$fit_successful) {
+          worker_log_message("Successfully processed gene ", gene_name, " - modes: ", gene_params$recommended_modes, 
                            iter = i, log_file_path = parallel_log_file)
         } else {
-          worker_log_message("Failed to process gene ", gene_name, " - error: ", gene_params["error_message", gene_name], 
+          worker_log_message("Failed to process gene ", gene_name, " - error: ", gene_params$error_message, 
                            iter = i, log_file_path = parallel_log_file)
         }
         
-        # Return as a dataframe column
-        result <- list(gene_params)
-        names(result) <- gene_name
-        return(result)
+        return(gene_params)
         
       }, error = function(e) {
         # Log worker error
@@ -425,15 +473,12 @@ extract_gmm_parameters_parallel <- function(data, debug = FALSE, log_file = NULL
         
         # Create error result using helper function
         error_result <- create_default_gene_params(gene_name, paste("Parallel worker error:", e$message))
-        
-        result <- list(error_result)
-        names(result) <- gene_name
-        return(result)
+        return(error_result)
       })
     }
     
     if (debug) {
-      message("DEBUG: Parameter foreach completed, got ", length(foreach_result), " results")
+      message("DEBUG: Parameter foreach completed, got ", nrow(foreach_result), " results")
     }
     
     return(foreach_result)
@@ -459,66 +504,18 @@ extract_gmm_parameters_parallel <- function(data, debug = FALSE, log_file = NULL
   
   if (debug) {
     message("DEBUG: Parallel parameter extraction completed in ", processing_time, " seconds")
-    message("DEBUG: Got ", length(results_by_gene), " results for ", n_genes, " genes")
-    if (length(results_by_gene) > 0) {
-      message("DEBUG: Result names (first 10): ", paste(head(names(results_by_gene), 10), collapse = ", "))
-    }
+    message("DEBUG: Got ", nrow(results_by_gene), " results for ", n_genes, " genes")
   }
   
   # Check if we got results for all genes
-  actual_gene_names <- names(results_by_gene)
-  missing_genes <- setdiff(gene_names, actual_gene_names)
-  
-  if (length(missing_genes) > 0) {
+  if (nrow(results_by_gene) != n_genes) {
     if (debug) {
-      message("DEBUG: Missing ", length(missing_genes), " genes from parallel processing")
-      message("DEBUG: First 10 missing genes: ", paste(head(missing_genes, 10), collapse = ", "))
+      message("DEBUG: Missing ", n_genes - nrow(results_by_gene), " genes from parallel processing")
     }
     return(NULL)
   }
   
   return(results_by_gene)
-}
-
-#' Extract GMM parameters using sequential processing (helper function)
-#' 
-#' @param data Matrix or data frame with samples as rows, genes as columns
-#' @param debug Logical, whether to enable debug logging
-#' @param log_file Path to log file for debug output
-#' @return List containing GMM parameters for each gene
-extract_gmm_parameters_sequential <- function(data, debug = FALSE, log_file = NULL) {
-  gene_names <- colnames(data)
-  n_genes <- length(gene_names)
-  
-  if (debug) {
-    message("DEBUG: Extracting GMM parameters for ", n_genes, " genes using sequential processing")
-  }
-  
-  start_time <- Sys.time()
-  gmm_params <- list()
-  
-  for (i in seq_along(gene_names)) {
-    gene_name <- gene_names[i]
-    X <- data[, gene_name]
-    
-    if (debug && i %% 100 == 0) {
-      message("DEBUG: Processing gene ", i, "/", n_genes, ": ", gene_name)
-    }
-    
-    gene_params <- process_single_gene_parameters(X, gene_name, debug = debug, iter = i)
-    gmm_params[[gene_name]] <- gene_params
-  }
-  
-  end_time <- Sys.time()
-  processing_time <- round(difftime(end_time, start_time, units = "secs"), 1)
-  
-  if (debug) {
-    message("DEBUG: Sequential parameter extraction completed in ", processing_time, " seconds")
-    successful_fits <- sum(sapply(gmm_params, function(x) x["fit_successful", colnames(x)[1]]))
-    message("DEBUG: Successfully fitted GMM for ", successful_fits, "/", n_genes, " genes")
-  }
-  
-  return(gmm_params)
 }
 
 #' Extract GMM parameters from data with intelligent caching
@@ -534,7 +531,7 @@ extract_gmm_parameters_sequential <- function(data, debug = FALSE, log_file = NU
 #' @param log_file Path to log file for debug output
 #' @param num_workers Number of workers to use. If 1, uses sequential processing.
 #'                    If -1, uses all available cores. Otherwise uses minimum of specified number and available cores.
-#' @return Dataframe containing GMM parameters for each gene (genes as columns)
+#' @return Dataframe containing GMM parameters for each gene (genes as rows, parameters as columns)
 extract_gmm_parameters <- function(data, batch_name = NULL, cache_folder = NULL, debug = FALSE, log_file = NULL, num_workers = 1) {
   if (!is.data.frame(data) && !is.matrix(data)) {
     stop("Input 'data' must be a data frame or matrix.")
@@ -553,7 +550,7 @@ extract_gmm_parameters <- function(data, batch_name = NULL, cache_folder = NULL,
     cached_params <- load_gmm_parameters_from_csv(batch_name, cache_folder)
     
     if (!is.null(cached_params) && debug) {
-      message("DEBUG: Loaded cached parameters for ", ncol(cached_params), " genes")
+      message("DEBUG: Loaded cached parameters for ", nrow(cached_params), " genes")
     }
   }
   
@@ -564,7 +561,7 @@ extract_gmm_parameters <- function(data, batch_name = NULL, cache_folder = NULL,
     if (debug) {
       message("DEBUG: All ", length(current_genes), " genes found in cache")
     }
-    return(cached_params[, current_genes, drop = FALSE])
+    return(cached_params[cached_params$gene_name %in% current_genes, , drop = FALSE])
   }
   
   # Determine which genes need computation
@@ -612,7 +609,7 @@ extract_gmm_parameters <- function(data, batch_name = NULL, cache_folder = NULL,
     if (length(genes_to_compute) > 0) {
       save_gmm_parameters_to_csv(merged_params, batch_name, cache_folder)
       if (debug) {
-        message("DEBUG: Saved updated cache with ", ncol(merged_params), " genes")
+        message("DEBUG: Saved updated cache with ", nrow(merged_params), " genes")
       }
     }
   }
