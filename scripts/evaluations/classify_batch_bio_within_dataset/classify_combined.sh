@@ -11,7 +11,7 @@ SCRIPT_PATH="/scripts/metrics/classify.py"
 BASE_DATA_DIR="/data/combined_data"
 OUTPUT_DIR="/outputs/metrics"
 # Directory to store the cache files with MD5 hashes
-HASH_DIR="/data/.cache"
+HASH_DIR="/data/.cache/classify_hashes"
 
 # Create output and cache directories if they don't exist
 mkdir -p "$OUTPUT_DIR"
