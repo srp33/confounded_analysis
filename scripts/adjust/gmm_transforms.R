@@ -1,3 +1,4 @@
+# gmm_transforms.R
 # GMM Data Transformation Functions
 # This module provides functions for applying GMM-based transformations
 # using pre-extracted parameters from gmm_parameters.R

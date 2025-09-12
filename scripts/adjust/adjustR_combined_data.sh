@@ -81,7 +81,7 @@ run_adjust() {
 for adjuster in "${ADJUSTERS_SEQUENTIAL[@]}"; do
     printf "\n\033[0;32mAdjusting data with %s (sequentially)\033[0m\n" "$adjuster"
     # Find all subdirectories in DATA_DIR and loop through them.
-    for dataset in $(find "$DATA_DIR" -mindepth 1 -maxdepth 1 -type d -name 'gse1*' -exec basename {} \;); do
+    for dataset in $(find "$DATA_DIR" -mindepth 1 -maxdepth 1 -type d -name 'gse*' -exec basename {} \;); do
         run_adjust "$adjuster" "$dataset"
     done
 done

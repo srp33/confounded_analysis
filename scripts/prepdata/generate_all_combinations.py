@@ -208,6 +208,7 @@ def find_compatible_datasets(data_dir="/data/gold", debug=False) -> Dict[str, Da
             else:
                 if debug:
                     print_now(f"  - ❌ Skipping {dataset_name}: missing 'meta_er_status' column")
+                    print_now(f"    Available metadata columns: {', '.join([col for col in df_header.columns if col.startswith('meta_')])}")
         except Exception as e:
             if debug:
                 print_now(f"  - ❌ Skipping {dataset_name}: error reading file -> {e}")

@@ -1,8 +1,8 @@
+# gmm_parameters.R
 # GMM Parameter Extraction and Caching Infrastructure
 # This module provides functions to extract, save, and load GMM parameters
 # to eliminate redundant model fitting across different adjustment strategies.
-# 
-# NEW STRUCTURE: Genes as rows, parameters as columns (more intuitive)
+
 
 suppressPackageStartupMessages({
   library(mclust)
@@ -413,7 +413,17 @@ extract_gmm_parameters_parallel <- function(data, debug = FALSE, log_file = NULL
       message("Setting up parallel processing with ", num_cores, " cores")
     }
     
-    cl <- makeCluster(num_cores)
+    if (.Platform$OS.type == "unix") {
+      cl <- tryCatch({
+        parallel::makeForkCluster(num_cores)
+      }, error = function(e) {
+        worker_log_message("Fork cluster failed, using PSOCK:", e$message, log_file_path = log_file)
+        parallel::makePSOCKcluster(num_cores)
+      })
+    } else {
+      cl <- parallel::makePSOCKcluster(num_cores)
+    }
+    
     registerDoParallel(cl)
     on.exit(stopCluster(cl), add = TRUE)
   } else {

@@ -137,7 +137,17 @@ bimodal_normalize <- function(data, gmm_parameters=NULL, batch_name=NULL, cache_
     available_cores <- detectCores()
     num_cores <- if (num_workers == -1) available_cores else min(num_workers, available_cores)
     
-    cl <- makeCluster(num_cores)
+    if (.Platform$OS.type == "unix") {
+      cl <- tryCatch({
+        parallel::makeForkCluster(num_cores)
+      }, error = function(e) {
+        log_message(debug = debug, "Fork cluster failed, using PSOCK:", e$message)
+        parallel::makePSOCKcluster(num_cores)
+      })
+    } else {
+      cl <- parallel::makePSOCKcluster(num_cores)
+    }
+    
     registerDoParallel(cl)
     on.exit(stopCluster(cl), add = TRUE)
     

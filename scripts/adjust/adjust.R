@@ -25,6 +25,26 @@ suppressPackageStartupMessages({
 
 source("scripts/adjust/gmm_adjust.R")
 
+get_allocated_cores <- function() {
+  # Check SLURM-provided environment variables first
+  slurm_cpus_per_task <- as.integer(Sys.getenv("SLURM_CPUS_PER_TASK", unset = NA))
+  slurm_ntasks <- as.integer(Sys.getenv("SLURM_NTASKS", unset = NA))
+  slurm_cpus_on_node <- as.integer(Sys.getenv("SLURM_CPUS_ON_NODE", unset = NA))
+
+  if (!is.na(slurm_cpus_per_task) && slurm_cpus_per_task > 0) {
+    return(slurm_cpus_per_task)
+  }
+  if (!is.na(slurm_ntasks) && slurm_ntasks > 0) {
+    return(slurm_ntasks)
+  }
+  if (!is.na(slurm_cpus_on_node) && slurm_cpus_on_node > 0) {
+    return(slurm_cpus_on_node)
+  }
+
+  # Fall back to full machine
+  return(parallel::detectCores(logical = TRUE))
+}
+
 # Helper Functions ------------------------------------------------------------
 
 transpose_essential <- function(gene_df) {
@@ -629,7 +649,7 @@ adjust_gmm_common <- function(matrix_, batch, adjustment_strategy, strategy_name
       debug = debug, 
       log_file = "/outputs/parallel/bimodal_parallel.log", 
       adjustment_strategy = adjustment_strategy, 
-      num_workers = -1
+      num_workers = get_allocated_cores()
     )
     adjusted_genes_df <- result$bimodal_data
     
@@ -648,7 +668,7 @@ adjust_gmm_common <- function(matrix_, batch, adjustment_strategy, strategy_name
       debug = debug, 
       adjustment_strategy = adjustment_strategy, 
       log_file = "/outputs/parallel/gmm_adjust_parallel.log", 
-      num_workers = -1
+      num_workers = get_allocated_cores()
     )
     
     if (!is.null(meta_file)) {
