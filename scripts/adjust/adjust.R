@@ -713,6 +713,44 @@ adjust_gmm_npn_unit_std <- function(matrix_, batch, debug = FALSE, meta_file = N
   return(adjust_gmm_common(matrix_, batch, "npn_unit_std", "NPN, Unit Std", debug, meta_file))
 }
 
+adjust_ranked <- function(matrix_, debug = FALSE) {
+  #' Normalize sample-wise by ranking the genes within the sample.
+  message("Adjusting with ranked.")
+  # Data has genes as rows, so we need to rank along the rows.
+  ranked = apply(matrix_, 1, rank, ties.method = "average")
+
+  return(ranked /  max(ranked, na.rm = TRUE))
+}
+
+adjust_ranked_twice <- function(matrix_, debug = FALSE) {
+  ranked = adjust_ranked(matrix_, debug)
+  message("Adjusting with ranked twice.")
+
+  # Next, we rank by sample. This tells us something about whether the gene is up or down regulated in the sample.
+  ranked2 = apply(ranked2, 2, rank, ties.method = "average")
+  return(ranked2 / max(ranked2, na.rm = TRUE))
+}
+
+adjust_ranked_with_batch_info <- function(matrix_, batch, debug = FALSE) {
+  #' Normalize sample-wise by ranking the genes within the sample, and then by batch.
+  #' @param matrix_ The matrix to adjust (features x samples).
+  #' @param batch The batch variable vector.
+  #' @param debug Logical flag for debug output.
+  #' @return The adjusted matrix (features x samples).
+  
+  message("Adjusting with ranked with batch info.")
+  ranked = adjust_ranked(matrix_, debug)
+  
+  batch_levels <- unique(batch)
+  ranked2 <- matrix(NA, nrow = nrow(matrix_), ncol = ncol(matrix_))
+  for (b in batch_levels) {
+    # For each batch, we rank by sample.
+    batch_ranked = apply(ranked[, batch == b], 2, rank, ties.method = "average")
+    ranked2[, batch == b] = batch_ranked / max(batch_ranked, na.rm = TRUE)
+  }
+  return(ranked2 / max(ranked2, na.rm = TRUE))
+}
+
 
 # Main Orchestration Function -------------------------------------------------
 
@@ -819,6 +857,9 @@ batch_adjust_tidy <- function(df, input_file, adjuster, batch_col, column, full_
     "gmm_scale_separate" = adjust_gmm_scale_separate(mat_genes, batch, debug=debug, meta_file=meta_file),
     "gmm_npn" = adjust_gmm_npn(mat_genes, batch, debug=debug, meta_file=meta_file),
     "gmm_npn_unit_std" = adjust_gmm_npn_unit_std(mat_genes, batch, debug=debug, meta_file=meta_file),
+    "ranked1" = adjust_ranked(mat_genes, debug = debug),
+    "ranked2" = adjust_ranked_twice(mat_genes, debug = debug),
+    "ranked_batch" = adjust_ranked_with_batch_info(mat_genes, batch, debug = debug),
     "min_mean" = adjust_min_mean(mat_genes, batch, debug = debug),
     "combat" = adjust_combat(mat_genes, batch, design, data_are_counts, debug = debug),
     "limma" = adjust_limma(mat_genes, batch, design, debug = debug),
