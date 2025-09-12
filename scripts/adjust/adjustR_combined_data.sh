@@ -17,16 +17,19 @@ DATA_DIR="/data/combined_data"
 
 # Define adjusters to run in PARALLEL (all dataset jobs for an adjuster run at once)
 ADJUSTERS_PARALLEL=(
-    "min_mean"
-    "npn"
+    # "min_mean"
+    # "npn"
+    "ranked1"
+    "ranked2"
+    "ranked_batch"
 )
 
 # Define adjusters to run SEQUENTIALLY (one dataset job at a time for each adjuster)
 ADJUSTERS_SEQUENTIAL=(
     # "fastMNN"
-    "gmm"
-    # "gmm_scale_separate"
-    # "gmm_npn"
+    # "gmm"
+    "gmm_scale_separate"
+    "gmm_npn"
 )
 
 # --- Helper Function ---
@@ -81,7 +84,7 @@ run_adjust() {
 for adjuster in "${ADJUSTERS_SEQUENTIAL[@]}"; do
     printf "\n\033[0;32mAdjusting data with %s (sequentially)\033[0m\n" "$adjuster"
     # Find all subdirectories in DATA_DIR and loop through them.
-    for dataset in $(find "$DATA_DIR" -mindepth 1 -maxdepth 1 -type d -name 'gse1*' -exec basename {} \;); do
+    for dataset in $(find "$DATA_DIR" -mindepth 1 -maxdepth 1 -type d -name 'gse*' -exec basename {} \;); do
         run_adjust "$adjuster" "$dataset"
     done
 done

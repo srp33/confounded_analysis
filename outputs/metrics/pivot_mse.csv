@@ -1,4 +1,0 @@
-dataset,autoclass,combat,combat_target,fastMNN,harmony,liger,limma,limma_target,min_mean,quantile,seurat_integration,seurat_scaling,unadjusted,wasserstein
-gse20194,0.126,0.003,0.002,0.479,0.344,0.105,0.003,0.003,0.005,0.346,0.284,1.07,0.0,2.579
-gse24080,0.302,0.001,0.001,0.514,0.327,0.08,0.001,0.001,0.004,0.328,0.188,1.168,0.0,1.58
-gse49711,3.618,0.425,0.446,282.35,16.19,266.36,0.201,0.201,0.468,16.311,37.328,280.953,0.0,5.887

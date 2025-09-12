@@ -254,6 +254,16 @@ def process_dataset(raw_folder_path: Path, dataset_id: str, output_base_dir: Pat
         meta_df = meta_df.set_index(sample_id_col)
         # Prefix columns with 'meta_'
         meta_df = meta_df.add_prefix('meta_')
+
+        # Standardize er status column name
+        other_er_columns = ['meta_er_ihc', 'meta_er', 'meta_er_consensus', 'meta_er_status_by_ihc', 'meta_esr1_status']
+        for col in meta_df.columns.tolist():
+            if col.lower() in other_er_columns:
+                meta_df = meta_df.rename(columns={col: 'meta_er_status'})
+
+        if "meta_er_status" not in meta_df.columns.tolist():
+            print(f"   ❌ ER status column not found. ")
+            print(f"DEBUG: Available columns: {meta_df.columns.tolist()}")
         
         # 4. Align and combine (the final and most critical validation)
         common_samples = expr_df.index.intersection(meta_df.index)

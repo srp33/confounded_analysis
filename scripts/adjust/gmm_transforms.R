@@ -1,3 +1,4 @@
+# gmm_transforms.R
 # GMM Data Transformation Functions
 # This module provides functions for applying GMM-based transformations
 # using pre-extracted parameters from gmm_parameters.R
@@ -154,44 +155,38 @@ unimodal_normalize <- function(data, use_parallel = NULL, debug = FALSE, num_wor
     }
     
     # Setup parallel processing
-    cl <- tryCatch({
-      setup_parallel(debug, num_workers)
+    available_cores <- detectCores()
+    num_cores <- if (num_workers == -1) available_cores else min(num_workers, available_cores)
+    
+    cl <- makeCluster(num_cores)
+    registerDoParallel(cl)
+    on.exit(stopCluster(cl), add = TRUE)
+    
+    # Export function to workers
+    clusterExport(cl, c("process_unimodal_gene"), envir = .GlobalEnv)
+      
+    # Process genes in parallel
+    results_list <- tryCatch({
+      foreach(
+        gene_name = gene_names,
+        .combine = 'cbind',
+        .multicombine = TRUE,
+        .errorhandling = 'stop'
+      ) %dopar% {
+        X <- data[, gene_name]
+        process_unimodal_gene(X, gene_name)
+      }
     }, error = function(e) {
       if (debug) {
-        message("DEBUG: Failed to setup parallel processing, falling back to sequential: ", e$message)
+        message("Parallel unimodal processing failed: ", e$message)
       }
       return(NULL)
     })
     
-    if (!is.null(cl)) {
-      on.exit(stopCluster(cl), add = TRUE)
-      
-      # Export function to workers
-      clusterExport(cl, c("process_unimodal_gene"), envir = .GlobalEnv)
-      
-      # Process genes in parallel
-      results_list <- tryCatch({
-        foreach(
-          gene_name = gene_names,
-          .combine = 'cbind',
-          .multicombine = TRUE,
-          .errorhandling = 'stop'
-        ) %dopar% {
-          X <- data[, gene_name]
-          process_unimodal_gene(X, gene_name)
-        }
-      }, error = function(e) {
-        if (debug) {
-          message("DEBUG: Parallel unimodal processing failed: ", e$message)
-        }
-        return(NULL)
-      })
-      
-      if (!is.null(results_list)) {
-        colnames(results_list) <- gene_names
-        rownames(results_list) <- rownames(data)
-        return(results_list)
-      }
+    if (!is.null(results_list)) {
+      colnames(results_list) <- gene_names
+      rownames(results_list) <- rownames(data)
+      return(results_list)
     }
   }
   
@@ -212,101 +207,6 @@ unimodal_normalize <- function(data, use_parallel = NULL, debug = FALSE, num_wor
   return(unimodal_data)
 }
 
-# ============================================================================
-# BOUNDARY CALCULATION UTILITIES
-# ============================================================================
-
-#' Calculate boundary coefficients for bimodal GMM
-#' 
-#' @param m0 Mean of first component
-#' @param m1 Mean of second component  
-#' @param v0 Variance of first component
-#' @param v1 Variance of second component
-#' @param w0 Weight of first component
-#' @param w1 Weight of second component
-#' @return List with coefficients A, B, C
-calculate_boundary_coefficients <- function(m0, m1, v0, v1, w0, w1) {
-  A <- 1 / (2 * v0) - 1 / (2 * v1)
-  B <- m1 / v1 - m0 / v0
-  C <- (m0^2 / (2 * v0)) - (m1^2 / (2 * v1)) - log(w0 * sqrt(v1) / (w1 * sqrt(v0)))
-  
-  return(list(A = A, B = B, C = C))
-}
-
-#' Calculate decision boundary from coefficients
-#' 
-#' @param A Quadratic coefficient
-#' @param B Linear coefficient
-#' @param C Constant coefficient
-#' @param m0 Mean of first component
-#' @param m1 Mean of second component
-#' @param default_boundary Default boundary if calculation fails
-#' @return List with boundary calculation results
-calculate_decision_boundary <- function(A, B, C, m0, m1, default_boundary) {
-  res = list(
-    variances_equal = abs(A) < 1e-9,
-    numerically_unstable = FALSE,
-    boundary = default_boundary,
-    discriminant = NULL,
-    discriminant_negative = FALSE,
-    boundaries = NULL,
-    no_valid_boundary = FALSE
-  )
-
-  if (res$variances_equal) {
-    if (abs(B) <= 1e-9) {
-      res$numerically_unstable <- TRUE
-    } else {
-      res$boundary <- -C / B
-    }
-  } else {
-    res$discriminant <- B^2 - 4 * A * C
-    if (res$discriminant < 0) {
-      res$discriminant_negative <- TRUE
-    } else {
-      boundaries <- (-B + c(-1, 1) * sqrt(res$discriminant)) / (2 * A)
-      res$boundaries <- boundaries
-      valid_boundaries <- boundaries[boundaries > m0 & boundaries < m1]
-      if (length(valid_boundaries) == 0) {
-        res$no_valid_boundary <- TRUE
-      } else {
-        res$boundary <- valid_boundaries[1]
-      }
-    }
-  }
-  return(res)
-}
-
-#' Log boundary calculation results
-#' 
-#' @param log_file Path to log file
-#' @param iter Iteration number
-#' @param boundary_result Result from calculate_decision_boundary
-#' @param coeffs Boundary coefficients
-#' @param m0 Mean of first component
-#' @param m1 Mean of second component
-#' @param debug Whether to enable debug logging
-log_boundary_result <- function(log_file, iter, boundary_result, coeffs, m0, m1, debug) {
-  if (!debug) return()
-  
-  A = round(coeffs$A, 3)
-  B = round(coeffs$B, 3)
-  C = round(coeffs$C, 3)
-  boundary = round(boundary_result$boundary, 3)
-  m0 = round(m0, 3)
-  m1 = round(m1, 3)
-
-  if(boundary_result$numerically_unstable) {
-    worker_log_message(sprintf("A and B too small for numeric stability. Using mean: %f. A=%f, B=%f.", boundary, coeffs$A, coeffs$B), iter=iter, log_file_path=log_file)
-  } else if(boundary_result$discriminant_negative) {
-    worker_log_message("Discriminant negative: ", round(boundary_result$discriminant, 3), " Using mean: ", boundary, " Boundary equation coefficients: A=", A, ", B=", B, ", C=", C, iter=iter, log_file_path=log_file)
-  } else if(boundary_result$no_valid_boundary) {
-    worker_log_message(sprintf("No valid boundary found between means. Using mean of means: mm=%f. m0=%f, m1=%f. b0=%f, b1=%f.", boundary, m0, m1, boundary_result$boundaries[1], boundary_result$boundaries[2]), iter=iter, log_file_path=log_file)
-  } else {
-    worker_log_message(sprintf("Valid boundary calculated using GMM at: %f, m0: %f, m1: %f.", boundary, m0, m1), iter=iter, log_file_path=log_file)
-  }
-}
-
 # ==========================================================================
 # ADJUSTMENT STRATEGY IMPLEMENTATIONS
 # ============================================================================
@@ -315,12 +215,14 @@ log_boundary_result <- function(log_file, iter, boundary_result, coeffs, m0, m1,
 #' 
 #' @param X Input data vector
 #' @param gene_params GMM parameters for the gene
-#' @param strategy Adjustment strategy ("simple", "boundary", "npn")
+#' @param strategy Adjustment strategy ("simple", "npn")
 #' @param debug Whether to enable debug logging
 #' @param log_file Path to log file
 #' @return Transformed data vector
 apply_adjustment_strategy <- function(X, gene_params, strategy = "simple", debug = FALSE, log_file = NULL) {
-  if (!gene_params$fit_successful || gene_params$n_components < 2) {
+  fit_successful <- as.logical(gene_params$fit_successful)
+  n_components <- as.numeric(gene_params$n_components)
+  if (is.na(fit_successful) || !fit_successful || n_components < 2) {
     # Fallback to unimodal
     ranks <- rank(X, na.last = "keep", ties.method = "average")
     quantiles <- ranks / (sum(!is.na(X)) + 1)
@@ -329,12 +231,12 @@ apply_adjustment_strategy <- function(X, gene_params, strategy = "simple", debug
   }
   
   # Extract parameters
-  m0 <- gene_params$means[1]
-  m1 <- gene_params$means[2]
-  v0 <- gene_params$variances[1]
-  v1 <- gene_params$variances[2]
-  w0 <- gene_params$weights[1]
-  w1 <- gene_params$weights[2]
+  m0 <- as.numeric(gene_params$mean0)
+  m1 <- as.numeric(gene_params$mean1)
+  v0 <- as.numeric(gene_params$variance0)
+  v1 <- as.numeric(gene_params$variance1)
+  w0 <- as.numeric(gene_params$weight0)
+  w1 <- as.numeric(gene_params$weight1)
   
   # Apply log-shift transformation (same as in parameter extraction)
   min_val <- min(X, na.rm = TRUE)
@@ -364,42 +266,6 @@ apply_adjustment_strategy <- function(X, gene_params, strategy = "simple", debug
       variances = c(new_var1, new_var2),
       weights = c(w0, w1)
     )
-    
-    return(result)
-    
-  } else if (strategy == "boundary") {
-    # Boundary-based transformation
-    coeffs <- gene_params$boundary_coefficients
-    A <- coeffs$A
-    B <- coeffs$B
-    C <- coeffs$C
-    
-    default_boundary <- (m0 + m1) / 2
-    boundary_result <- calculate_decision_boundary(A, B, C, m0, m1, default_boundary)
-    
-    if (debug) {
-      log_boundary_result(log_file, NULL, boundary_result, coeffs, m0, m1, debug)
-    }
-    
-    boundary <- boundary_result$boundary
-    
-    # Classify points and transform
-    low_group <- X_transformed <= boundary
-    high_group <- X_transformed > boundary
-    
-    result <- numeric(length(X_transformed))
-    
-    if (sum(low_group, na.rm = TRUE) > 0) {
-      low_ranks <- rank(X_transformed[low_group], na.last = "keep", ties.method = "average")
-      low_quantiles <- low_ranks / (sum(!is.na(X_transformed[low_group])) + 1)
-      result[low_group] <- qnorm(low_quantiles * 0.5)  # Map to lower half of normal
-    }
-    
-    if (sum(high_group, na.rm = TRUE) > 0) {
-      high_ranks <- rank(X_transformed[high_group], na.last = "keep", ties.method = "average")
-      high_quantiles <- high_ranks / (sum(!is.na(X_transformed[high_group])) + 1)
-      result[high_group] <- qnorm(0.5 + high_quantiles * 0.5)  # Map to upper half of normal
-    }
     
     return(result)
     
@@ -506,26 +372,20 @@ apply_gmm_adjustment <- function(data, gmm_params, strategy = "simple", debug = 
   
   if (use_parallel && n_genes > 1) {  
     # Setup parallel processing
-    cl <- tryCatch({
-      setup_parallel(debug, num_workers)
-    }, error = function(e) {
-      if (debug) {
-        message("DEBUG: Failed to setup parallel processing, falling back to sequential: ", e$message)
-      }
-      return(NULL)
-    })
+    available_cores <- detectCores()
+    num_cores <- if (num_workers == -1) available_cores else min(num_workers, available_cores)
     
-    if (!is.null(cl)) {
-      on.exit(stopCluster(cl), add = TRUE)
-      
-      # Export functions to workers
-      clusterExport(cl, c("process_gmm_adjustment_gene", "apply_adjustment_strategy", 
-                         "inverse_cdf_gmm_R", "bimodal_npn", "calculate_boundary_coefficients",
-                         "calculate_decision_boundary", "log_boundary_result", "worker_log_message"), 
-                   envir = .GlobalEnv)
+    cl <- makeCluster(num_cores)
+    registerDoParallel(cl)
+    on.exit(stopCluster(cl), add = TRUE)
+    
+    # Export functions to workers
+    clusterExport(cl, c("process_gmm_adjustment_gene", "apply_adjustment_strategy", 
+                       "inverse_cdf_gmm_R", "bimodal_npn", "worker_log_message"), 
+                 envir = .GlobalEnv)
 
       if (debug) {
-        message("DEBUG: Starting parallel gmm adjustment")
+        message("Starting parallel gmm adjustment")
       }
       
       # Process genes in parallel
@@ -543,7 +403,7 @@ apply_gmm_adjustment <- function(data, gmm_params, strategy = "simple", debug = 
         }
       }, error = function(e) {
         if (debug) {
-          message("DEBUG: Parallel GMM adjustment failed: ", e$message)
+          message("Parallel GMM adjustment failed: ", e$message)
         }
         return(NULL)
       })
@@ -553,7 +413,6 @@ apply_gmm_adjustment <- function(data, gmm_params, strategy = "simple", debug = 
         rownames(results_list) <- rownames(data)
         return(results_list)
       }
-    }
   }
   
   # Sequential processing (fallback or requested)

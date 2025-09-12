@@ -24,28 +24,28 @@ mkdir -p "$HASH_DIR"
 
 # Define datasets and their corresponding true columns for global prediction
 declare -A TASKS
-TASKS["gse20194"]="meta_er_status meta_her2_status meta_pr_status"
+# TASKS["gse20194"]="meta_er_status meta_her2_status meta_pr_status"
 TASKS["gse24080"]="meta_cytogenetic_abnormality"
 TASKS["gse49711"]="meta_INSS_Stage_Split_3_4"
 
 TASKS["gse_20194_62944"]="meta_er_status"
 
-TASKS["2_dims_no_bio_no_batch"]="meta_bio"
-TASKS["2_dims_no_bio_yes_batch"]="meta_bio"
-TASKS["2_dims_yes_bio_no_batch"]="meta_bio"
-TASKS["2_dims_yes_bio_yes_batch"]="meta_bio"
+# TASKS["2_dims_no_bio_no_batch"]="meta_bio"
+# TASKS["2_dims_no_bio_yes_batch"]="meta_bio"
+# TASKS["2_dims_yes_bio_no_batch"]="meta_bio"
+# TASKS["2_dims_yes_bio_yes_batch"]="meta_bio"
 
-TASKS["400_dims_no_bio_no_batch"]="meta_bio"
-TASKS["400_dims_no_bio_yes_batch"]="meta_bio"
-TASKS["400_dims_yes_bio_no_batch"]="meta_bio"
-TASKS["400_dims_yes_bio_yes_batch"]="meta_bio"
+# TASKS["400_dims_no_bio_no_batch"]="meta_bio"
+# TASKS["400_dims_no_bio_yes_batch"]="meta_bio"
+# TASKS["400_dims_yes_bio_no_batch"]="meta_bio"
+# TASKS["400_dims_yes_bio_yes_batch"]="meta_bio"
 
-TASKS["1000_dims_no_bio_no_batch"]="meta_bio"
-TASKS["1000_dims_no_bio_yes_batch"]="meta_bio"
-TASKS["1000_dims_yes_bio_no_batch"]="meta_bio"
-TASKS["1000_dims_yes_bio_yes_batch"]="meta_bio"
+# TASKS["1000_dims_no_bio_no_batch"]="meta_bio"
+# TASKS["1000_dims_no_bio_yes_batch"]="meta_bio"
+# TASKS["1000_dims_yes_bio_no_batch"]="meta_bio"
+# TASKS["1000_dims_yes_bio_yes_batch"]="meta_bio"
 
-TASKS["structured_synthetic"]="meta_bio"
+# TASKS["structured_synthetic"]="meta_bio"
 
 # Define batch columns for each dataset
 declare -A BATCH_COLS

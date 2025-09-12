@@ -22,16 +22,19 @@ ADJUSTERS_PARALLEL=(
     # "combat"
     # "seurat_scaling"
     # "seurat_integration"
-    "npn"
+    # "npn"
+    "ranked1"
+    "ranked2"
+    "ranked_batch"
 )
 
 # Define adjusters to run SEQUENTIALLY (one dataset job at a time for each adjuster)
 ADJUSTERS_SEQUENTIAL=(
-    "fastMNN"
+    # "fastMNN"
     # "liger"
-    "gmm"
-    "gmm_scale_separate"
-    "gmm_npn"
+    # "gmm"
+    # "gmm_scale_separate"
+    # "gmm_npn"
 )
 
 ADJUSTERS_TARGET=(
@@ -46,8 +49,6 @@ DATASETS=(
     "gse49711"
     "gse20194"
     "gse24080"
-
-    "gse_20194_62944"
 
 
     # "2_dims_no_bio_no_batch"
@@ -74,7 +75,7 @@ DATASETS=(
 # Define batch columns for each dataset using an associative array
 declare -A BATCH_COLS
 BATCH_COLS["gse49711"]="meta_Sex"
-BATCH_COLS["gse20194"]="meta_batch"
+BATCH_COLS["gse20194"]="meta_Dataset_ID"
 BATCH_COLS["gse24080"]="meta_batch"
 BATCH_COLS["special_distinct"]="batch"
 BATCH_COLS["gse_20194_62944"]="meta_source"
