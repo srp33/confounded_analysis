@@ -713,22 +713,27 @@ adjust_gmm_npn_unit_std <- function(matrix_, batch, debug = FALSE, meta_file = N
   return(adjust_gmm_common(matrix_, batch, "npn_unit_std", "NPN, Unit Std", debug, meta_file))
 }
 
+
+rank_normalized <- function(matrix_, dim) {
+  if (dim < 1 || dim > 2) {
+    stop("Invalid dimension. Must be 1 for rows or 2 for columns.")
+  }
+  ranked = apply(matrix_, dim, rank, ties.method = "average")
+  return(ranked / max(ranked, na.rm = TRUE))
+}
+
 adjust_ranked <- function(matrix_, debug = FALSE) {
   #' Normalize sample-wise by ranking the genes within the sample.
   message("Adjusting with ranked.")
   # Data has genes as rows, so we need to rank along the rows.
-  ranked = apply(matrix_, 1, rank, ties.method = "average")
-
-  return(ranked /  max(ranked, na.rm = TRUE))
+  return(t(rank_normalized(matrix_, 1)))
 }
 
 adjust_ranked_twice <- function(matrix_, debug = FALSE) {
-  ranked = adjust_ranked(matrix_, debug)
   message("Adjusting with ranked twice.")
-
-  # Next, we rank by sample. This tells us something about whether the gene is up or down regulated in the sample.
-  ranked2 = apply(ranked2, 2, rank, ties.method = "average")
-  return(ranked2 / max(ranked2, na.rm = TRUE))
+  #' Normalize sample-wise by ranking the genes within the sample.
+  # Next, rank by sample. This tells us something about whether the gene is up or down regulated in the sample.
+  return(t(rank_normalized(rank_normalized(matrix_, 1), 2)))
 }
 
 adjust_ranked_with_batch_info <- function(matrix_, batch, debug = FALSE) {
@@ -739,16 +744,47 @@ adjust_ranked_with_batch_info <- function(matrix_, batch, debug = FALSE) {
   #' @return The adjusted matrix (features x samples).
   
   message("Adjusting with ranked with batch info.")
-  ranked = adjust_ranked(matrix_, debug)
+  ranked = rank_normalized(matrix_, 1)
   
   batch_levels <- unique(batch)
   ranked2 <- matrix(NA, nrow = nrow(matrix_), ncol = ncol(matrix_))
+  
   for (b in batch_levels) {
     # For each batch, we rank by sample.
-    batch_ranked = apply(ranked[, batch == b], 2, rank, ties.method = "average")
-    ranked2[, batch == b] = batch_ranked / max(batch_ranked, na.rm = TRUE)
+    batch_indices <- which(batch == b)
+    batch_data <- ranked[, batch_indices, drop = FALSE]
+    
+    if (debug) {
+      message("DEBUG: Processing batch '", b, "' with ", length(batch_indices), " samples")
+      message("DEBUG: batch_data dimensions: ", nrow(batch_data), " x ", ncol(batch_data))
+    }
+    
+    # Only apply ranking if there's more than one sample in the batch
+    if (ncol(batch_data) > 1) {
+      batch_ranked <- rank_normalized(batch_data, 2)
+      if (debug) {
+        message("DEBUG: batch_ranked dimensions: ", nrow(batch_ranked), " x ", ncol(batch_ranked))
+      }
+      ranked2[, batch_indices] <- batch_ranked
+    } else {
+      # For single-sample batches, just use the original ranked values
+      ranked2[, batch_indices] <- batch_data
+    }
   }
-  return(ranked2 / max(ranked2, na.rm = TRUE))
+  
+  # Handle any remaining NA values
+  if (any(is.na(ranked2))) {
+    message("WARNING: Found NA values in ranked2 matrix. Replacing with original ranked values.")
+    ranked2[is.na(ranked2)] <- ranked[is.na(ranked2)]
+  }
+  
+  max_val <- max(ranked2, na.rm = TRUE)
+  if (max_val == 0) {
+    message("WARNING: Maximum value in ranked2 is 0. Using 1 as denominator.")
+    max_val <- 1
+  }
+  
+  return(t(ranked2 / max_val))
 }
 
 
@@ -792,6 +828,8 @@ batch_adjust_tidy <- function(df, input_file, adjuster, batch_col, column, full_
     } else {
       message("Detected unnamed first column with sample IDs - setting as row names")
     }
+    # Convert to data.frame to avoid tibble deprecation warning
+    df <- as.data.frame(df)
     rownames(df) <- df[[1]]
     df <- df[, -1]
   }
@@ -830,6 +868,14 @@ batch_adjust_tidy <- function(df, input_file, adjuster, batch_col, column, full_
   if (file.exists(transposed_cache_file)) {
     message("Loading cached transposed data from '", transposed_cache_file, "'")
     mat_genes <- as.matrix(read.csv(transposed_cache_file, row.names = 1, check.names = FALSE))
+    
+    # Verify cached data matches current gene columns
+    if (ncol(mat_genes) != nrow(genes) || !all(colnames(mat_genes) == rownames(genes))) {
+      message("WARNING: Cached transposed data doesn't match current gene data. Regenerating...")
+      mat_genes <- transpose_essential(genes)
+      message("Updating cached transposed data to '", transposed_cache_file, "'")
+      write.csv(mat_genes, transposed_cache_file, row.names = TRUE, quote = FALSE)
+    }
   } else {
     message("3. Transposing gene data for adjustment (features x samples).")
     mat_genes <- transpose_essential(genes)
@@ -879,6 +925,21 @@ batch_adjust_tidy <- function(df, input_file, adjuster, batch_col, column, full_
   message("5. Reconstructing the tidy data frame.")
   adjusted_df <- as.data.frame(t(adjusted_matrix))
 
+  # Ensure column names match - handle dimension mismatches
+  if (ncol(adjusted_df) != length(gene_col_names)) {
+    message("WARNING: Dimension mismatch between adjusted data (", ncol(adjusted_df), " cols) and original gene columns (", length(gene_col_names), " cols)")
+    if (ncol(adjusted_df) < length(gene_col_names)) {
+      # Use only the available columns
+      gene_col_names <- gene_col_names[1:ncol(adjusted_df)]
+      message("Using first ", ncol(adjusted_df), " gene column names")
+    } else {
+      # Pad with generic names if needed
+      extra_names <- paste0("Gene_", (length(gene_col_names) + 1):ncol(adjusted_df))
+      gene_col_names <- c(gene_col_names, extra_names)
+      message("Added ", length(extra_names), " generic column names")
+    }
+  }
+  
   colnames(adjusted_df) <- gene_col_names
 
   if (debug) message("DEBUG: Dimensions of final adjusted matrix after transposing: ", nrow(adjusted_df), " rows, ", ncol(adjusted_df), " cols")
@@ -920,7 +981,6 @@ parser$add_argument("input_file", help = "Path to the input CSV file. Rows are s
 parser$add_argument("output_file", help = "Path for the output adjusted CSV file.")
 parser$add_argument("-a", "--adjuster",
   default = "combat",
-  choices = c("gmm", "gmm_scale_separate", "gmm_npn", "gmm_npn_unit_std", "min_mean", "combat", "limma", "seurat_scaling", "seurat_integration", "quantile", "fairadapt", "liger", "fastMNN", "npn"),
   help = "Batch adjustment method to use."
 )
 parser$add_argument("-b", "--batch-col", default = NULL, help = "Name of the column identifying the batch for each sample.")
@@ -940,9 +1000,10 @@ suppressMessages(df <- vroom(args$input_file, show_col_types = FALSE))
 message("Input file has ", nrow(df), " rows and ", ncol(df), " columns.")
 
 if (!is.null(args$batch_col) && !(args$batch_col %in% names(df))) {
+  available_meta_cols <- names(df)[startsWith(names(df), "meta_")]
   stop(sprintf(
-    "The specified batch column ('%s') was not found in the input file. Please check the column name.",
-    args$batch_col
+    "The specified batch column ('%s') was not found in the input file. Please check the column name. Available metadata columns are: %s",
+    args$batch_col, paste(available_meta_cols, collapse = ", ")
   ))
 }
 

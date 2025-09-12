@@ -19,6 +19,9 @@ DATA_DIR="/data/combined_data"
 ADJUSTERS_PARALLEL=(
     "min_mean"
     "npn"
+    "ranked1"
+    "ranked2"
+    "ranked_batch"
 )
 
 # Define adjusters to run SEQUENTIALLY (one dataset job at a time for each adjuster)
