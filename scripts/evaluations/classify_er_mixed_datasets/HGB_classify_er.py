@@ -2,8 +2,9 @@ import argparse
 import os
 import sys
 import pandas as pd
+import numpy as np
 from pathlib import Path
-from sklearn.ensemble import HistGradientBoostingClassifier
+from sklearn.ensemble import HistGradientBoostingClassifier, RandomForestClassifier
 from sklearn.metrics import roc_auc_score, confusion_matrix
 from sklearn.model_selection import RepeatedStratifiedKFold
 from sklearn.base import clone
@@ -16,64 +17,169 @@ def print_now(*args, **kwargs):
     """Print a message to the console with flushing."""
     print(*args, flush=True, **kwargs)
 
-def run_single_dataset(filename, pred_col, source_col, model, n_splits, n_repeats, current_repeat):
+def calculate_metrics(y_true, y_pred, y_proba):
+    """Calculate a standard set of classification metrics."""
+    # Return NaN for metrics that fail if only one class is present.
+    if len(pd.unique(y_true)) < 2:
+        return {
+            'ROC AUC': np.nan,
+            'True Negative': np.nan,
+            'False Positive': np.nan,
+            'False Negative': np.nan,
+            'True Positive': np.nan
+        }
+
+    # Use confusion matrix for robust calculation of TPR/TNR
+    tn, fp, fn, tp = confusion_matrix(y_true, y_pred, labels=[0,1]).ravel()
+
+    metrics = {
+        'ROC AUC' : roc_auc_score(y_true, y_proba),
+        'True Negative': tn,
+        'False Positive': fp,
+        'False Negative': fn,
+        'True Positive': tp
+    }
+
+    return metrics
+
+def run_single_dataset(filepath, output_file, pred_col, source_col, classifier, clf_model, n_splits, current_repeat):
     """Generate metrics for a single dataset."""
     # Load pandas dataframe
     try:
-        df = load_dataframe(filename, pred_col, source_col) # Give df an index - double check
+        df = load_dataframe(filepath, pred_col, source_col) # Give df an index - double check
     except Exception as e:
         print_now(f"Error loading or validating data: {e}")
-
-    if n_repeats <= 0:
-        return
-    print_now(f"\nRunning classification for {filename} with {n_repeats} repeats (offset: {current_repeat})...")
 
     # Separate data into training and testing
     y = df[pred_col]
     cols_to_drop = [pred_col, source_col]
-    X = df.drop(columns=[col for col in cols_to+drop if col in df.columns]).select_dtypes(include=[np.number])
+    X = df.drop(columns=[col for col in cols_to_drop if col in df.columns]).select_dtypes(include=[np.number])
 
-    # Clone the model and create random seed for the cross-validation with repeat offset
-    random_seed = 42 + repeat_offset
-    model = HistGradientBoostingClassifier(max_iter=100, random_state=random_seed)
-    cv = RepeatedStratifiedKFold(n_splits=n_splits, n_repeats=n_repeats, random_state=random_seed)
+    # Create dataframe for y predictions
+    predictions = pd.DataFrame(index=df.index, columns=['y_predicted', 'y_probability'])
+
+    # Clone the model
+    model = clone(clf_model)
+    cv_random_seed = 42 + current_repeat
+    cv = RepeatedStratifiedKFold(n_splits=n_splits, random_state=cv_random_seed)
     splits = list(cv.split(X,y))
 
-    # Create empty dataframe - match the index of y (before train or test) or create another column
-    new_df = pandas.DataFrame(index=df.index)
-
+    # Fit the model, test, and calculate metrics
     for train_index, test_index in splits:
         X_train, X_test = X.iloc[train_index], X.iloc[test_index]
         y_train, y_test = y.iloc[train_index], y.iloc[test_index]
         model.fit(X_train, y_train)
     
         # Predict off of x test to get y test predictions
-        # Probabilistic predictions from x test
-        new_d.ilocf[test_index] = probabilistic_predictions
+        y_pred = model.predict(X_test)
+        predictions.loc[test_index, 'y_predicted'] = y_pred
+
+        # Take the second column of probabilistic predictions from x test
+        y_proba = model.predict_proba(X_test)[:,1]
+        predictions.loc[test_index, 'y_probability'] = y_proba
 
     # Generate the metrics from y, y predictions, and y probabilistic predictions
+    metrics = calculate_metrics(y, predictions['y_predicted'], predictions['y_probability'])
+    metrics_df = pd.DataFrame([metrics])
 
-    # Create a dataframe of the metrics
+    # Add other columns
+    folder = Path(filepath).parent.name
+    adjuster = Path(filepath).stem
 
-def run_combined_dataset(filename, pred_col, source_col, model, n_splits, n_repeats, current_repeat):
+    metrics_df['Classifier'] = classifier
+    metrics_df['Adjustment'] = adjuster
+    metrics_df['Prediction'] = pred_col
+    metrics_df['Train'] = folder
+    metrics_df['Test'] = folder
+
+    # Reorder columns and append to output file
+    output_cols = ['Train', 'Test', 'ROC AUC', 'True Negative', 'False Negative', 'False Positive', 'True Positive', 
+    'Classifier', 'Adjustment', 'Prediction']
+    metrics_df[output_cols].to_csv(output_file, mode='a', header=False, index=False, float_format='%.4f')    
+
+def run_combined_dataset(filepath, output_file, pred_col, source_col, classifier, clf_model, n_splits, current_repeat):
     """Generate metrics for combined datasets
     with each training and testing combination."""
     # Load pandas dataframe
     try:
-        df = load_dataframe(filename, pred_col, source_col)
+        df = load_dataframe(filepath, pred_col, source_col)
     except Exception as e:
         print_now(f"Error loading or validating data: {e}")
 
-    if n_repeats <= 0:
-        return
-    print_now(f"\nRunning classification for {filename} with {n_repeats} repeats (offset: {current_repeat})...")
+    # Ensure source column has two unique values
+    sources = df[source_col].unique()
+    if len(sources) != 2:
+        raise ValueError(f"Expected exactly 2 unique sources in '{source_col}', found: {sources}")
+    source1, source2 = sources
 
+    # Define train/test combinations
+    combinations = [
+        ('combined', 'combined'),
+        ('combined', source1),
+        ('combined', source2),
+        (source1, source2),
+        (source2, source1)
+    ]
 
-    # Separate data into training and testing
+    # Drop unwanted columns to get features
+    cols_to_drop = [pred_col, source_col]
+    feature_df = df.drop(columns=[col for col in cols_to_drop if col in df.columns]).select_dtypes(include=[np.number])
 
-    # Clone the model and fit it to the data
+    for train_key, test_key in combinations:
+        # Select training data
+        if train_key == 'combined':
+            train_df = df
+        else:
+            train_df = df[df[source_col] == train_key]
 
-    # Create a dataframe of the metrics
+        # Select testing data
+        if test_key == 'combined':
+            test_df = df
+        else:
+            test_df = df[df[source_col] == test_key]
+
+        # Get features and targets
+        X_train = feature_df.loc[train_df.index]
+        y_train = train_df[pred_col]
+
+        X_test = feature_df.loc[test_df.index]
+        y_test = test_df[pred_col]
+    
+        # Create empty dataframe for y predictions
+        predictions = pd.DataFrame(index=df.index, columns=['y_predicted', 'y_probability'])
+
+        # Clone model
+        model = clone(clf_model)
+
+        # Fit the model and create predictions
+        model.fit(X_train, y_train)
+        y_pred = model.predict(X_test)
+        y_proba = model.predict_proba(X_test)[:,1]
+
+        predictions.loc[y_test.index, 'y_predicted'] = y_pred
+        predictions.loc[y_test.index, 'y_probability'] = y_proba
+
+        y_true = y_test
+        y_pred_all = y_pred
+        y_proba_all = y_proba
+
+        # Calculate metrics
+        metrics = calculate_metrics(y_true, y_pred_all, y_proba_all)
+        metrics_df = pd.DataFrame([metrics])
+    
+        # Add other columns
+        adjuster = Path(filepath).stem
+
+        metrics_df['Classifier'] = classifier
+        metrics_df['Adjustment'] = adjuster
+        metrics_df['Prediction'] = pred_col
+        metrics_df['Train'] = train_key
+        metrics_df['Test'] = test_key
+
+        # Reorder columns and append to output file
+        output_cols = ['Train', 'Test', 'ROC AUC', 'True Negative', 'False Negative', 'False Positive', 'True Positive', 
+        'Classifier', 'Adjustment', 'Prediction']
+        metrics_df[output_cols].to_csv(output_file, mode='a', header=False, index=False, float_format='%.4f')    
 
 def load_dataframe(filename, pred_col, source_col):
     """Read the file into a pandas dataframe and check it has the required columns."""
@@ -85,6 +191,62 @@ def load_dataframe(filename, pred_col, source_col):
 
     return df
 
+def generate_runs(single_list, combined_list):
+    """Return a list of dictionaries of run parameters for each combination of datasets."""
+    
+    runs = []
+    for filepath in single_list:
+        runs.append({
+            "type": "single",
+            "filename": filepath
+        })
+
+    for filepath in combined_list:
+        runs.append({
+            "type": "combined",
+            "filename": filepath
+        })
+
+    return runs
+
+def execute_run(run):
+    """Perform a single run based on its type."""
+    if run['type'] == 'single':
+        run_single_dataset(
+            filename=run['filename'],
+            output_file=args.output,
+            pred_col=args.prediction_column,
+            source_col=args.source_column,
+            classifier=args.classifier,
+            clf_model=model,
+            n_splits=args.n_splits,
+            current_repeat=1
+        )
+
+    elif run['type'] == 'combined':
+        run_combined_dataset(
+            filename=run['filename'],
+            output_file=args.output,
+            pred_col=args.prediction_column,
+            source_col=args.source_column,
+            classifier=args.classifier,
+            clf_model=model,
+            n_splits=args.n_splits,
+            current_repeat=1
+        )
+
+def initialize_model(classifier):
+    random_seed = 42
+    if classifier == 'HistGradientBoosting':
+        model = HistGradientBoostingClassifier(max_iter=100, random_state=random_seed)
+    elif classifier == 'RandomForest':
+        model = RandomForestClassifier(n_estimators=100, random_state=random_seed)
+    else:
+        print_now(f"{classifier} is not currently recognized. Please try 'HistGradientBoosting' or 'RandomForest'.")
+
+    return model
+
+
 def main():
     """Parse arguments and run the classification pipeline."""
     parser = argparse.ArgumentParser(description="Run HistGradientBoosting classification on gene expression for ER status.")
@@ -93,7 +255,6 @@ def main():
     parser.add_argument('--output', required=True, help='Path for the detailed output CSV file.')
     parser.add_argument('--confusion-matrix', required=True, help='Path for the confusion matrix .txt file.')
     parser.add_argument('--summary', required=True, help='Path for the summary metrics CSV file.')
-    parser.add_argument('--adjustment', default='Unadjusted', help='Name of the adjustment method used.')
     parser.add_argument('--classifier', default= 'HistGradientBoosting', help='Name of classifier algorithm used.')
     parser.add_argument('--prediction-column', default='meta_er_status', help='Name of the prediction column, y.')
     parser.add_argument('--source-column', default='meta_source', help='Name of the source column.')
@@ -105,15 +266,24 @@ def main():
     # Create output file from output_file path and create header
     os.makedirs(os.path.dirname(args.output), exist_ok=True)
     if not os.path.exists(args.output) or os.path.getsize(args.output) == 0:
-        pd.DataFrame(columns=['train', 'test', 'ROC_AUC', 'true_negative', 'false_positive', 'false_negative', 'true positive',
-        'classifier', 'adjuster', 'dataset', 'pred_column'])
+        pd.DataFrame(columns=['Train', 'Test', 'ROC AUC', 'True Negative', 'False Negative', 'False Positive', 'True Positive', 
+    'Classifier', 'Adjustment', 'Prediction']).to_csv(args.output, index=False)
     
-    print_now(f"=== HistGradientBoostingClassifier ER Status Classification ({args.adjustment}) ===")
+    print_now(f"=== HistGradientBoostingClassifier ER Status Classification ===")
 
-    # Set up model and cross-validation
-        # Set a random seed
-        # Define the model (can be variable)
+    # Set up model
+    model = initialize_model(args.classifier)
+    
+    # Generate a list of dictionaries with the parameters for each run
+    runs = generate_runs(args.single_list, args.combined_list)
 
-    # Loop to evaluate each dataset combination, appending its returned metrics dataframe
+    # Execute runs
+    for run in runs:
+        execute_run(run)
 
-    # Aggregate results and add to .csv file
+    print_now("\nPipeline finished.")
+
+if __name__ == "__main__":
+    main()
+
+    
