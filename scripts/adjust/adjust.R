@@ -23,7 +23,7 @@ suppressPackageStartupMessages({
   library(data.table)
 })
 
-source("scripts/adjust/gmm_adjust.R")
+source("/scripts/adjust/gmm_adjust.R")
 
 get_allocated_cores <- function() {
   # Check SLURM-provided environment variables first
@@ -565,57 +565,6 @@ adjust_fastMNN <- function(df_, batch, data_are_counts, debug = FALSE) {
 }
 
 
-# GMM Parameter Caching Functions -----------------------------------------------
-
-save_gmm_parameters_to_csv <- function(gmm_params, batch_name, cache_folder) {
-  #' Save GMM parameters to CSV file using flattened format
-  #' @param gmm_params Dataframe with GMM parameters (genes as columns, parameters as rows)
-  #' @param batch_name Name of the batch for the cache file
-  #' @param cache_folder Directory to store cache files
-  
-  cache_file <- file.path(cache_folder, paste0(batch_name, "_gmm_params.csv"))
-  
-  # Use flattened format directly - no list conversion needed
-  # Parameters should already be in flattened format: mean0, mean1, variance0, variance1, weight0, weight1
-  write.csv(gmm_params, cache_file, row.names = TRUE)
-  message("Saved GMM parameters for batch '", batch_name, "' to: ", cache_file)
-}
-
-load_gmm_parameters_from_csv <- function(batch_name, cache_folder) {
-  #' Load GMM parameters from CSV file in flattened format
-  #' @param batch_name Name of the batch for the cache file
-  #' @param cache_folder Directory containing cache files
-  #' @return Dataframe with GMM parameters in flattened format or NULL if not found
-  
-  cache_file <- file.path(cache_folder, paste0(batch_name, "_gmm_params.csv"))
-  
-  if (!file.exists(cache_file)) return(NULL)
-  
-  params <- read.csv(cache_file, row.names = 1, stringsAsFactors = FALSE, check.names = FALSE)
-  
-  # Convert logical and numeric columns back to proper types
-  if ("fit_successful" %in% rownames(params)) {
-    params["fit_successful", ] <- as.logical(params["fit_successful", ])
-  }
-  if ("recommended_modes" %in% rownames(params)) {
-    params["recommended_modes", ] <- as.numeric(params["recommended_modes", ])
-  }
-  if ("n_components" %in% rownames(params)) {
-    params["n_components", ] <- as.numeric(params["n_components", ])
-  }
-  
-  # Ensure numeric parameter rows are numeric
-  numeric_rows <- c("mean0", "mean1", "variance0", "variance1", "weight0", "weight1")
-  for (row_name in numeric_rows) {
-    if (row_name %in% rownames(params)) {
-      params[row_name, ] <- as.numeric(params[row_name, ])
-    }
-  }
-  
-  return(params)
-}
-
-
 adjust_gmm_common <- function(matrix_, batch, adjustment_strategy, strategy_name, debug = FALSE, meta_file = NULL) {
   #' Common implementation for all GMM-based adjustment methods.
   #' Wrapper for gmm_adjust to fit into the main adjustment pipeline with caching support.
@@ -632,7 +581,7 @@ adjust_gmm_common <- function(matrix_, batch, adjustment_strategy, strategy_name
   message("Adjusting with GMM-based adjustment (", strategy_name, ", with caching).")
 
   genes_df <- as.data.frame(t(matrix_))
-  cache_folder <- "data/.cache/gmm_cache"
+  cache_folder <- "/data/.cache/gmm_cache"
   if (!dir.exists(cache_folder)) {
     dir.create(cache_folder, recursive = TRUE)
   }

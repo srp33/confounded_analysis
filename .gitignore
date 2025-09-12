@@ -9,3 +9,4 @@ outputs/metrics/archive
 *.out
 *.sif
 grp_batch_effects
+core.*

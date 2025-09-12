@@ -10,8 +10,8 @@ suppressPackageStartupMessages({
 })
 
 # Source core modules
-source("scripts/adjust/gmm_parameters.R")
-source("scripts/adjust/gmm_transforms.R")
+source("/scripts/adjust/gmm_parameters.R")
+source("/scripts/adjust/gmm_transforms.R")
 
 # ============================================================================
 # HIGH-LEVEL INTERFACE FUNCTIONS
