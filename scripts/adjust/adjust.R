@@ -719,6 +719,14 @@ rank_normalized <- function(matrix_, dim) {
     stop("Invalid dimension. Must be 1 for rows or 2 for columns.")
   }
   ranked = apply(matrix_, dim, rank, ties.method = "average")
+  
+  # apply() transposes the result when dim=1, so we need to transpose it back
+  # When dim=1: apply ranks across columns (samples) for each row (feature)
+  # When dim=2: apply ranks across rows (features) for each column (sample)
+  if (dim == 1 && is.matrix(ranked)) {
+    ranked = t(ranked)
+  }
+  
   return(ranked / max(ranked, na.rm = TRUE))
 }
 
@@ -726,14 +734,14 @@ adjust_ranked <- function(matrix_, debug = FALSE) {
   #' Normalize sample-wise by ranking the genes within the sample.
   message("Adjusting with ranked.")
   # Data has genes as rows, so we need to rank along the rows.
-  return(t(rank_normalized(matrix_, 1)))
+  return(rank_normalized(matrix_, 1))
 }
 
 adjust_ranked_twice <- function(matrix_, debug = FALSE) {
   message("Adjusting with ranked twice.")
   #' Normalize sample-wise by ranking the genes within the sample.
   # Next, rank by sample. This tells us something about whether the gene is up or down regulated in the sample.
-  return(t(rank_normalized(rank_normalized(matrix_, 1), 2)))
+  return(rank_normalized(rank_normalized(matrix_, 1), 2))
 }
 
 adjust_ranked_with_batch_info <- function(matrix_, batch, debug = FALSE) {
@@ -746,8 +754,13 @@ adjust_ranked_with_batch_info <- function(matrix_, batch, debug = FALSE) {
   message("Adjusting with ranked with batch info.")
   ranked = rank_normalized(matrix_, 1)
   
+  if (debug) {
+    message("DEBUG: matrix_ dimensions: ", nrow(matrix_), " x ", ncol(matrix_))
+    message("DEBUG: ranked dimensions: ", nrow(ranked), " x ", ncol(ranked))
+  }
+  
   batch_levels <- unique(batch)
-  ranked2 <- matrix(NA, nrow = nrow(matrix_), ncol = ncol(matrix_))
+  ranked2 <- matrix(NA, nrow = nrow(ranked), ncol = ncol(ranked))
   
   for (b in batch_levels) {
     # For each batch, we rank by sample.
@@ -784,7 +797,7 @@ adjust_ranked_with_batch_info <- function(matrix_, batch, debug = FALSE) {
     max_val <- 1
   }
   
-  return(t(ranked2 / max_val))
+  return(ranked2 / max_val)
 }
 
 
