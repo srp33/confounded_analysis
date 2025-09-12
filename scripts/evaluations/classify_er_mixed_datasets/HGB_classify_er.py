@@ -42,7 +42,7 @@ def calculate_metrics(y_true, y_pred, y_proba):
 
     return metrics
 
-def run_single_dataset(filepath, output_file, pred_col, source_col, classifier, clf_model, n_splits, current_repeat):
+def run_single_dataset(filepath, output_file, pred_col, source_col, adjustment, classifier, clf_model, n_splits, current_repeat):
     """Generate metrics for a single dataset."""
     # Load pandas dataframe
     try:
@@ -84,10 +84,9 @@ def run_single_dataset(filepath, output_file, pred_col, source_col, classifier, 
 
     # Add other columns
     folder = Path(filepath).parent.name
-    adjuster = Path(filepath).stem
 
     metrics_df['Classifier'] = classifier
-    metrics_df['Adjustment'] = adjuster
+    metrics_df['Adjustment'] = adjustment
     metrics_df['Prediction'] = pred_col
     metrics_df['Train'] = folder
     metrics_df['Test'] = folder
@@ -97,7 +96,7 @@ def run_single_dataset(filepath, output_file, pred_col, source_col, classifier, 
     'Classifier', 'Adjustment', 'Prediction']
     metrics_df[output_cols].to_csv(output_file, mode='a', header=False, index=False, float_format='%.4f')    
 
-def run_combined_dataset(filepath, output_file, pred_col, source_col, classifier, clf_model, n_splits, current_repeat):
+def run_combined_dataset(filepath, output_file, pred_col, source_col, adjustment, classifier, clf_model, n_splits, current_repeat):
     """Generate metrics for combined datasets
     with each training and testing combination."""
     # Load pandas dataframe
@@ -168,10 +167,8 @@ def run_combined_dataset(filepath, output_file, pred_col, source_col, classifier
         metrics_df = pd.DataFrame([metrics])
     
         # Add other columns
-        adjuster = Path(filepath).stem
-
         metrics_df['Classifier'] = classifier
-        metrics_df['Adjustment'] = adjuster
+        metrics_df['Adjustment'] = adjustment
         metrics_df['Prediction'] = pred_col
         metrics_df['Train'] = train_key
         metrics_df['Test'] = test_key
@@ -217,6 +214,7 @@ def execute_run(run):
             output_file=args.output,
             pred_col=args.prediction_column,
             source_col=args.source_column,
+            adjustment=args.adjustment,
             classifier=args.classifier,
             clf_model=model,
             n_splits=args.n_splits,
@@ -229,6 +227,7 @@ def execute_run(run):
             output_file=args.output,
             pred_col=args.prediction_column,
             source_col=args.source_column,
+            adjustment=args.adjustment,
             classifier=args.classifier,
             clf_model=model,
             n_splits=args.n_splits,
@@ -255,6 +254,7 @@ def main():
     parser.add_argument('--output', required=True, help='Path for the detailed output CSV file.')
     parser.add_argument('--confusion-matrix', required=True, help='Path for the confusion matrix .txt file.')
     parser.add_argument('--summary', required=True, help='Path for the summary metrics CSV file.')
+    parser.add_argument('--adjustment', required=True, help='Type of adjustment done to CSV file.')
     parser.add_argument('--classifier', default= 'HistGradientBoosting', help='Name of classifier algorithm used.')
     parser.add_argument('--prediction-column', default='meta_er_status', help='Name of the prediction column, y.')
     parser.add_argument('--source-column', default='meta_source', help='Name of the source column.')
