@@ -618,7 +618,7 @@ load_gmm_parameters_from_csv <- function(batch_name, cache_folder) {
 
 adjust_gmm_common <- function(matrix_, batch, adjustment_strategy, strategy_name, debug = FALSE, meta_file = NULL) {
   #' Common implementation for all GMM-based adjustment methods.
-  #' Wrapper for gmm_adjust to fit into the main adjustment pipeline with intelligent caching support.
+  #' Wrapper for gmm_adjust to fit into the main adjustment pipeline with caching support.
   #' Handles the transposition of data to match gmm_adjust's input requirements.
   #' Parameter extraction and caching is now handled internally by bimodal_normalize and gmm_adjust.
   #' @param matrix_ The matrix to adjust (features x samples).
@@ -629,7 +629,7 @@ adjust_gmm_common <- function(matrix_, batch, adjustment_strategy, strategy_name
   #' @param meta_file Path to save the recommended modes for each gene.
   #' @return The adjusted matrix (features x samples).
   
-  message("Adjusting with GMM-based adjustment (", strategy_name, ", with intelligent caching).")
+  message("Adjusting with GMM-based adjustment (", strategy_name, ", with caching).")
 
   genes_df <- as.data.frame(t(matrix_))
   cache_folder <- "data/.cache/gmm_cache"

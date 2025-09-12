@@ -22,12 +22,15 @@ ADJUSTERS_PARALLEL=(
     # "combat"
     # "seurat_scaling"
     # "seurat_integration"
-    "npn"
+    # "npn"
+    "ranked1"
+    "ranked2"
+    "ranked_batch"
 )
 
 # Define adjusters to run SEQUENTIALLY (one dataset job at a time for each adjuster)
 ADJUSTERS_SEQUENTIAL=(
-    "fastMNN"
+    # "fastMNN"
     # "liger"
     "gmm"
     "gmm_scale_separate"

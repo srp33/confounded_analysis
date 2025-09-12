@@ -116,7 +116,7 @@ bimodal_normalize <- function(data, gmm_parameters=NULL, batch_name=NULL, cache_
   
   # Extract GMM parameters if not provided
   if (is.null(gmm_parameters)) {
-    log_message(debug = debug, "Extracting GMM parameters using intelligent caching...")
+    log_message(debug = debug, "Extracting GMM parameters using caching...")
     gmm_parameters <- extract_gmm_parameters(
       data, 
       batch_name = batch_name,
@@ -272,7 +272,7 @@ bimodal_normalize <- function(data, gmm_parameters=NULL, batch_name=NULL, cache_
 #' @param data Input data matrix/data frame
 #' @param batch Batch vector
 #' @param gmm_parameters Named list with structure {batch_name = dataframe}. Dataframe columns are genes, rows are parameters
-#' @param cache_folder Path to cache directory (optional, for intelligent caching)
+#' @param cache_folder Path to cache directory (optional, for caching)
 #' @param debug Whether to enable debug logging
 #' @param log_file Path to log file
 #' @param adjustment_strategy Adjustment strategy

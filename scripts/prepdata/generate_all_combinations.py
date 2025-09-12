@@ -4,12 +4,12 @@ Enhanced Dataset Combination Generation Script
 
 This script finds all processed datasets containing 'meta_er_status', creates all
 possible pairwise combinations for multiple CSV file types (unadjusted, combat, limma, etc.),
-and saves them to the /data/combined_data/ directory with intelligent caching and performance
+and saves them to the /data/combined_data/ directory with caching and performance
 optimizations.
 
 Key Features:
 - Multi-file support: Processes all available CSV file types per dataset
-- Intelligent caching: Uses HashCache to avoid regenerating unchanged combinations  
+- Caching: Uses HashCache to avoid regenerating unchanged combinations  
 - Performance optimization: Supports parallel processing and memory monitoring
 - Comprehensive reporting: Detailed statistics on cache efficiency and performance
 
@@ -217,7 +217,7 @@ def find_compatible_datasets(data_dir="/data/gold", debug=False) -> Dict[str, Da
 
 
 class CacheManager:
-    """Manages intelligent caching for combination generation."""
+    """Manages caching for combination generation."""
     
     def __init__(self, cache_dir: Path, debug: bool = False, force: bool = False):
         self.cache_dir = Path(cache_dir)

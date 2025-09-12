@@ -528,7 +528,7 @@ extract_gmm_parameters_parallel <- function(data, debug = FALSE, log_file = NULL
   return(results_by_gene)
 }
 
-#' Extract GMM parameters from data with intelligent caching
+#' Extract GMM parameters from data with caching
 #' 
 #' Fits GMM models once per gene and extracts all parameters needed for
 #' different adjustment strategies. Uses cached parameters when available
