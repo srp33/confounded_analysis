@@ -1,6 +1,7 @@
 import argparse
 import os
 import sys
+import traceback
 import pandas as pd
 import numpy as np
 from pathlib import Path
@@ -15,9 +16,10 @@ from filelock import FileLock
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 def safe_write_to_csv(df, output_file):
-    lock_path - output_file + '.lock'
+    lock_path = output_file + '.lock'
     with FileLock(lock_path):
         df.to_csv(output_file, mode='a', header=False, index=False, float_format='%.4f')
+
 def print_now(*args, **kwargs):
     """Print a message to the console with flushing."""
     print(*args, flush=True, **kwargs)
@@ -50,6 +52,7 @@ def calculate_metrics(y_true, y_pred, y_proba):
 def run_single_dataset(filepath, output_file, pred_col, source_col, adjustment, classifier, clf_model, n_splits, current_repeat):
     """Generate metrics for a single dataset."""
     # Load pandas dataframe
+    df = pd.DataFrame()
     try:
         print_now(f"Loading combined data from {filepath}")
         df = load_dataframe(filepath, pred_col, source_col) # Give df an index - double check
@@ -110,10 +113,12 @@ def run_combined_dataset(filepath, output_file, pred_col, source_col, adjustment
     """Generate metrics for combined datasets
     with each training and testing combination."""
     # Load pandas dataframe
+    df = pd.DataFrame()
     try:
         df = load_dataframe(filepath, pred_col, source_col)
     except Exception as e:
         print_now(f"Error loading or validating data: {e}")
+        traceback.print_exc()
 
     # Ensure source column has two unique values
     sources = df[source_col].unique()
@@ -217,11 +222,11 @@ def generate_runs(single_list, combined_list):
 
     return runs
 
-def execute_run(run, current_repeat):
+def execute_run(args, run, model, current_repeat):
     """Perform a single run based on its type."""
     if run['type'] == 'single':
         run_single_dataset(
-            filename=run['filename'],
+            filepath=run['filename'],
             output_file=args.output,
             pred_col=args.prediction_column,
             source_col=args.source_column,
@@ -234,7 +239,7 @@ def execute_run(run, current_repeat):
 
     elif run['type'] == 'combined':
         run_combined_dataset(
-            filename=run['filename'],
+            filepath=run['filename'],
             output_file=args.output,
             pred_col=args.prediction_column,
             source_col=args.source_column,
@@ -262,8 +267,6 @@ def main():
     parser.add_argument('--combined-list', nargs='*', required=True, help='List of combined gene expression data filenames.')
     parser.add_argument('--single-list', nargs='*', required=True, help='List of individual gene expression data filenames.')
     parser.add_argument('--output', required=True, help='Path for the detailed output CSV file.')
-    parser.add_argument('--confusion-matrix', required=True, help='Path for the confusion matrix .txt file.')
-    parser.add_argument('--summary', required=True, help='Path for the summary metrics CSV file.')
     parser.add_argument('--adjustment', required=True, help='Type of adjustment done to CSV file.')
     parser.add_argument('--classifier', default= 'HistGradientBoosting', help='Name of classifier algorithm used.')
     parser.add_argument('--prediction-column', default='meta_er_status', help='Name of the prediction column, y.')
@@ -294,7 +297,7 @@ def main():
     for current_repeat in range(args.n):
         print_now(f"=== Repeat {current_repeat + 1} of {args.n} ===")
         Parallel(n_jobs=n_jobs)(
-            delayed(execute_run)(run, current_repeat) for run in runs
+            delayed(execute_run)(args, run, model, current_repeat) for run in runs
         )
 
     # for run in runs:

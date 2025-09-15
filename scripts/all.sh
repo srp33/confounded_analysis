@@ -9,6 +9,6 @@ id
 export PYTHONPATH="/scripts:$PYTHONPATH"
 
 # bash /scripts/prepdata/all.sh &> /outputs/prepdata.log
-bash /scripts/adjust/all.sh &> /outputs/adjust.log
-# bash /scripts/evaluations/all.sh
+# bash /scripts/adjust/all.sh &> /outputs/adjust.log
+bash /scripts/evaluations/all.sh
 

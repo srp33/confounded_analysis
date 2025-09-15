@@ -20,8 +20,10 @@ set -e
 # bash /scripts/evaluations/classify_batch_bio_within_dataset/classify_combined.sh &> /outputs/classify_combined.log
 # bash scripts/evaluations/classify_batch_bio_within_dataset/classification_figures.sh &> /outputs/classification_figures.log
 
-bash /scripts/evaluations/classify_er_mixed_datasets/hist_gradient_er.sh &> /outputs/hist_gradient_er.log
-Rscript scripts/evaluations/classify_er_mixed_datasets/er_classification_plots_single.R &> /outputs/er_classification_plots_single.log
+# bash /scripts/evaluations/classify_er_mixed_datasets/hist_gradient_er.sh &> /outputs/hist_gradient_er.log
+
+bash /scripts/evaluations/classify_er_mixed_datasets/classify.sh &> /outputs/hist_gradient_er.log
+# Rscript scripts/evaluations/classify_er_mixed_datasets/er_classification_plots_single.R &> /outputs/er_classification_plots_single.log
 
 
 
