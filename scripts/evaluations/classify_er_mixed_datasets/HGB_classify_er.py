@@ -9,10 +9,15 @@ from sklearn.metrics import roc_auc_score, confusion_matrix
 from sklearn.model_selection import RepeatedStratifiedKFold
 from sklearn.base import clone
 from joblib import Parallel, delayed
+from filelock import FileLock
 
 # Add the parent directory (scripts) to Python path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+def safe_write_to_csv(df, output_file):
+    lock_path - output_file + '.lock'
+    with FileLock(lock_path):
+        df.to_csv(output_file, mode='a', header=False, index=False, float_format='%.4f')
 def print_now(*args, **kwargs):
     """Print a message to the console with flushing."""
     print(*args, flush=True, **kwargs)
@@ -46,9 +51,14 @@ def run_single_dataset(filepath, output_file, pred_col, source_col, adjustment, 
     """Generate metrics for a single dataset."""
     # Load pandas dataframe
     try:
+        print_now(f"Loading combined data from {filepath}")
         df = load_dataframe(filepath, pred_col, source_col) # Give df an index - double check
     except Exception as e:
         print_now(f"Error loading or validating data: {e}")
+
+    source = df[source_col].unique()
+    if len(source) != 1:
+        raise ValueError(f"Expected exactly 2 unique sources in '{source_col}', found: {source}")
 
     # Separate data into training and testing
     y = df[pred_col]
@@ -83,18 +93,18 @@ def run_single_dataset(filepath, output_file, pred_col, source_col, adjustment, 
     metrics_df = pd.DataFrame([metrics])
 
     # Add other columns
-    folder = Path(filepath).parent.name
-
+    
     metrics_df['Classifier'] = classifier
     metrics_df['Adjustment'] = adjustment
     metrics_df['Prediction'] = pred_col
-    metrics_df['Train'] = folder
-    metrics_df['Test'] = folder
+    metrics_df['Train'] = source
+    metrics_df['Test'] = source
 
     # Reorder columns and append to output file
     output_cols = ['Train', 'Test', 'ROC AUC', 'True Negative', 'False Negative', 'False Positive', 'True Positive', 
     'Classifier', 'Adjustment', 'Prediction']
-    metrics_df[output_cols].to_csv(output_file, mode='a', header=False, index=False, float_format='%.4f')    
+    safe_write_to_csv(metrics_df[output_cols], output_file)
+    print_now(f"Classification results for {filepath} saved.")
 
 def run_combined_dataset(filepath, output_file, pred_col, source_col, adjustment, classifier, clf_model, n_splits, current_repeat):
     """Generate metrics for combined datasets
@@ -176,7 +186,8 @@ def run_combined_dataset(filepath, output_file, pred_col, source_col, adjustment
         # Reorder columns and append to output file
         output_cols = ['Train', 'Test', 'ROC AUC', 'True Negative', 'False Negative', 'False Positive', 'True Positive', 
         'Classifier', 'Adjustment', 'Prediction']
-        metrics_df[output_cols].to_csv(output_file, mode='a', header=False, index=False, float_format='%.4f')    
+        safe_write_to_csv(metrics_df[output_cols], output_file)
+        print_now(f"Classification results for {filepath} saved.")
 
 def load_dataframe(filename, pred_col, source_col):
     """Read the file into a pandas dataframe and check it has the required columns."""
@@ -206,7 +217,7 @@ def generate_runs(single_list, combined_list):
 
     return runs
 
-def execute_run(run):
+def execute_run(run, current_repeat):
     """Perform a single run based on its type."""
     if run['type'] == 'single':
         run_single_dataset(
@@ -218,7 +229,7 @@ def execute_run(run):
             classifier=args.classifier,
             clf_model=model,
             n_splits=args.n_splits,
-            current_repeat=1
+            current_repeat=current_repeat
         )
 
     elif run['type'] == 'combined':
@@ -231,7 +242,7 @@ def execute_run(run):
             classifier=args.classifier,
             clf_model=model,
             n_splits=args.n_splits,
-            current_repeat=1
+            current_repeat=current_repeat
         )
 
 def initialize_model(classifier):
@@ -239,12 +250,11 @@ def initialize_model(classifier):
     if classifier == 'HistGradientBoosting':
         model = HistGradientBoostingClassifier(max_iter=100, random_state=random_seed)
     elif classifier == 'RandomForest':
-        model = RandomForestClassifier(n_estimators=100, random_state=random_seed)
+        model = RandomForestClassifier(n_estimators=100, n_jobs=1, random_state=random_seed)
     else:
         print_now(f"{classifier} is not currently recognized. Please try 'HistGradientBoosting' or 'RandomForest'.")
 
     return model
-
 
 def main():
     """Parse arguments and run the classification pipeline."""
@@ -269,7 +279,7 @@ def main():
         pd.DataFrame(columns=['Train', 'Test', 'ROC AUC', 'True Negative', 'False Negative', 'False Positive', 'True Positive', 
     'Classifier', 'Adjustment', 'Prediction']).to_csv(args.output, index=False)
     
-    print_now(f"=== HistGradientBoostingClassifier ER Status Classification ===")
+    print_now(f"=== HistGradientBoostingClassifier ER Status Classification ({args.adjustment}) ===")
 
     # Set up model
     model = initialize_model(args.classifier)
@@ -277,11 +287,22 @@ def main():
     # Generate a list of dictionaries with the parameters for each run
     runs = generate_runs(args.single_list, args.combined_list)
 
-    # Execute runs
-    for run in runs:
-        execute_run(run)
+    # Execute runs in parallel
+
+    n_jobs = min(len(runs), os.cpu_count() or 1)
+
+    for current_repeat in range(args.n):
+        print_now(f"=== Repeat {current_repeat + 1} of {args.n} ===")
+        Parallel(n_jobs=n_jobs)(
+            delayed(execute_run)(run, current_repeat) for run in runs
+        )
+
+    # for run in runs:
+    #     execute_run(run)
 
     print_now("\nPipeline finished.")
+    print_now(f"Detailed results are in: {args.output}")
+    print_now("="*60)
 
 if __name__ == "__main__":
     main()
