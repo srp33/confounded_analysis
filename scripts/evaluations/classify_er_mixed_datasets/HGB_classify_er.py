@@ -28,6 +28,14 @@ def print_now(*args, **kwargs):
 
 def calculate_metrics(y_true, y_pred, y_proba):
     """Calculate a standard set of classification metrics."""
+
+    print_now("Y true shape: ", y_true.shape)
+    print_now("Y pred shape: ", y_pred.shape)
+    print_now("Y proba shape: ", y_proba.shape)
+
+    print_now("Y true unique: ", np.unique(y_true))
+    print_now("Y pred unique: ", np.unique(y_pred))
+
     # Return NaN for metrics that fail if only one class is present.
     if len(pd.unique(y_true)) < 2:
         return {
@@ -108,23 +116,12 @@ def run_single_dataset(filepath, output_file, pred_col, source_col, adjustment, 
     print_now(f"Classification results for {filepath} saved.")
 
 
-def check_col_exists(df, col_name):
-    """Check if a column exists in the dataframe."""
-    if col_name not in df.columns:
-        if col_name.startswith('meta_'):
-            meta_cols = [col for col in df.columns if col.startswith('meta_')]
-            raise ValueError(f"Column '{col_name}' not found in the dataframe. Available meta columns: {meta_cols}")
-        raise ValueError(f"Column '{col_name}' not found in the dataframe.")
-
 
 def run_combined_dataset(filepath, output_file, pred_col, source_col, adjustment, classifier, clf_model, n_splits, current_repeat):
     """Generate metrics for combined datasets
     with each training and testing combination."""
     # Load pandas dataframe
     df = load_dataframe(filepath, pred_col, source_col)
-
-    check_col_exists(df, pred_col)
-    check_col_exists(df, source_col)
 
     # Ensure source column has two unique values
     sources = df[source_col].unique()
@@ -134,9 +131,9 @@ def run_combined_dataset(filepath, output_file, pred_col, source_col, adjustment
 
     # Define train/test combinations
     combinations = [
-        ('combined', 'combined'),
-        ('combined', source1),
-        ('combined', source2),
+        (f'{source1};{source2}', '{source1};{source2}'),
+        ('{source1};{source2}', source1),
+        ('{source1};{source2}', source2),
         (source1, source2),
         (source2, source1)
     ]
@@ -147,13 +144,13 @@ def run_combined_dataset(filepath, output_file, pred_col, source_col, adjustment
 
     for train_key, test_key in combinations:
         # Select training data
-        if train_key == 'combined':
+        if ';' in train_key:
             train_df = df
         else:
             train_df = df[df[source_col] == train_key]
 
         # Select testing data
-        if test_key == 'combined':
+        if ';' in train_key:
             test_df = df
         else:
             test_df = df[df[source_col] == test_key]
@@ -206,9 +203,11 @@ def load_dataframe(filename, pred_col, source_col):
     df = pd.read_csv(filename)
 
     if pred_col not in df.columns or source_col not in df.columns:
-        raise ValueError(f"{pred_col} and {source_col} are required columns.")
+        meta_cols = [col for col in df.columns if col.startswith('meta_')]
+        raise ValueError(f"{pred_col} and {source_col} not found in dataframe. Meta columns: {meta_cols}")
 
-    meta_cols = [col for col in df.columns if col.startswith('meta_')]
+    # Remove all non [0,1] values (This should be done in the preprocessing script)
+    df = df[(df[pred_col] == 0) | (df[pred_col] == 1)]
     return df
 
 def generate_runs(single_list, combined_list, n_repeats):

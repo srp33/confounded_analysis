@@ -22,16 +22,16 @@ printf "\n\033[0;32mClassifying ER status with adjuster: %s\033[0m\n" "$ADJUSTER
 
 # Find all dataset files for the given adjuster
 echo "Searching for datasets in $DATA_DIR with adjuster: $ADJUSTER"
-readarray -t COMBINED_FILES < (find "$DATA_DIR" -mindepth 1  -name "${ADJUSTER}.csv" -type f)
+readarray -t COMBINED_FILES < <(find "$COMBINED_DATA_DIR" -mindepth 1  -name "${ADJUSTER}.csv" -type f)
 
 echo "Found ${#COMBINED_FILES[@]} dataset files"
 echo "Combined datasets: ${#COMBINED_FILES[@]}"
 
-readarray -t SINGLE_FILES < (find "$SINGLE_DATA_DIR" -mindepth 1 -name "${ADJUSTER}.csv" -type f)
+readarray -t SINGLE_FILES < <(find "$SINGLE_DATA_DIR" -mindepth 1 -name "${ADJUSTER}.csv" -type f)
 echo "Single datasets: ${#SINGLE_FILES[@]}"
 
 # Prepare output file paths
-OUTPUT_FILE="${OUTPUT_DIR}/er_classification_${ADJUSTER}.csv"
+OUTPUT_FILE="${OUTPUT_DIR}/er_classification_all_${ADJUSTER}.csv"
 
 # Debug: Print file lists
 echo "Combined files:"
@@ -49,4 +49,6 @@ python "$SCRIPT_PATH" \
     --classifier "HistGradientBoosting" \
     --prediction-column "meta_er_status" \
     --source-column "meta_source" \
-    --10
+    --n 10 \
+    --num-workers $SLURM_CPUS_ON_NODE
+    

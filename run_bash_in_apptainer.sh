@@ -14,4 +14,4 @@ shift  # remove the first arg, leaving only the rest
 source ~/confounded_analysis/init_apptainer.sh
 
 # Execute the specified script inside the Apptainer container, forwarding all args
-apptainer exec --contain "$APPTAINER_IMAGE" "$SCRIPT_TO_RUN" "$@"
+apptainer exec --contain "$APPTAINER_IMAGE" bash "$SCRIPT_TO_RUN" "$@"
