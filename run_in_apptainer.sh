@@ -2,7 +2,7 @@
 
 # Check if an argument was provided
 if [ -z "$1" ]; then
-    echo "Usage: $0 <bash_script_path.sh>"
+    echo "Usage: $0 <executable>"
     exit 1
 fi
 

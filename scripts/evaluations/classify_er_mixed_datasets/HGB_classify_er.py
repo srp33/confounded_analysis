@@ -131,9 +131,9 @@ def run_combined_dataset(filepath, output_file, pred_col, source_col, adjustment
 
     # Define train/test combinations
     combinations = [
-        (f'{source1};{source2}', '{source1};{source2}'),
-        ('{source1};{source2}', source1),
-        ('{source1};{source2}', source2),
+        (f'{source1};{source2}', f'{source1};{source2}'),
+        (f'{source1};{source2}', source1),
+        (f'{source1};{source2}', source2),
         (source1, source2),
         (source2, source1)
     ]

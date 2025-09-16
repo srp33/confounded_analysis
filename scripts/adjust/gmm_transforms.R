@@ -10,7 +10,7 @@ suppressPackageStartupMessages({
 })
 
 # Source parameter extraction functions
-source("scripts/adjust/gmm_parameters.R")
+source("/scripts/adjust/gmm_parameters.R")
 
 # ============================================================================
 # INPUT VALIDATION
