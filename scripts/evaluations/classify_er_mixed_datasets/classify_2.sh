@@ -21,11 +21,11 @@ echo "Current working directory: $(pwd)"
 printf "\n\033[0;32mClassifying ER status with adjuster: %s\033[0m\n" "$ADJUSTER"
 
 # Find all dataset files for the given adjuster
-echo "Searching for datasets in $DATA_DIR with adjuster: $ADJUSTER"
-COMBINED_FILES="gse20194_gse96058_hiseq"
+echo "Searching for datasets in $COMBINED_DATA_DIR with adjuster: $ADJUSTER"
+readarray -t COMBINED_FILES < <(find "$COMBINED_DATA_DIR" -mindepth 1  -name "${ADJUSTER}.csv" -type f)
 
-# echo "Found ${#COMBINED_FILES[@]} dataset files"
-# echo "Combined datasets: ${#COMBINED_FILES[@]}"
+echo "Found ${#COMBINED_FILES[@]} dataset files"
+echo "Combined datasets: ${#COMBINED_FILES[@]}"
 
 # echo "Single datasets: ${#SINGLE_FILES[@]}"
 
@@ -41,7 +41,7 @@ OUTPUT_FILE="${OUTPUT_DIR}/er_classification_${ADJUSTER}.csv"
 # Run the Python classification script
 echo "Running HGB classification..."
 python "$SCRIPT_PATH" \
-    --combined-list "${COMBINED_FILES}" \
+    --combined-list "${COMBINED_FILES[@]}" \
     --single-list "${SINGLE_FILES[@]}" \
     --output "$OUTPUT_FILE" \
     --adjustment "$ADJUSTER" \

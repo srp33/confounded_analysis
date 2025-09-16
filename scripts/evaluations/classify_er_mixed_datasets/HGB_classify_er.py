@@ -53,11 +53,7 @@ def run_single_dataset(filepath, output_file, pred_col, source_col, adjustment, 
     """Generate metrics for a single dataset."""
     # Load pandas dataframe
     df = pd.DataFrame()
-    try:
-        print_now(f"Loading combined data from {filepath}")
-        df = load_dataframe(filepath, pred_col, source_col) # Give df an index - double check
-    except Exception as e:
-        print_now(f"Error loading or validating data: {e}")
+    df = load_dataframe(filepath, pred_col, source_col) # Give df an index - double check
 
     source = df[source_col].unique()
     if len(source) != 1:
@@ -84,7 +80,7 @@ def run_single_dataset(filepath, output_file, pred_col, source_col, adjustment, 
         model.fit(X_train, y_train)
     
         # Predict off of x test to get y test predictions
-        y_pred = model.predict(X_test)
+        y_pred = model.predict(X_test)[:,1]
         predictions.loc[test_index, 'y_predicted'] = y_pred
 
         # Take the second column of probabilistic predictions from x test
@@ -109,16 +105,24 @@ def run_single_dataset(filepath, output_file, pred_col, source_col, adjustment, 
     safe_write_to_csv(metrics_df[output_cols], output_file)
     print_now(f"Classification results for {filepath} saved.")
 
+
+def check_col_exists(df, col_name):
+    """Check if a column exists in the dataframe."""
+    if col_name not in df.columns:
+        if col_name.startswith('meta_'):
+            meta_cols = [col for col in df.columns if col.startswith('meta_')]
+            raise ValueError(f"Column '{col_name}' not found in the dataframe. Available meta columns: {meta_cols}")
+        raise ValueError(f"Column '{col_name}' not found in the dataframe.")
+
+
 def run_combined_dataset(filepath, output_file, pred_col, source_col, adjustment, classifier, clf_model, n_splits, current_repeat):
     """Generate metrics for combined datasets
     with each training and testing combination."""
     # Load pandas dataframe
-    df = pd.DataFrame()
-    try:
-        df = load_dataframe(filepath, pred_col, source_col)
-    except Exception as e:
-        print_now(f"Error loading or validating data: {e}")
-        traceback.print_exc()
+    df = load_dataframe(filepath, pred_col, source_col)
+
+    check_col_exists(df, pred_col)
+    check_col_exists(df, source_col)
 
     # Ensure source column has two unique values
     sources = df[source_col].unique()
@@ -202,27 +206,30 @@ def load_dataframe(filename, pred_col, source_col):
     if pred_col not in df.columns or source_col not in df.columns:
         raise ValueError(f"{pred_col} and {source_col} are required columns.")
 
+    meta_cols = [col for col in df.columns if col.startswith('meta_')]
     return df
 
-def generate_runs(single_list, combined_list):
+def generate_runs(single_list, combined_list, n_repeats):
     """Return a list of dictionaries of run parameters for each combination of datasets."""
-    
     runs = []
-    for filepath in single_list:
-        runs.append({
-            "type": "single",
-            "filename": filepath
-        })
+    for current_repeat in range(n_repeats):
+        for filepath in single_list:
+            runs.append({
+                "type": "single",
+                "filename": filepath,
+                "current_repeat": current_repeat
+            })
 
-    for filepath in combined_list:
-        runs.append({
-            "type": "combined",
-            "filename": filepath
-        })
+        for filepath in combined_list:
+            runs.append({
+                "type": "combined",
+                "filename": filepath,
+                "current_repeat": current_repeat
+            })
 
     return runs
 
-def execute_run(args, run, model, current_repeat):
+def execute_run(args, run, model):
     """Perform a single run based on its type."""
     if run['type'] == 'single':
         run_single_dataset(
@@ -234,7 +241,7 @@ def execute_run(args, run, model, current_repeat):
             classifier=args.classifier,
             clf_model=model,
             n_splits=args.n_splits,
-            current_repeat=current_repeat
+            current_repeat=run['current_repeat']
         )
 
     elif run['type'] == 'combined':
@@ -247,7 +254,7 @@ def execute_run(args, run, model, current_repeat):
             classifier=args.classifier,
             clf_model=model,
             n_splits=args.n_splits,
-            current_repeat=current_repeat
+            current_repeat=run['current_repeat']
         )
 
 def initialize_model(classifier):
@@ -274,6 +281,7 @@ def main():
     parser.add_argument('--n', '--n-repeats', type=int, default=10, help='Number of repeats for cross-validation.')
     parser.add_argument('--n-splits', type=int, default=3, help='Number of splits for cross-validation.')
     parser.add_argument('--force-rerun', action='store_true', help='Force re-computation even if cache is valid.')
+    parser.add_argument('--num-workers', type=int, default=1, help='Number of workers for parallel execution.')
     args = parser.parse_args()
 
     # Create output file from output_file path and create header
@@ -288,17 +296,15 @@ def main():
     model = initialize_model(args.classifier)
     
     # Generate a list of dictionaries with the parameters for each run
-    runs = generate_runs(args.single_list, args.combined_list)
+    runs = generate_runs(args.single_list, args.combined_list, args.n)
 
     # Execute runs in parallel
+    n_jobs = min(len(runs), os.cpu_count() or 1, args.num_workers)
+    print_now(f"Running {len(runs)} runs in parallel with {n_jobs} jobs. args.num_workers: {args.num_workers}. os.cpu_count: {os.cpu_count()}")
 
-    n_jobs = min(len(runs), os.cpu_count() or 1)
-
-    for current_repeat in range(args.n):
-        print_now(f"=== Repeat {current_repeat + 1} of {args.n} ===")
-        Parallel(n_jobs=n_jobs)(
-            delayed(execute_run)(args, run, model, current_repeat) for run in runs
-        )
+    Parallel(n_jobs=n_jobs)(
+        delayed(execute_run)(args, run, model) for run in runs
+    )
 
     # for run in runs:
     #     execute_run(run)
