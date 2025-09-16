@@ -77,6 +77,9 @@ prepare_metric_data <- function(data, metric_col) {
       # Remove entries where Train or Test contains "combined"
       filter(!grepl("combined", Train, ignore.case = TRUE)) %>%
       filter(!grepl("combined", Test, ignore.case = TRUE)) %>%
+      # Remove entries where Train or Test contains a colon
+      filter(!grepl(":", Train)) %>%
+      filter(!grepl(":", Test)) %>%
       # Filter for rows with complete confusion matrix data
       filter(!is.na(`True Positive`) & !is.na(`True Negative`) & 
              !is.na(`False Positive`) & !is.na(`False Negative`)) %>%
@@ -93,6 +96,9 @@ prepare_metric_data <- function(data, metric_col) {
       # Remove entries where Train or Test contains "combined"
       filter(!grepl("combined", Train, ignore.case = TRUE)) %>%
       filter(!grepl("combined", Test, ignore.case = TRUE)) %>%
+      # Remove entries where Train or Test contains a colon
+      filter(!grepl(":", Train)) %>%
+      filter(!grepl(":", Test)) %>%
       select(Train, Test, all_of(metric_col)) %>%
       group_by(Train, Test) %>%
       summarise(Mean_Metric = mean(.data[[metric_col]], na.rm = TRUE), .groups = 'drop')
@@ -184,9 +190,11 @@ save_plot_and_summary <- function(plot, filename, metric_data, metric_name) {
 # Read and prepare data
 data <- read_and_prepare_data(CSV_FILE)
 
-# Display unique train/test combinations
-unique_trains <- unique(data$Train[!grepl("combined", data$Train, ignore.case = TRUE)])
-unique_tests <- unique(data$Test[!grepl("combined", data$Test, ignore.case = TRUE)])
+# Display unique train/test combinations (after filtering)
+unique_trains <- unique(data$Train[!grepl("combined", data$Train, ignore.case = TRUE) & 
+                                   !grepl(":", data$Train)])
+unique_tests <- unique(data$Test[!grepl("combined", data$Test, ignore.case = TRUE) & 
+                                 !grepl(":", data$Test)])
 cat("Unique Train datasets:", paste(unique_trains, collapse = ", "), "\n")
 cat("Unique Test datasets:", paste(unique_tests, collapse = ", "), "\n\n")
 
