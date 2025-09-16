@@ -12,6 +12,8 @@ from sklearn.base import clone
 from joblib import Parallel, delayed
 from filelock import FileLock
 
+RANDOM_SEED = 42
+
 # Add the parent directory (scripts) to Python path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -69,7 +71,7 @@ def run_single_dataset(filepath, output_file, pred_col, source_col, adjustment, 
 
     # Clone the model
     model = clone(clf_model)
-    cv_random_seed = 42 + current_repeat
+    cv_random_seed = RANDOM_SEED + current_repeat
     cv = RepeatedStratifiedKFold(n_splits=n_splits, random_state=cv_random_seed)
     splits = list(cv.split(X,y))
 
@@ -258,7 +260,7 @@ def execute_run(args, run, model):
         )
 
 def initialize_model(classifier):
-    random_seed = 42
+    random_seed = RANDOM_SEED
     if classifier == 'HistGradientBoosting':
         model = HistGradientBoostingClassifier(max_iter=100, random_state=random_seed)
     elif classifier == 'RandomForest':
