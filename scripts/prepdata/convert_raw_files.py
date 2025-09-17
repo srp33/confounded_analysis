@@ -256,7 +256,7 @@ def process_dataset(raw_folder_path: Path, dataset_id: str, output_base_dir: Pat
         meta_df = meta_df.add_prefix('meta_')
 
         # Standardize er status column name
-        other_er_columns = ['meta_er_ihc', 'meta_er', 'meta_er_consensus', 'meta_er_status_by_ihc', 'meta_esr1_status']
+        other_er_columns = ['meta_er_ihc', 'meta_er', 'meta_er_status', 'meta_er_status_by_ihc', 'meta_er_status_ihc', 'meta_esr1_status']
         for col in meta_df.columns.tolist():
             if col.lower() in other_er_columns:
                 meta_df = meta_df.rename(columns={col: 'meta_er_status'})
@@ -264,7 +264,27 @@ def process_dataset(raw_folder_path: Path, dataset_id: str, output_base_dir: Pat
         if "meta_er_status" not in meta_df.columns.tolist():
             print(f"   ❌ ER status column not found. ")
             print(f"DEBUG: Available columns: {meta_df.columns.tolist()}")
+
+        # Standardize pr status column name
+        other_pr_columns = ['meta_pr', 'meta_pr_status', 'meta_pr_status_ihc', 'meta_pr_ihc', 'meta_prihc']
+        for col in meta_df.columns.tolist():
+            if col.lower() in other_pr_columns:
+                meta_df = meta_df.rename(columns={col: 'meta_pr_status'})
+
+        if "meta_pr_status" not in meta_df.columns.tolist():
+            print(f"   ❌ PR status column not found. ")
+            print(f"DEBUG: Available columns: {meta_df.columns.tolist()}")
+
+        # Standardize her2 status column name
+        other_her2_columns = ['meta_her2', 'meta_her2_status', 'meta_her_2_status']
+        for col in meta_df.columns.tolist():
+            if col.lower() in other_pr_columns: 
+                meta_df = meta_df.rename(columns={col: 'meta_her2_status'})
         
+        if "meta_her2_status" not in meta_df.columns.tolist():
+            print(f"   ❌ HER2 status column not found. ")
+            print(f"DEBUG: Available columns: {meta_df.columns.tolist()}")
+
         # 4. Align and combine (the final and most critical validation)
         common_samples = expr_df.index.intersection(meta_df.index)
         if len(common_samples) == 0:
