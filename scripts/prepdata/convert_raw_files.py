@@ -274,7 +274,7 @@ def process_dataset(raw_folder_path: Path, dataset_id: str, output_base_dir: Pat
             print(meta_df['meta_er_status'].value_counts())
 
         # Standardize pr status column name
-        other_pr_columns = ['meta_pr', 'meta_pr_status', 'meta_pr_status_ihc', 'meta_pr_ihc', 'meta_prihc']
+        other_pr_columns = ['meta_pr', 'meta_pr_status', 'meta_pr_status_ihc', 'meta_pr_ihc', 'meta_prihc', 'meta_per_status_by_ihc']
         for pr_column in other_pr_columns:
             if pr_column in lower_to_full_case_columns:
                 pr_column = lower_to_full_case_columns[pr_column]
@@ -290,7 +290,7 @@ def process_dataset(raw_folder_path: Path, dataset_id: str, output_base_dir: Pat
             print(meta_df['meta_pr_status'].value_counts())
 
         # Standardize her2 status column name
-        other_her2_columns = ['meta_her2', 'meta_her2_status', 'meta_her_2_status']
+        other_her2_columns = ['meta_her2', 'meta_her_2', 'meta_her2_status', 'meta_her_2_status', 'meta_her2_status_by_ihc']
         for her2_column in other_her2_columns:
             if her2_column in lower_to_full_case_columns:
                 her2_column = lower_to_full_case_columns[her2_column]
@@ -304,6 +304,44 @@ def process_dataset(raw_folder_path: Path, dataset_id: str, output_base_dir: Pat
         else:
             print(f"Unique her2 values: ")
             print(meta_df['meta_her2_status'].value_counts())
+
+        # Map column values to 0 for negative and 1 for positive.
+        expected_cols = ['meta_er_status', 'meta_pr_status', 'meta_her2_status']
+        cols_to_convert = [col for col in expected_cols if col in meta_df.columns]
+
+        # Lowercase all values in relevant columns
+        meta_df[cols_to_convert] = meta_df[cols_to_convert].apply(lambda col: col.str.lower())
+
+        def status_to_binary(val):
+            if pd.isnull(val):
+                return np.nan 
+            # Case 1: Already numeric
+            if isinstance(val, (int, float)):
+                if val == 0.0 or val == 0:
+                    return 0
+                if val == 1.0 or val == 1:
+                    return 1
+
+            # Case 2: It's a string
+            if isinstanace(val, str):
+
+                val = val.strip().lower()
+
+                positive_vals = {'positive', 'P', 'pos', 'pos-low', '1', 'er+', 'he+', 'pr+'}
+                negative_vals = {'negative', 'N', 'neg', '0', 'er-', 'he-', 'pr-'}
+
+                for pos in positive_vals:
+                    if pos in val:
+                        return 1
+                for neg in negative_vals:
+                    if neg in val:
+                        return 0
+
+            return None
+
+        df[cols_to_convert] = df[cols_to_convert].applymap(status_to_binary)
+
+        print("Number of values that couldn't be classified: ", df[cols_to_convert].isnull().sum())
 
         # 4. Align and combine (the final and most critical validation)
         common_samples = expr_df.index.intersection(meta_df.index)
