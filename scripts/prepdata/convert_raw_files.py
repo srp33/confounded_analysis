@@ -266,7 +266,7 @@ def process_dataset(raw_folder_path: Path, dataset_id: str, output_base_dir: Pat
             print(f"DEBUG: Available columns: {meta_df.columns.tolist()}")
 
         # Standardize pr status column name
-        other_pr_columns = ['meta_pr', 'meta_pr_status', 'meta_pr_status_ihc', 'meta_pr_ihc', 'meta_prihc']
+        other_pr_columns = ['meta_pr', 'meta_pr_status', 'meta_pr_status_ihc', 'meta_pr_ihc', 'meta_prihc', 'meta_pr_status_by_ihc']
         for col in meta_df.columns.tolist():
             if col.lower() in other_pr_columns:
                 meta_df = meta_df.rename(columns={col: 'meta_pr_status'})
@@ -276,7 +276,7 @@ def process_dataset(raw_folder_path: Path, dataset_id: str, output_base_dir: Pat
             print(f"DEBUG: Available columns: {meta_df.columns.tolist()}")
 
         # Standardize her2 status column name
-        other_her2_columns = ['meta_her2', 'meta_her2_status', 'meta_her_2_status']
+        other_her2_columns = ['meta_her2', 'meta_her_2', 'meta_her2_status', 'meta_her_2_status', 'meta_her2_status_by_ihc']
         for col in meta_df.columns.tolist():
             if col.lower() in other_pr_columns: 
                 meta_df = meta_df.rename(columns={col: 'meta_her2_status'})
