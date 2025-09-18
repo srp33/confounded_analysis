@@ -255,35 +255,55 @@ def process_dataset(raw_folder_path: Path, dataset_id: str, output_base_dir: Pat
         # Prefix columns with 'meta_'
         meta_df = meta_df.add_prefix('meta_')
 
+        lower_to_full_case_columns = {col.lower():col for col in meta_df.columns}
+
         # Standardize er status column name
         other_er_columns = ['meta_er_ihc', 'meta_er', 'meta_er_status', 'meta_er_status_by_ihc', 'meta_er_status_ihc', 'meta_esr1_status']
-        for col in meta_df.columns.tolist():
-            if col.lower() in other_er_columns:
-                meta_df = meta_df.rename(columns={col: 'meta_er_status'})
+        for er_column in other_er_columns:
+            if er_column in lower_to_full_case_columns:
+                er_column = lower_to_full_case_columns[er_column]
+                print(f"Using {er_column} as ER status column")
+                meta_df = meta_df.rename(columns={er_column: 'meta_er_status'})
+                break
 
         if "meta_er_status" not in meta_df.columns.tolist():
             print(f"   ❌ ER status column not found. ")
             print(f"DEBUG: Available columns: {meta_df.columns.tolist()}")
+        else:
+            print(f"Unique er values: ")
+            print(meta_df['meta_er_status'].value_counts())
 
         # Standardize pr status column name
-        other_pr_columns = ['meta_pr', 'meta_pr_status', 'meta_pr_status_ihc', 'meta_pr_ihc', 'meta_prihc', 'meta_pr_status_by_ihc']
-        for col in meta_df.columns.tolist():
-            if col.lower() in other_pr_columns:
-                meta_df = meta_df.rename(columns={col: 'meta_pr_status'})
+        other_pr_columns = ['meta_pr', 'meta_pr_status', 'meta_pr_status_ihc', 'meta_pr_ihc', 'meta_prihc']
+        for pr_column in other_pr_columns:
+            if pr_column in lower_to_full_case_columns:
+                pr_column = lower_to_full_case_columns[pr_column]
+                print(f"Using {pr_column} as PR status column")
+                meta_df = meta_df.rename(columns={pr_column: 'meta_pr_status'})
+                break
 
         if "meta_pr_status" not in meta_df.columns.tolist():
             print(f"   ❌ PR status column not found. ")
             print(f"DEBUG: Available columns: {meta_df.columns.tolist()}")
+        else:
+            print(f"Unique pr values: ")
+            print(meta_df['meta_pr_status'].value_counts())
 
         # Standardize her2 status column name
-        other_her2_columns = ['meta_her2', 'meta_her_2', 'meta_her2_status', 'meta_her_2_status', 'meta_her2_status_by_ihc']
-        for col in meta_df.columns.tolist():
-            if col.lower() in other_pr_columns: 
-                meta_df = meta_df.rename(columns={col: 'meta_her2_status'})
-        
+        other_her2_columns = ['meta_her2', 'meta_her2_status', 'meta_her_2_status']
+        for her2_column in other_her2_columns:
+            if her2_column in lower_to_full_case_columns:
+                her2_column = lower_to_full_case_columns[her2_column]
+                print(f"Using {her2_column} as HER2 status column")
+                meta_df = meta_df.rename(columns={her2_column: 'meta_her_2_status'})
+                break
+
         if "meta_her2_status" not in meta_df.columns.tolist():
             print(f"   ❌ HER2 status column not found. ")
             print(f"DEBUG: Available columns: {meta_df.columns.tolist()}")
+        else:
+            print(f"Unique her2 values: ")
+            print(meta_df['meta_her2_status'].value_counts())
 
         # 4. Align and combine (the final and most critical validation)
         common_samples = expr_df.index.intersection(meta_df.index)
@@ -343,7 +363,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
     
     print("="*80)
-    print(f"PROCESSING RAW DATASETS -> {args.target_dir}")
+    print(f"PROCESSING RAW DATASETS -> {args.target_dir}", flush=True)
     print("="*80)
 
     datasets_info = scan_for_datasets(args.raw_dir)

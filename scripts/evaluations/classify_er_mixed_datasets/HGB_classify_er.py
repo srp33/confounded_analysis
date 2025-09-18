@@ -59,19 +59,15 @@ def calculate_metrics(y_true, y_pred, y_proba):
 
     return metrics
 
-def run_single_dataset(filepath, output_file, pred_col, source_col, adjustment, classifier, clf_model, n_splits, current_repeat):
+def run_single_dataset(filepath, source, output_file, pred_col, adjustment, classifier, clf_model, n_splits, current_repeat):
     """Generate metrics for a single dataset."""
     # Load pandas dataframe
     df = pd.DataFrame()
-    df = load_dataframe(filepath, pred_col, source_col) # Give df an index - double check
-
-    source = df[source_col].unique()
-    if len(source) != 1:
-        raise ValueError(f"Expected exactly 2 unique sources in '{source_col}', found: {source}")
+    df = load_dataframe(filepath, pred_col) # Give df an index - double check
 
     # Separate data into training and testing
     y = df[pred_col]
-    cols_to_drop = [pred_col, source_col]
+    cols_to_drop = [pred_col]
     X = df.drop(columns=[col for col in cols_to_drop if col in df.columns]).select_dtypes(include=[np.number])
 
     # Create dataframe for y predictions
@@ -81,7 +77,14 @@ def run_single_dataset(filepath, output_file, pred_col, source_col, adjustment, 
     model = clone(clf_model)
     cv_random_seed = RANDOM_SEED + current_repeat
     cv = RepeatedStratifiedKFold(n_splits=n_splits, random_state=cv_random_seed)
-    splits = list(cv.split(X,y))
+    try:
+        splits = list(cv.split(X,y))
+    except ValueError as e:
+        print_now(f"Error splitting data: {e} for {filepath}")
+        print_now(f"y shape: {y.shape} for {filepath}")
+        print_now(f"y unique: {y.unique()} for {filepath}")
+        print_now(f"X shape: {X.shape} for {filepath}")
+        raise e
 
     # Fit the model, test, and calculate metrics
     for train_index, test_index in splits:
@@ -108,10 +111,14 @@ def run_single_dataset(filepath, output_file, pred_col, source_col, adjustment, 
     metrics_df['Prediction'] = pred_col
     metrics_df['Train'] = source
     metrics_df['Test'] = source
+    # Use parent directory + filename for uniqueness
+    path_parts = Path(filepath).parts[-2:]  # Get last 2 parts (dir/file.csv)
+    file_id = "_".join(path_parts).replace("/", "_").replace(".", "_")
+    metrics_df['Run_ID'] = f"single_{file_id}_{current_repeat}"
 
     # Reorder columns and append to output file
     output_cols = ['Train', 'Test', 'ROC AUC', 'True Negative', 'False Negative', 'False Positive', 'True Positive', 
-    'Classifier', 'Adjustment', 'Prediction']
+    'Classifier', 'Adjustment', 'Prediction', 'Run_ID']
     safe_write_to_csv(metrics_df[output_cols], output_file)
     print_now(f"Classification results for {filepath} saved.")
 
@@ -121,7 +128,7 @@ def run_combined_dataset(filepath, output_file, pred_col, source_col, adjustment
     """Generate metrics for combined datasets
     with each training and testing combination."""
     # Load pandas dataframe
-    df = load_dataframe(filepath, pred_col, source_col)
+    df = load_dataframe(filepath, pred_col)
 
     # Ensure source column has two unique values
     sources = df[source_col].unique()
@@ -190,54 +197,83 @@ def run_combined_dataset(filepath, output_file, pred_col, source_col, adjustment
         metrics_df['Prediction'] = pred_col
         metrics_df['Train'] = train_key
         metrics_df['Test'] = test_key
+        # Use parent directory + filename for uniqueness
+        path_parts = Path(filepath).parts[-2:]  # Get last 2 parts (dir/file.csv)
+        file_id = "_".join(path_parts).replace("/", "_").replace(".", "_")
+        metrics_df['Run_ID'] = f"combined_{file_id}_{current_repeat}"
 
         # Reorder columns and append to output file
         output_cols = ['Train', 'Test', 'ROC AUC', 'True Negative', 'False Negative', 'False Positive', 'True Positive', 
-        'Classifier', 'Adjustment', 'Prediction']
+        'Classifier', 'Adjustment', 'Prediction', 'Run_ID']
         safe_write_to_csv(metrics_df[output_cols], output_file)
         print_now(f"Classification results for {filepath} saved.")
 
-def load_dataframe(filename, pred_col, source_col):
+def load_dataframe(filename, pred_col):
     """Read the file into a pandas dataframe and check it has the required columns."""
     print_now(f"Loading data from {filename}")
     df = pd.read_csv(filename)
 
-    if pred_col not in df.columns or source_col not in df.columns:
+    if pred_col not in df.columns :
         meta_cols = [col for col in df.columns if col.startswith('meta_')]
-        raise ValueError(f"{pred_col} and {source_col} not found in dataframe. Meta columns: {meta_cols}")
+        raise ValueError(f"{pred_col} not found in dataframe. Meta columns: {meta_cols}")
 
     # Remove all non [0,1] values (This should be done in the preprocessing script)
     df = df[(df[pred_col] == 0) | (df[pred_col] == 1)]
     return df
 
-def generate_runs(single_list, combined_list, n_repeats):
+def generate_runs(single_list, single_names, combined_list, n_repeats):
     """Return a list of dictionaries of run parameters for each combination of datasets."""
     runs = []
     for current_repeat in range(n_repeats):
-        for filepath in single_list:
+        for source, filepath in zip(single_names, single_list):
+            # Use parent directory + filename for uniqueness
+            path_parts = Path(filepath).parts[-2:]  # Get last 2 parts (dir/file.csv)
+            file_id = "_".join(path_parts).replace("/", "_").replace(".", "_")
             runs.append({
                 "type": "single",
                 "filename": filepath,
-                "current_repeat": current_repeat
+                "source": source,
+                "current_repeat": current_repeat,
+                "run_id": f"single_{file_id}_{current_repeat}"
             })
 
         for filepath in combined_list:
+            # Use parent directory + filename for uniqueness
+            path_parts = Path(filepath).parts[-2:]  # Get last 2 parts (dir/file.csv)
+            file_id = "_".join(path_parts).replace("/", "_").replace(".", "_")
             runs.append({
                 "type": "combined",
                 "filename": filepath,
-                "current_repeat": current_repeat
+                "current_repeat": current_repeat,
+                "run_id": f"combined_{file_id}_{current_repeat}"
             })
 
     return runs
+
+def filter_runs(runs, output_file):
+    """Filter out runs that have already been completed."""
+    if not os.path.exists(output_file) or os.path.getsize(output_file) == 0:
+        print_now("No existing output file found. Running all runs.")
+        return runs
+    
+    try:
+        existing_df = pd.read_csv(output_file)
+        completed_ids = set(existing_df.get('Run_ID', []))
+        filtered_runs = [run for run in runs if run['run_id'] not in completed_ids]
+        print_now(f"Filtered {len(runs)} runs down to {len(filtered_runs)} remaining runs.")
+        return filtered_runs
+    except Exception as e:
+        print_now(f"Error reading output file for filtering: {e}. Running all runs.")
+        return runs
 
 def execute_run(args, run, model):
     """Perform a single run based on its type."""
     if run['type'] == 'single':
         run_single_dataset(
             filepath=run['filename'],
+            source=run['source'],
             output_file=args.output,
             pred_col=args.prediction_column,
-            source_col=args.source_column,
             adjustment=args.adjustment,
             classifier=args.classifier,
             clf_model=model,
@@ -274,6 +310,7 @@ def main():
     parser = argparse.ArgumentParser(description="Run HistGradientBoosting classification on gene expression for ER status.")
     parser.add_argument('--combined-list', nargs='*', required=True, help='List of combined gene expression data filenames.')
     parser.add_argument('--single-list', nargs='*', required=True, help='List of individual gene expression data filenames.')
+    parser.add_argument('--single-source-names', nargs='*', required=True, help='List of dataset names for single source files.')
     parser.add_argument('--output', required=True, help='Path for the detailed output CSV file.')
     parser.add_argument('--adjustment', required=True, help='Type of adjustment done to CSV file.')
     parser.add_argument('--classifier', default= 'HistGradientBoosting', help='Name of classifier algorithm used.')
@@ -289,7 +326,7 @@ def main():
     os.makedirs(os.path.dirname(args.output), exist_ok=True)
     if not os.path.exists(args.output) or os.path.getsize(args.output) == 0:
         pd.DataFrame(columns=['Train', 'Test', 'ROC AUC', 'True Negative', 'False Negative', 'False Positive', 'True Positive', 
-    'Classifier', 'Adjustment', 'Prediction']).to_csv(args.output, index=False)
+    'Classifier', 'Adjustment', 'Prediction', 'Run_ID']).to_csv(args.output, index=False)
     
     print_now(f"=== HistGradientBoostingClassifier ER Status Classification ({args.adjustment}) ===")
 
@@ -297,7 +334,9 @@ def main():
     model = initialize_model(args.classifier)
     
     # Generate a list of dictionaries with the parameters for each run
-    runs = generate_runs(args.single_list, args.combined_list, args.n)
+    runs = generate_runs(args.single_list, args.single_source_names, args.combined_list, args.n)
+
+    runs = filter_runs(runs, args.output)
 
     # Execute runs in parallel
     n_jobs = min(len(runs), os.cpu_count() or 1, args.num_workers)
@@ -306,9 +345,6 @@ def main():
     Parallel(n_jobs=n_jobs)(
         delayed(execute_run)(args, run, model) for run in runs
     )
-
-    # for run in runs:
-    #     execute_run(run)
 
     print_now("\nPipeline finished.")
     print_now(f"Detailed results are in: {args.output}")
