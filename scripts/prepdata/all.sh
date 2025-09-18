@@ -40,7 +40,7 @@ python3 /scripts/prepdata/convert_raw_files.py \
     --debug
 
 echo "🔗 Generating all dataset combinations with caching (only the unadjusted files)..."
-python3 scripts/prepdata/generate_all_combinations.py --csv-files unadjusted.csv --debug
+python3 /scripts/prepdata/generate_all_combinations.py --csv-files unadjusted.csv --debug
 
 
 # https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE20194

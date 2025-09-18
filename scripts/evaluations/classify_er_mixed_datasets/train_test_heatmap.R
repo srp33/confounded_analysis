@@ -10,12 +10,14 @@ if (!require(ggplot2)) install.packages("ggplot2")
 if (!require(readr)) install.packages("readr")
 if (!require(dplyr)) install.packages("dplyr")
 if (!require(tidyr)) install.packages("tidyr")
+if (!require(stringr)) install.packages("stringr")
 
 # Load libraries
 library(ggplot2)
 library(readr)
 library(dplyr)
 library(tidyr)
+library(stringr)
 
 # --- Parse Command Line Arguments ---
 args <- commandArgs(trailingOnly = TRUE)
@@ -31,7 +33,7 @@ adjuster <- args[1]
 cat("Processing adjuster:", adjuster, "\n")
 
 # --- Configuration ---
-CSV_FILE <- paste0("/outputs/metrics/er_classification_all_", adjuster, ".csv")
+CSV_FILE <- paste0("/outputs/metrics/er_classification_", adjuster, ".csv")
 FIG_DIR <- "/outputs/figures"
 
 # --- Helper Functions ---
@@ -66,45 +68,44 @@ read_and_prepare_data <- function(csv_file) {
   cat("Data dimensions:", nrow(data), "rows,", ncol(data), "columns\n")
   cat("Column names:", paste(colnames(data), collapse = ", "), "\n")
   
+  # Convert to regular data.frame for easier processing
+  data <- as.data.frame(data)
+  
   return(data)
+}
+
+# Function to filter data (common filtering logic)
+filter_datasets <- function(data) {
+  data %>%
+    filter(!str_detect(Train, regex("combined", ignore_case = TRUE)),
+           !str_detect(Test, regex("combined", ignore_case = TRUE)),
+           !str_detect(Train, ";"),
+           !str_detect(Test, ";"))
 }
 
 # Function to prepare metric data
 prepare_metric_data <- function(data, metric_col) {
+  # Apply common filtering first
+  filtered_data <- filter_datasets(data)
+  
   if (metric_col == "MCC") {
-    # For MCC, we need to calculate it from confusion matrix values
-    metric_data <- data %>%
-      # Remove entries where Train or Test contains "combined"
-      filter(!grepl("combined", Train, ignore.case = TRUE)) %>%
-      filter(!grepl("combined", Test, ignore.case = TRUE)) %>%
-      # Remove entries where Train or Test contains a colon
-      filter(!grepl(":", Train)) %>%
-      filter(!grepl(":", Test)) %>%
-      # Filter for rows with complete confusion matrix data
+    # For MCC, calculate from confusion matrix values
+    filtered_data %>%
       filter(!is.na(`True Positive`) & !is.na(`True Negative`) & 
              !is.na(`False Positive`) & !is.na(`False Negative`)) %>%
-      # Calculate MCC from confusion matrix values
-      mutate(MCC = calculate_mcc(`True Positive`, `True Negative`, 
-                                `False Positive`, `False Negative`)) %>%
-      select(Train, Test, MCC) %>%
+      mutate(!!metric_col := calculate_mcc(`True Positive`, `True Negative`, 
+                                          `False Positive`, `False Negative`)) %>%
+      select(Train, Test, all_of(metric_col)) %>%
       group_by(Train, Test) %>%
-      summarise(Mean_Metric = mean(MCC, na.rm = TRUE), .groups = 'drop')
+      summarise(Mean_Metric = mean(.data[[metric_col]], na.rm = TRUE), .groups = 'drop')
   } else {
-    # For other metrics like ROC AUC
-    metric_data <- data %>%
+    # For existing metrics like ROC AUC
+    filtered_data %>%
       filter(!is.na(.data[[metric_col]])) %>%
-      # Remove entries where Train or Test contains "combined"
-      filter(!grepl("combined", Train, ignore.case = TRUE)) %>%
-      filter(!grepl("combined", Test, ignore.case = TRUE)) %>%
-      # Remove entries where Train or Test contains a colon
-      filter(!grepl(":", Train)) %>%
-      filter(!grepl(":", Test)) %>%
       select(Train, Test, all_of(metric_col)) %>%
       group_by(Train, Test) %>%
       summarise(Mean_Metric = mean(.data[[metric_col]], na.rm = TRUE), .groups = 'drop')
   }
-  
-  return(metric_data)
 }
 
 # Function to create heatmap
@@ -190,41 +191,51 @@ save_plot_and_summary <- function(plot, filename, metric_data, metric_name) {
 # Read and prepare data
 data <- read_and_prepare_data(CSV_FILE)
 
+# Function to generate heatmap for a specific metric
+generate_metric_heatmap <- function(data, metric_name, metric_col, adjuster) {
+  cat("Generating", metric_name, "Heatmap...\n")
+  
+  # Prepare data
+  metric_data <- prepare_metric_data(data, metric_col)
+  
+  # Set parameters based on metric type
+  if (metric_col == "MCC") {
+    title <- paste("Matthews Correlation Coefficient Heatmap: Dataset Combinations (", adjuster, ")", sep = "")
+    subtitle <- "Mean MCC scores for Train/Test dataset pairs"
+    legend_name <- "Mean\nMCC"
+    midpoint <- 0
+    limits <- c(-1, 1)
+    is_mcc <- TRUE
+    filename <- paste0("mcc_heatmap_", adjuster, ".pdf")
+  } else {
+    title <- paste("ROC AUC Heatmap: Dataset Combinations (", adjuster, ")", sep = "")
+    subtitle <- "Mean AUC scores for Train/Test dataset pairs"
+    legend_name <- "Mean\nROC AUC"
+    midpoint <- 0.5
+    limits <- c(0, 1)
+    is_mcc <- FALSE
+    filename <- paste0("auc_heatmap_", adjuster, ".pdf")
+  }
+  
+  # Create plot
+  plot <- create_heatmap(metric_data, title, subtitle, legend_name, 
+                        midpoint, limits, is_mcc)
+  
+  # Save and summarize
+  save_plot_and_summary(plot, filename, metric_data, metric_name)
+  
+  return(metric_data)
+}
+
 # Display unique train/test combinations (after filtering)
-unique_trains <- unique(data$Train[!grepl("combined", data$Train, ignore.case = TRUE) & 
-                                   !grepl(":", data$Train)])
-unique_tests <- unique(data$Test[!grepl("combined", data$Test, ignore.case = TRUE) & 
-                                 !grepl(":", data$Test)])
+filtered_data <- filter_datasets(data)
+unique_trains <- unique(filtered_data$Train)
+unique_tests <- unique(filtered_data$Test)
 cat("Unique Train datasets:", paste(unique_trains, collapse = ", "), "\n")
 cat("Unique Test datasets:", paste(unique_tests, collapse = ", "), "\n\n")
 
-# Generate AUC Heatmap
-cat("Generating ROC AUC Heatmap...\n")
-auc_data <- prepare_metric_data(data, "ROC AUC")
-auc_plot <- create_heatmap(
-  auc_data, 
-  paste("ROC AUC Heatmap: Dataset Combinations (", adjuster, ")", sep = ""),
-  "Mean AUC scores for Train/Test dataset pairs",
-  "Mean\nROC AUC",
-  midpoint = 0.5,
-  limits = c(0, 1)
-)
-auc_filename <- paste0("auc_heatmap_", adjuster, ".pdf")
-save_plot_and_summary(auc_plot, auc_filename, auc_data, "ROC AUC")
-
-# Generate MCC Heatmap
-cat("Generating MCC Heatmap...\n")
-mcc_data <- prepare_metric_data(data, "MCC")
-mcc_plot <- create_heatmap(
-  mcc_data,
-  paste("Matthews Correlation Coefficient Heatmap: Dataset Combinations (", adjuster, ")", sep = ""), 
-  "Mean MCC scores for Train/Test dataset pairs",
-  "Mean\nMCC",
-  midpoint = 0,
-  limits = c(-1, 1),
-  is_mcc = TRUE
-)
-mcc_filename <- paste0("mcc_heatmap_", adjuster, ".pdf")
-save_plot_and_summary(mcc_plot, mcc_filename, mcc_data, "MCC")
+# Generate both heatmaps
+auc_data <- generate_metric_heatmap(data, "ROC AUC", "ROC AUC", adjuster)
+mcc_data <- generate_metric_heatmap(data, "MCC", "MCC", adjuster)
 
 cat("All heatmaps generated successfully for adjuster:", adjuster, "\n")

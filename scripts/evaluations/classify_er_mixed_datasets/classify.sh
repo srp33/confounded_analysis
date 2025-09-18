@@ -29,9 +29,11 @@ echo "Combined datasets: ${#COMBINED_FILES[@]}"
 
 readarray -t SINGLE_FILES < <(find "$SINGLE_DATA_DIR" -mindepth 1 -name "${ADJUSTER}.csv" -type f)
 echo "Single datasets: ${#SINGLE_FILES[@]}"
+# Extract directory names as dataset names
+readarray -t SINGLE_DATASET_NAMES < <(printf '%s\n' "${SINGLE_FILES[@]}" | xargs -I {} dirname {} | xargs -I {} basename {})
 
 # Prepare output file paths
-OUTPUT_FILE="${OUTPUT_DIR}/er_classification_all_${ADJUSTER}.csv"
+OUTPUT_FILE="${OUTPUT_DIR}/er_classification_${ADJUSTER}.csv"
 
 # Debug: Print file lists
 echo "Combined files:"
@@ -44,6 +46,7 @@ echo "Running HGB classification..."
 python "$SCRIPT_PATH" \
     --combined-list "${COMBINED_FILES[@]}" \
     --single-list "${SINGLE_FILES[@]}" \
+    --single-source-names "${SINGLE_DATASET_NAMES[@]}" \
     --output "$OUTPUT_FILE" \
     --adjustment "$ADJUSTER" \
     --classifier "HistGradientBoosting" \
