@@ -258,7 +258,7 @@ def process_dataset(raw_folder_path: Path, dataset_id: str, output_base_dir: Pat
         lower_to_full_case_columns = {col.lower():col for col in meta_df.columns}
 
         # Standardize er status column name
-        other_er_columns = ['meta_er_ihc', 'meta_er', 'meta_er_status', 'meta_er_status_by_ihc', 'meta_er_status_ihc', 'meta_esr1_status']
+        other_er_columns = ['meta_er_status', 'meta_er_ihc', 'meta_er', 'meta_er_status_by_ihc', 'meta_er_status_ihc', 'meta_er_consensus', 'meta_esr1_status']
         for er_column in other_er_columns:
             if er_column in lower_to_full_case_columns:
                 er_column = lower_to_full_case_columns[er_column]
@@ -290,7 +290,7 @@ def process_dataset(raw_folder_path: Path, dataset_id: str, output_base_dir: Pat
             print(meta_df['meta_pr_status'].value_counts())
 
         # Standardize her2 status column name
-        other_her2_columns = ['meta_her2', 'meta_her_2', 'meta_her2_status', 'meta_her_2_status', 'meta_her2_status_by_ihc']
+        other_her2_columns = ['meta_her2', 'meta_her_2', 'meta_her2_status', 'meta_her_2_status', 'meta_her2_status_by_ihc', 'meta_her2_consensus']
         for her2_column in other_her2_columns:
             if her2_column in lower_to_full_case_columns:
                 her2_column = lower_to_full_case_columns[her2_column]
@@ -315,27 +315,28 @@ def process_dataset(raw_folder_path: Path, dataset_id: str, output_base_dir: Pat
         def status_to_binary(val):
             if pd.isnull(val):
                 return np.nan 
-            # Case 1: Already numeric
-            if isinstance(val, (int, float)):
-                if val == 0.0 or val == 0:
+
+            val = str(val).strip().lower()
+
+            try: 
+                # Case 1: Already numeric
+                num_val = float(val)
+                if num_val == 0:
                     return 0
-                if val == 1.0 or val == 1:
+                elif num_val in [1, 2, 3]:
                     return 1
+            except ValueError: 
+                pass
 
-            # Case 2: It's a string
-            if isinstance(val, str):
+            positive_vals = {'positive', 'p', 'pos', 'pos-low', '1', '2', '3', 'er+', 'he+', 'pr+'}
+            negative_vals = {'negative', 'n', 'neg', '0', 'er-', 'he-', 'pr-'}
 
-                val = val.strip().lower()
-
-                positive_vals = {'positive', 'p', 'pos', 'pos-low', '1', 'er+', 'he+', 'pr+'}
-                negative_vals = {'negative', 'n', 'neg', '0', 'er-', 'he-', 'pr-'}
-
-                for pos in positive_vals:
-                    if pos in val:
-                        return 1
-                for neg in negative_vals:
-                    if neg in val:
-                        return 0
+            for pos in positive_vals:
+                if pos in val:
+                    return 1
+            for neg in negative_vals:
+                if neg in val:
+                    return 0
 
             return np.nan
 
