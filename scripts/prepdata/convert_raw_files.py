@@ -2,6 +2,7 @@
 
 import os
 import pandas as pd
+import numpy as np
 import gzip
 import warnings
 import sys
@@ -254,7 +255,6 @@ def process_dataset(raw_folder_path: Path, dataset_id: str, output_base_dir: Pat
         meta_df = meta_df.set_index(sample_id_col)
         # Prefix columns with 'meta_'
         meta_df = meta_df.add_prefix('meta_')
-
         lower_to_full_case_columns = {col.lower():col for col in meta_df.columns}
 
         # Standardize er status column name
@@ -295,7 +295,7 @@ def process_dataset(raw_folder_path: Path, dataset_id: str, output_base_dir: Pat
             if her2_column in lower_to_full_case_columns:
                 her2_column = lower_to_full_case_columns[her2_column]
                 print(f"Using {her2_column} as HER2 status column")
-                meta_df = meta_df.rename(columns={her2_column: 'meta_her_2_status'})
+                meta_df = meta_df.rename(columns={her2_column: 'meta_her2_status'})
                 break
 
         if "meta_her2_status" not in meta_df.columns.tolist():
@@ -310,7 +310,7 @@ def process_dataset(raw_folder_path: Path, dataset_id: str, output_base_dir: Pat
         cols_to_convert = [col for col in expected_cols if col in meta_df.columns]
 
         # Lowercase all values in relevant columns
-        meta_df[cols_to_convert] = meta_df[cols_to_convert].apply(lambda col: col.str.lower())
+        meta_df[cols_to_convert] = meta_df[cols_to_convert].apply(lambda col: col.astype(str).str.lower())
 
         def status_to_binary(val):
             if pd.isnull(val):
@@ -323,12 +323,12 @@ def process_dataset(raw_folder_path: Path, dataset_id: str, output_base_dir: Pat
                     return 1
 
             # Case 2: It's a string
-            if isinstanace(val, str):
+            if isinstance(val, str):
 
                 val = val.strip().lower()
 
-                positive_vals = {'positive', 'P', 'pos', 'pos-low', '1', 'er+', 'he+', 'pr+'}
-                negative_vals = {'negative', 'N', 'neg', '0', 'er-', 'he-', 'pr-'}
+                positive_vals = {'positive', 'p', 'pos', 'pos-low', '1', 'er+', 'he+', 'pr+'}
+                negative_vals = {'negative', 'n', 'neg', '0', 'er-', 'he-', 'pr-'}
 
                 for pos in positive_vals:
                     if pos in val:
@@ -337,11 +337,17 @@ def process_dataset(raw_folder_path: Path, dataset_id: str, output_base_dir: Pat
                     if neg in val:
                         return 0
 
-            return None
+            return np.nan
 
-        df[cols_to_convert] = df[cols_to_convert].applymap(status_to_binary)
+        meta_df[cols_to_convert] = meta_df[cols_to_convert].applymap(status_to_binary)
 
-        print("Number of values that couldn't be classified: ", df[cols_to_convert].isnull().sum())
+        #print("Number of values that couldn't be classified: ", meta_df[cols_to_convert].isnull().sum())
+        for col in cols_to_convert:
+            unclassified = meta_df[col][meta_df[col].isnull()]
+            if not unclassified.empty:
+                print(f"❓ Unclassified values in {col}:")
+                print(unclassified.value_counts(dropna=False))
+
 
         # 4. Align and combine (the final and most critical validation)
         common_samples = expr_df.index.intersection(meta_df.index)
