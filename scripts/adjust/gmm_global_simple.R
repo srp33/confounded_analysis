@@ -2,10 +2,10 @@
 # Simple Gene-Global GMM Adjustment Strategy
 # 
 # This implements a very simple global adjustment approach:
-# 1. Average expression across all genes to get a global distribution
-# 2. Fit a two-component GMM to this global distribution  
+# 1. Flatten all expression values to create a global distribution
+# 2. Fit a two-component GMM to this global distribution in log space
 # 3. Find the midpoint between the two modes
-# 4. Subtract this midpoint from all expression values
+# 4. Apply transformation strategy using global GMM parameters
 
 suppressPackageStartupMessages({
   library(mclust)
@@ -17,8 +17,8 @@ source("/scripts/adjust/gmm_transforms.R")
 #' Core function for gene-global GMM adjustment with multiple strategies
 #' 
 #' This function implements a global adjustment strategy that:
-#' 1. Computes the mean expression across all genes for each sample
-#' 2. Transforms all data to log space
+#' 1. Transforms all data to log space
+#' 2. Flattens all expression values to create a global distribution
 #' 3. Fits a two-component GMM to the log-transformed global distribution
 #' 4. Applies the specified transformation strategy using global GMM parameters
 #' 
@@ -27,6 +27,7 @@ source("/scripts/adjust/gmm_transforms.R")
 #' @param debug Whether to enable debug logging
 #' @return List with adjusted_data and adjustment_info
 gmm_global_core <- function(data, strategy = "simple", debug = FALSE) {
+  
   if (debug) {
     message("Starting gene-global GMM adjustment with strategy: ", strategy)
     message("Input data dimensions: ", nrow(data), " samples x ", ncol(data), " genes")
@@ -36,8 +37,8 @@ gmm_global_core <- function(data, strategy = "simple", debug = FALSE) {
   min_val <- min(data, na.rm = TRUE)
   data_log <- log(data - min_val + 1)
   
-  # Step 2: Compute mean expression across all genes for each sample (in log space)
-  global_distribution_log <- rowMeans(data_log, na.rm = TRUE)
+  # Step 2: Flatten all expression values to create a global distribution (in log space)
+  global_distribution_log <- as.vector(data_log)
   
   if (debug) {
     message("Global distribution (log space) summary:")
@@ -59,11 +60,23 @@ gmm_global_core <- function(data, strategy = "simple", debug = FALSE) {
   # Step 3: Fit a two-component GMM to the global distribution (in log space)
   result <- tryCatch({
     if (debug) {
-      message("Fitting GMM to log-space global distribution...")
+      message("Fitting GMM to all expression values in log space...")
+    }
+    
+    # For very large datasets, subsample for GMM fitting to speed up
+    if (length(global_distribution_log) > 1000000) {
+      if (debug) {
+        message("Large dataset detected, using subsample for GMM fitting...")
+      }
+      sample_size <- min(500000, length(global_distribution_log))
+      sample_indices <- sample(length(global_distribution_log), sample_size)
+      gmm_data <- global_distribution_log[sample_indices]
+    } else {
+      gmm_data <- global_distribution_log
     }
     
     # Fit GMM with exactly 2 components
-    gmm_fit <- Mclust(global_distribution_log, G = 2, modelNames = "V", verbose = FALSE)
+    gmm_fit <- Mclust(gmm_data, G = 2, modelNames = "V", verbose = FALSE)
     
     if (is.null(gmm_fit)) {
       return(set_fallback_values("GMM fitting returned NULL"))
@@ -109,11 +122,11 @@ gmm_global_core <- function(data, strategy = "simple", debug = FALSE) {
       message("  Scale factor: ", round(scale_factor, 3))
     }
     
-    return(list(
+    list(
       adjustment_value_log = midpoint_log,
       fit_successful = TRUE,
       component_info = component_info
-    ))
+    )
     
   }, error = function(e) {
     return(set_fallback_values(paste("Error in GMM fitting:", e$message)))
@@ -125,6 +138,9 @@ gmm_global_core <- function(data, strategy = "simple", debug = FALSE) {
   component_info <- result$component_info
   
   # Step 5: Apply the specified transformation strategy
+  # Initialize adjusted_data with fallback
+  adjusted_data <- data_log
+  
   if (strategy == "simple") {
     # Simple centering and scaling in log space
     centered_data_log <- data_log - adjustment_value_log
@@ -152,8 +168,8 @@ gmm_global_core <- function(data, strategy = "simple", debug = FALSE) {
         message("Applying bimodal NPN transformation using global GMM parameters")
       }
       
-      # Flatten all data for global ranking
-      all_values <- as.vector(data_log)
+      # Use the already flattened data for ranking (same as global_distribution_log)
+      all_values <- global_distribution_log
       
       # Create target bimodal distribution with modes at -1 and +1
       target_means <- c(-1, 1)
@@ -165,21 +181,25 @@ gmm_global_core <- function(data, strategy = "simple", debug = FALSE) {
       quantiles <- ranks / (sum(!is.na(all_values)) + 1)
       
       # Transform through inverse CDF of target bimodal distribution
-      transformed_values <- inverse_cdf_gmm_R(
-        quantiles,
-        means = target_means,
-        variances = target_variances,
-        weights = target_weights
-      )
+      transformed_values <- tryCatch({
+        inverse_cdf_gmm_R(
+          quantiles,
+          means = target_means,
+          variances = target_variances,
+          weights = target_weights
+        )
+      }, error = function(e) {
+        if (debug) {
+          message("Error in inverse_cdf_gmm_R: ", e$message)
+        }
+        return(NULL)
+      })
+      
+      
+      transformed_values <- qnorm(quantiles)
       
       # Reshape back to original matrix dimensions
       adjusted_data <- matrix(transformed_values, nrow = nrow(data_log), ncol = ncol(data_log))
-      
-      if (debug) {
-        message("Applied global bimodal NPN transformation")
-        message("  Target modes: -1, +1")
-        message("  Original weights: ", round(component_info$weight1, 3), ", ", round(component_info$weight2, 3))
-      }
       
     } else {
       # Fallback to simple unimodal NPN if GMM failed
@@ -187,7 +207,8 @@ gmm_global_core <- function(data, strategy = "simple", debug = FALSE) {
         message("GMM failed, applying unimodal NPN transformation")
       }
       
-      all_values <- as.vector(data_log)
+      # Use the already flattened data (same as global_distribution_log)
+      all_values <- global_distribution_log
       ranks <- rank(all_values, na.last = "keep", ties.method = "average")
       quantiles <- ranks / (sum(!is.na(all_values)) + 1)
       transformed_values <- qnorm(quantiles)
@@ -203,10 +224,11 @@ gmm_global_core <- function(data, strategy = "simple", debug = FALSE) {
   
   if (debug) {
     message("Adjustment completed successfully with strategy: ", strategy)
-    message("Final data range: [", round(min(adjusted_data, na.rm = TRUE), 3), ", ", round(max(adjusted_data, na.rm = TRUE), 3), "]")
+    if (!is.null(adjusted_data)) {
+      message("Final data range: [", round(min(adjusted_data, na.rm = TRUE), 3), ", ", round(max(adjusted_data, na.rm = TRUE), 3), "]")
+    }
   }
   
-  # Return results
   return(list(
     adjusted_data = adjusted_data,
     adjustment_info = list(

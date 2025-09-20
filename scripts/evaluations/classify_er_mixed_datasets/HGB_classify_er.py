@@ -93,7 +93,7 @@ def run_single_dataset(filepath, source, output_file, pred_col, adjustment, clas
         model.fit(X_train, y_train)
     
         # Predict off of x test to get y test predictions
-        y_pred = model.predict(X_test)[:,1]
+        y_pred = model.predict(X_test)
         predictions.loc[test_index, 'y_predicted'] = y_pred
 
         # Take the second column of probabilistic predictions from x test

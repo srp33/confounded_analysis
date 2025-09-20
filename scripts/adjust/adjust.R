@@ -684,7 +684,16 @@ adjust_gmm_global_npn <- function(matrix_, batch = NULL, debug = FALSE, meta_fil
   # Apply the global NPN adjustment
   result <- gmm_global_npn_core(data_transposed, debug = debug)
   
-  return(t(result$adjusted_data))
+  # Ensure we have a matrix before transposing
+  adjusted_data <- result$adjusted_data
+  if (!is.matrix(adjusted_data)) {
+    if (debug) {
+      message("Converting to matrix before transpose")
+    }
+    adjusted_data <- as.matrix(adjusted_data)
+  }
+  
+  return(t(adjusted_data))
 }
 
 
@@ -889,8 +898,8 @@ batch_adjust_tidy <- function(df, input_file, adjuster, batch_col, column, full_
     "gmm" = adjust_gmm(mat_genes, batch, debug=debug, meta_file=meta_file),
     "gmm_npn" = adjust_gmm_npn(mat_genes, batch, debug=debug, meta_file=meta_file),
     "gmm_npn_unit_std" = adjust_gmm_npn_unit_std(mat_genes, batch, debug=debug, meta_file=meta_file),
-    "gmm_global_simple" = adjust_gmm_global_simple(mat_genes, batch, debug=debug, meta_file=meta_file),
-    "gmm_global_npn" = adjust_gmm_global_npn(mat_genes, batch, debug=debug, meta_file=meta_file),
+    "gmm_global_simple" = adjust_gmm_global_simple(mat_genes, batch, debug=TRUE, meta_file=meta_file),
+    "gmm_global_npn" = adjust_gmm_global_npn(mat_genes, batch, debug=TRUE, meta_file=meta_file),
     "ranked1" = adjust_ranked(mat_genes, debug = debug),
     "ranked2" = adjust_ranked_twice(mat_genes, debug = debug),
     "ranked_batch" = adjust_ranked_with_batch_info(mat_genes, batch, debug = debug),
