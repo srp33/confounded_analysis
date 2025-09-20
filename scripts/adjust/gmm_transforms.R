@@ -273,7 +273,15 @@ apply_adjustment_strategy <- function(X, gene_params, strategy = "simple", debug
     # Non-paranormal transformation
     return(bimodal_npn(X_transformed, m0, m1, v0, v1, w0, w1))
     
-  } else {
+  } else if (strategy == "npn_unit_std") {
+    adjusted = bimodal_npn(X_transformed, m0, m1, v0, v1, w0, w1)
+    new_mean = mean(adjusted, na.rm = TRUE)
+    adjusted = adjusted - new_mean
+    adjusted = adjusted / sd(adjusted, na.rm = TRUE)
+    return(adjusted + new_mean)
+  }
+  
+  else {
     stop("Unknown adjustment strategy: ", strategy)
   }
 }
