@@ -12,7 +12,7 @@ suppressPackageStartupMessages({
 })
 
 # Source functions from gmm_transforms.R for NPN functionality
-source("scripts/adjust/gmm_transforms.R")
+source("/scripts/adjust/gmm_transforms.R")
 
 #' Core function for gene-global GMM adjustment with multiple strategies
 #' 
