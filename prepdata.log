@@ -1,0 +1,885 @@
+🔧 Converting files, and fixing if needed...
+================================================================================
+PROCESSING RAW DATASETS -> /data/gold
+================================================================================
+
+Found 14 datasets to process in /data/raw_data:
+  - gse19615
+  - gse20194
+  - gse20271
+  - gse23720
+  - gse25065
+  - gse31448
+  - gse45255
+  - gse58644
+  - gse62944_tumor
+  - gse76275
+  - gse81538
+  - gse96058_hiseq
+  - gse96058_nextseq
+  - metabric
+
+🔄 Processing dataset: gse19615
+   🔍 Transpose decision: YES - columns (121) closer to expected samples (115) than rows (20945)
+DEBUG: Using metadata column 'Sample_ID' as sample ID
+Using meta_er as ER status column
+Unique er values: 
+meta_er_status
+pos        66
+neg        45
+pos-low     4
+Name: count, dtype: int64
+Using meta_pr as PR status column
+Unique pr values: 
+meta_pr_status
+pos        52
+neg        51
+pos-low    12
+Name: count, dtype: int64
+Using meta_her_2 as HER2 status column
+Unique her2 values: 
+meta_her2_status
+neg             79
+pos (3+)        30
+low pos (2+)     6
+Name: count, dtype: int64
+   🔗 Found 115 common samples.
+   ✅ Successfully saved: /data/gold/gse19615/unadjusted.csv (41,538,382 bytes)
+
+🔄 Processing dataset: gse20194
+   🔍 Transpose decision: YES - columns (257) closer to expected samples (251) than rows (13744)
+DEBUG: Using metadata column 'Sample_ID' as sample ID
+Using meta_er_status as ER status column
+Unique er values: 
+meta_er_status
+P    155
+N     96
+Name: count, dtype: int64
+Using meta_pr_status as PR status column
+Unique pr values: 
+meta_pr_status
+N    138
+P    113
+Name: count, dtype: int64
+Using meta_her2_status as HER2 status column
+Unique her2 values: 
+meta_her2_status
+N    195
+P     56
+Name: count, dtype: int64
+   🔗 Found 251 common samples.
+   ✅ Successfully saved: /data/gold/gse20194/unadjusted.csv (59,145,181 bytes)
+
+🔄 Processing dataset: gse20271
+   🔍 Transpose decision: YES - columns (162) closer to expected samples (156) than rows (13744)
+DEBUG: Using metadata column 'Sample_ID' as sample ID
+Using meta_er_status as ER status column
+Unique er values: 
+meta_er_status
+P    92
+N    64
+Name: count, dtype: int64
+Using meta_pr_status as PR status column
+Unique pr values: 
+meta_pr_status
+P    79
+N    77
+Name: count, dtype: int64
+Using meta_her_2_status as HER2 status column
+Unique her2 values: 
+meta_her2_status
+N    132
+P     24
+Name: count, dtype: int64
+   🔗 Found 156 common samples.
+   ✅ Successfully saved: /data/gold/gse20271/unadjusted.csv (36,817,125 bytes)
+
+🔄 Processing dataset: gse23720
+   🔍 Transpose decision: YES - columns (203) closer to expected samples (197) than rows (20945)
+DEBUG: Using metadata column 'Sample_ID' as sample ID
+Using meta_er_ihc as ER status column
+Unique er values: 
+meta_er_status
+positive    131
+negative     66
+Name: count, dtype: int64
+Using meta_pr_ihc as PR status column
+Unique pr values: 
+meta_pr_status
+positive    118
+negative     79
+Name: count, dtype: int64
+   ❌ HER2 status column not found. 
+DEBUG: Available columns: ['meta_Dataset_ID', 'meta_Platform_ID', 'meta_description', 'meta_age_at_diagnosis', 'meta_er_status', 'meta_pr_status']
+   🔗 Found 197 common samples.
+   ✅ Successfully saved: /data/gold/gse23720/unadjusted.csv (70,882,695 bytes)
+
+🔄 Processing dataset: gse25065
+   🔍 Transpose decision: YES - columns (190) closer to expected samples (184) than rows (13744)
+DEBUG: Using metadata column 'Sample_ID' as sample ID
+Using meta_er_status_ihc as ER status column
+Unique er values: 
+meta_er_status
+P    117
+N     66
+Name: count, dtype: int64
+Using meta_pr_status_ihc as PR status column
+Unique pr values: 
+meta_pr_status
+P    95
+N    88
+Name: count, dtype: int64
+Using meta_her2_status as HER2 status column
+Unique her2 values: 
+meta_her2_status
+N    180
+P      2
+Name: count, dtype: int64
+   🔗 Found 184 common samples.
+   ✅ Successfully saved: /data/gold/gse25065/unadjusted.csv (43,429,625 bytes)
+
+🔄 Processing dataset: gse31448
+   🔍 Transpose decision: YES - columns (363) closer to expected samples (357) than rows (20945)
+DEBUG: Using metadata column 'Sample_ID' as sample ID
+Using meta_er_ihc as ER status column
+Unique er values: 
+meta_er_status
+1           150
+0           111
+negative     50
+positive     38
+Name: count, dtype: int64
+Using meta_pr_ihc as PR status column
+Unique pr values: 
+meta_pr_status
+1           136
+0           125
+negative     52
+positive     36
+Name: count, dtype: int64
+   ❌ HER2 status column not found. 
+DEBUG: Available columns: ['meta_Dataset_ID', 'meta_Platform_ID', 'meta_Patient_ID', 'meta_center', 'meta_dfs_evt', 'meta_dfs_time_months', 'meta_histology', 'meta_ki67_ihc', 'meta_molecular_subtype', 'meta_p53_ihc', 'meta_pn', 'meta_pt', 'meta_sbr_grade', 'meta_tumor_status', 'meta_age_at_diagnosis', 'meta_er_status', 'meta_pr_status', 'meta_erbb2_ihc_status']
+   🔗 Found 357 common samples.
+   ✅ Successfully saved: /data/gold/gse31448/unadjusted.csv (128,328,612 bytes)
+
+🔄 Processing dataset: gse45255
+   🔍 Transpose decision: YES - columns (141) closer to expected samples (135) than rows (13744)
+DEBUG: Using metadata column 'Sample_ID' as sample ID
+Using meta_er_status as ER status column
+Unique er values: 
+meta_er_status
+ER+    86
+ER-    47
+Name: count, dtype: int64
+   ❌ PR status column not found. 
+DEBUG: Available columns: ['meta_Dataset_ID', 'meta_Platform_ID', 'meta_endocrine_0=no_1=yes', 'meta_adjuvant_treated_0_no_1_yes', 'meta_chemo_0_no_1_yes', 'meta_dfs_event_defined_as_any_type_of_recurrence_or_death_from_breast_cancer', 'meta_dfs_time', 'meta_dmfs_event_defined_as_distant_metastasis_or_death_from_breast_cancer', 'meta_dmfs_time', 'meta_dss_event_defined_as_death_from_breast_cancer', 'meta_dss_time', 'meta_er_status', 'meta_her2_status', 'meta_histological_grade', 'meta_histology', 'meta_ln_status', 'meta_patient_age', 'meta_pgr_status', 'meta_size_mm', 'meta_treatment_type']
+Using meta_her2_status as HER2 status column
+Unique her2 values: 
+meta_her2_status
+He-    68
+He+    59
+Name: count, dtype: int64
+   🔗 Found 135 common samples.
+   ✅ Successfully saved: /data/gold/gse45255/unadjusted.csv (31,754,830 bytes)
+
+🔄 Processing dataset: gse58644
+   🔍 Transpose decision: YES - columns (327) closer to expected samples (321) than rows (21659)
+DEBUG: Using metadata column 'Sample_ID' as sample ID
+Using meta_er as ER status column
+Unique er values: 
+meta_er_status
+1.0    250
+0.0     70
+Name: count, dtype: int64
+   ❌ PR status column not found. 
+DEBUG: Available columns: ['meta_Dataset_ID', 'meta_Platform_ID', 'meta_age', 'meta_chemo', 'meta_er_status', 'meta_event', 'meta_grade', 'meta_her2', 'meta_herceptin', 'meta_lymph', 'meta_size', 'meta_stage', 'meta_tamoxifen', 'meta_time']
+Using meta_her2 as HER2 status column
+Unique her2 values: 
+meta_her2_status
+0.0    256
+1.0     58
+Name: count, dtype: int64
+   🔗 Found 321 common samples.
+   ✅ Successfully saved: /data/gold/gse58644/unadjusted.csv (120,386,292 bytes)
+
+🔄 Processing dataset: gse62944_tumor
+   🔍 Transpose decision: YES - columns (1071) closer to expected samples (1065) than rows (22013)
+DEBUG: Using metadata column 'Sample_ID' as sample ID
+Using meta_er_status_by_ihc as ER status column
+Unique er values: 
+meta_er_status
+Positive         785
+Negative         230
+Indeterminate      2
+Name: count, dtype: int64
+   ❌ PR status column not found. 
+DEBUG: Available columns: ['meta_Dataset_ID', 'meta_Platform_ID', 'meta_bcr_patient_uuid', 'meta_bcr_patient_barcode', 'meta_gender', 'meta_race', 'meta_ethnicity', 'meta_history_other_malignancy', 'meta_history_neoadjuvant_treatment', 'meta_tumor_status', 'meta_vital_status', 'meta_initial_pathologic_dx_year', 'meta_lymph_nodes_examined', 'meta_lymph_nodes_examined_he_count', 'meta_ajcc_pathologic_tumor_stage', 'meta_icd_10', 'meta_icd_o_3_histology', 'meta_patient_id', 'meta_birth_days_to', 'meta_last_contact_days_to', 'meta_age_at_diagnosis', 'meta_method_initial_path_dx', 'meta_ajcc_staging_edition', 'meta_ajcc_tumor_pathologic_pt', 'meta_ajcc_nodes_pathologic_pn', 'meta_ajcc_metastasis_pathologic_pm', 'meta_anatomic_neoplasm_subdivision', 'meta_histological_type', 'meta_menopause_status', 'meta_surgical_procedure_first', 'meta_margin_status', 'meta_axillary_staging_method', 'meta_micromet_detection_by_ihc', 'meta_er_status', 'meta_pr_status_by_ihc', 'meta_her2_status_by_ihc', 'meta_her2_ihc_score']
+Using meta_her2_status_by_ihc as HER2 status column
+Unique her2 values: 
+meta_her2_status
+Negative         546
+Equivocal        173
+Positive         162
+Indeterminate     12
+Name: count, dtype: int64
+❓ Unclassified values in meta_her2_status:
+meta_her2_status
+NaN    173
+Name: count, dtype: int64
+   🔗 Found 1065 common samples.
+   ✅ Successfully saved: /data/gold/gse62944_tumor/unadjusted.csv (354,641,500 bytes)
+
+🔄 Processing dataset: gse76275
+   🔍 Transpose decision: YES - columns (271) closer to expected samples (265) than rows (20945)
+DEBUG: Using metadata column 'Sample_ID' as sample ID
+Using meta_er as ER status column
+Unique er values: 
+meta_er_status
+Negative    216
+Positive     49
+Name: count, dtype: int64
+Using meta_pr as PR status column
+Unique pr values: 
+meta_pr_status
+Negative    223
+Positive     42
+Name: count, dtype: int64
+Using meta_her2 as HER2 status column
+Unique her2 values: 
+meta_her2_status
+Negative    226
+Positive     22
+Name: count, dtype: int64
+   🔗 Found 265 common samples.
+   ✅ Successfully saved: /data/gold/gse76275/unadjusted.csv (95,394,211 bytes)
+
+🔄 Processing dataset: gse81538
+   🔍 Transpose decision: YES - columns (411) closer to expected samples (405) than rows (19595)
+DEBUG: Using metadata column 'Sample_ID' as sample ID
+Using meta_er_consensus as ER status column
+Unique er values: 
+meta_er_status
+3    304
+0     82
+2     11
+1      8
+Name: count, dtype: int64
+   ❌ PR status column not found. 
+DEBUG: Available columns: ['meta_Dataset_ID', 'meta_Platform_ID', 'meta_er_status', 'meta_er_ihc_restain_reading_1', 'meta_er_ihc_restain_reading_2', 'meta_er_ihc_restain_reading_3', 'meta_er_ihc_routinestain_clinical_reading', 'meta_er_ihc_routinestain_reading_2', 'meta_er_ihc_routinestain_reading_3', 'meta_her2_clinical_status', 'meta_her2_consensus', 'meta_her2_ihc_clinreading', 'meta_her2_ihc_reading_2', 'meta_her2_ihc_reading_3', 'meta_her2_sish_reading_1', 'meta_her2_sish_reading_2', 'meta_her2_sish_reading_3', 'meta_ki67_consensus', 'meta_ki67_reading_1', 'meta_ki67_reading_2', 'meta_ki67_reading_3', 'meta_nhg_consensus', 'meta_nhg_reading_1_mitotic', 'meta_nhg_reading_1_pleomorph', 'meta_nhg_reading_1_tubular', 'meta_nhg_reading_2_mitotic', 'meta_nhg_reading_2_pleomorph', 'meta_nhg_reading_2_tubular', 'meta_nhg_reading_3_mitotic', 'meta_nhg_reading_3_pleomorph', 'meta_nhg_reading_3_tubular', 'meta_pam50_subtype', 'meta_pgr_consensus', 'meta_pgr_ihc_routinestain_clinical_reading', 'meta_pgr_restain_reading_1', 'meta_pgr_restain_reading_2', 'meta_pgr_restain_reading_3', 'meta_pgr_routinestain_reading_2', 'meta_pgr_routinestain_reading_3']
+Using meta_her2_consensus as HER2 status column
+Unique her2 values: 
+meta_her2_status
+0    319
+1     86
+Name: count, dtype: int64
+   🔗 Found 405 common samples.
+   ✅ Successfully saved: /data/gold/gse81538/unadjusted.csv (138,096,610 bytes)
+
+🔄 Processing dataset: gse96058_hiseq
+   🔍 Transpose decision: YES - columns (2975) closer to expected samples (2969) than rows (23924)
+DEBUG: Using metadata column 'Sample_ID' as sample ID
+Using meta_er_status as ER status column
+Unique er values: 
+meta_er_status
+1.0    2569
+0.0     214
+Name: count, dtype: int64
+   ❌ PR status column not found. 
+DEBUG: Available columns: ['meta_Dataset_ID', 'meta_Platform_ID', 'meta_age_at_diagnosis', 'meta_chemo_treated', 'meta_endocrine_treated', 'meta_er_status', 'meta_her2_status', 'meta_ki67_status', 'meta_lymph_node_group', 'meta_lymph_node_status', 'meta_nhg', 'meta_overall_survival_days', 'meta_overall_survival_event', 'meta_pam50_subtype', 'meta_pgr_status', 'meta_tumor_size']
+Using meta_her2_status as HER2 status column
+Unique her2 values: 
+meta_her2_status
+0.0    2490
+1.0     378
+Name: count, dtype: int64
+   🔗 Found 2969 common samples.
+   ✅ Successfully saved: /data/gold/gse96058_hiseq/unadjusted.csv (1,240,865,795 bytes)
+
+🔄 Processing dataset: gse96058_nextseq
+   🔍 Transpose decision: YES - columns (310) closer to expected samples (304) than rows (23924)
+DEBUG: Using metadata column 'Sample_ID' as sample ID
+Using meta_er_status as ER status column
+Unique er values: 
+meta_er_status
+1.0    263
+0.0     27
+Name: count, dtype: int64
+   ❌ PR status column not found. 
+DEBUG: Available columns: ['meta_Dataset_ID', 'meta_Platform_ID', 'meta_age_at_diagnosis', 'meta_chemo_treated', 'meta_endocrine_treated', 'meta_er_status', 'meta_her2_status', 'meta_ki67_status', 'meta_lymph_node_group', 'meta_lymph_node_status', 'meta_nhg', 'meta_overall_survival_days', 'meta_overall_survival_event', 'meta_pam50_subtype', 'meta_pgr_status', 'meta_tumor_size']
+Using meta_her2_status as HER2 status column
+Unique her2 values: 
+meta_her2_status
+0.0    241
+1.0     42
+Name: count, dtype: int64
+   🔗 Found 304 common samples.
+   ✅ Successfully saved: /data/gold/gse96058_nextseq/unadjusted.csv (127,187,412 bytes)
+
+🔄 Processing dataset: metabric
+   🔍 Transpose decision: YES - columns (1986) closer to expected samples (1980) than rows (21423)
+DEBUG: Using metadata column 'Sample_ID' as sample ID
+Using meta_ER_IHC as ER status column
+Unique er values: 
+meta_er_status
+Positve     1498
+Negative     439
+Name: count, dtype: int64
+   ❌ PR status column not found. 
+DEBUG: Available columns: ['meta_Dataset_ID', 'meta_Platform_ID', 'meta_LYMPH_NODES_EXAMINED_POSITIVE', 'meta_NPI', 'meta_CELLULARITY', 'meta_CHEMOTHERAPY', 'meta_COHORT', 'meta_er_status', 'meta_HER2_SNP6', 'meta_HORMONE_THERAPY', 'meta_INFERRED_MENOPAUSAL_STATE', 'meta_SEX', 'meta_AGE_AT_DIAGNOSIS', 'meta_OS_MONTHS', 'meta_OS_STATUS', 'meta_CLAUDIN_SUBTYPE', 'meta_THREEGENE', 'meta_VITAL_STATUS', 'meta_LATERALITY', 'meta_RADIO_THERAPY', 'meta_HISTOLOGICAL_SUBTYPE', 'meta_BREAST_SURGERY', 'meta_RFS_STATUS', 'meta_RFS_MONTHS']
+   ❌ HER2 status column not found. 
+DEBUG: Available columns: ['meta_Dataset_ID', 'meta_Platform_ID', 'meta_LYMPH_NODES_EXAMINED_POSITIVE', 'meta_NPI', 'meta_CELLULARITY', 'meta_CHEMOTHERAPY', 'meta_COHORT', 'meta_er_status', 'meta_HER2_SNP6', 'meta_HORMONE_THERAPY', 'meta_INFERRED_MENOPAUSAL_STATE', 'meta_SEX', 'meta_AGE_AT_DIAGNOSIS', 'meta_OS_MONTHS', 'meta_OS_STATUS', 'meta_CLAUDIN_SUBTYPE', 'meta_THREEGENE', 'meta_VITAL_STATUS', 'meta_LATERALITY', 'meta_RADIO_THERAPY', 'meta_HISTOLOGICAL_SUBTYPE', 'meta_BREAST_SURGERY', 'meta_RFS_STATUS', 'meta_RFS_MONTHS']
+   🔗 Found 1980 common samples.
+   ✅ Successfully saved: /data/gold/metabric/unadjusted.csv (315,412,521 bytes)
+
+================================================================================
+PROCESSING SUMMARY
+================================================================================
+✅ Successfully processed: 14/14 datasets
+❌ Failed to process: 0/14 datasets
+📁 Output directory: /data/gold
+🔗 Generating all dataset combinations with caching (only the unadjusted files)...
+================================================================================
+GENERATING ALL DATASET COMBINATIONS
+================================================================================
+💾 Initial memory usage: 71.9MB
+🔍 Found 14 potential datasets. Checking for compatibility ('meta_er_status')...
+  - ✅ Added gse19615 (1 CSV files)
+    Available files: unadjusted.csv
+  - ✅ Added gse20194 (1 CSV files)
+    Available files: unadjusted.csv
+  - ✅ Added gse20271 (1 CSV files)
+    Available files: unadjusted.csv
+  - ✅ Added gse23720 (1 CSV files)
+    Available files: unadjusted.csv
+  - ✅ Added gse25065 (1 CSV files)
+    Available files: unadjusted.csv
+  - ✅ Added gse31448 (1 CSV files)
+    Available files: unadjusted.csv
+  - ✅ Added gse45255 (1 CSV files)
+    Available files: unadjusted.csv
+  - ✅ Added gse58644 (1 CSV files)
+    Available files: unadjusted.csv
+  - ✅ Added gse62944_tumor (1 CSV files)
+    Available files: unadjusted.csv
+  - ✅ Added gse76275 (1 CSV files)
+    Available files: unadjusted.csv
+  - ✅ Added gse81538 (1 CSV files)
+    Available files: unadjusted.csv
+  - ✅ Added gse96058_hiseq (1 CSV files)
+    Available files: unadjusted.csv
+  - ✅ Added gse96058_nextseq (1 CSV files)
+    Available files: unadjusted.csv
+  - ✅ Added metabric (1 CSV files)
+    Available files: unadjusted.csv
+
+✅ Found 14 compatible datasets to be combined:
+   1. gse19615 (1 CSV files)
+   2. gse20194 (1 CSV files)
+   3. gse20271 (1 CSV files)
+   4. gse23720 (1 CSV files)
+   5. gse25065 (1 CSV files)
+   6. gse31448 (1 CSV files)
+   7. gse45255 (1 CSV files)
+   8. gse58644 (1 CSV files)
+   9. gse62944_tumor (1 CSV files)
+  10. gse76275 (1 CSV files)
+  11. gse81538 (1 CSV files)
+  12. gse96058_hiseq (1 CSV files)
+  13. gse96058_nextseq (1 CSV files)
+  14. metabric (1 CSV files)
+
+📋 Processing specified CSV files: unadjusted.csv
+
+📊 Total valid combinations: 91
+    Dataset pairs: 91
+    CSV file types: 1
+📁 Output directory: /data/combined_data
+💾 Cache directory: /tmp/combination_cache
+
+🚀 Processing 91 combinations...
+
+[  1/91]    🔄 Combining gse19615 + gse20194 → gse19615_gse20194/unadjusted.csv
+Input data changed for 'gse19615_gse20194_unadjusted.csv'. Clearing old results.
+DEBUG (PID 1094216): Saved 1 hashes to /tmp/combination_cache/combination_cache.json
+      ✅ Success: gse19615_gse20194/unadjusted.csv (82.1MB)
+
+[  2/91]    🔄 Combining gse19615 + gse20271 → gse19615_gse20271/unadjusted.csv
+Input data changed for 'gse19615_gse20271_unadjusted.csv'. Clearing old results.
+DEBUG (PID 1094216): Saved 2 hashes to /tmp/combination_cache/combination_cache.json
+      ✅ Success: gse19615_gse20271/unadjusted.csv (60.8MB)
+
+[  3/91]    🔄 Combining gse19615 + gse23720 → gse19615_gse23720/unadjusted.csv
+Input data changed for 'gse19615_gse23720_unadjusted.csv'. Clearing old results.
+DEBUG (PID 1094216): Saved 3 hashes to /tmp/combination_cache/combination_cache.json
+      ✅ Success: gse19615_gse23720/unadjusted.csv (107.0MB)
+
+[  4/91]    🔄 Combining gse19615 + gse25065 → gse19615_gse25065/unadjusted.csv
+Input data changed for 'gse19615_gse25065_unadjusted.csv'. Clearing old results.
+DEBUG (PID 1094216): Saved 4 hashes to /tmp/combination_cache/combination_cache.json
+      ✅ Success: gse19615_gse25065/unadjusted.csv (67.1MB)
+
+[  5/91]    🔄 Combining gse19615 + gse31448 → gse19615_gse31448/unadjusted.csv
+Input data changed for 'gse19615_gse31448_unadjusted.csv'. Clearing old results.
+DEBUG (PID 1094216): Saved 5 hashes to /tmp/combination_cache/combination_cache.json
+      ✅ Success: gse19615_gse31448/unadjusted.csv (161.8MB)
+
+[  6/91]    🔄 Combining gse19615 + gse45255 → gse19615_gse45255/unadjusted.csv
+Input data changed for 'gse19615_gse45255_unadjusted.csv'. Clearing old results.
+DEBUG (PID 1094216): Saved 6 hashes to /tmp/combination_cache/combination_cache.json
+      ✅ Success: gse19615_gse45255/unadjusted.csv (56.0MB)
+
+[  7/91]    🔄 Combining gse19615 + gse58644 → gse19615_gse58644/unadjusted.csv
+Input data changed for 'gse19615_gse58644_unadjusted.csv'. Clearing old results.
+DEBUG (PID 1094216): Saved 7 hashes to /tmp/combination_cache/combination_cache.json
+      ✅ Success: gse19615_gse58644/unadjusted.csv (139.2MB)
+
+[  8/91]    🔄 Combining gse19615 + gse62944_tumor → gse19615_gse62944_tumor/unadjusted.csv
+Input data changed for 'gse19615_gse62944_tumor_unadjusted.csv'. Clearing old results.
+DEBUG (PID 1094216): Saved 8 hashes to /tmp/combination_cache/combination_cache.json
+      ✅ Success: gse19615_gse62944_tumor/unadjusted.csv (329.9MB)
+
+[  9/91]    🔄 Combining gse19615 + gse76275 → gse19615_gse76275/unadjusted.csv
+Input data changed for 'gse19615_gse76275_unadjusted.csv'. Clearing old results.
+DEBUG (PID 1094216): Saved 9 hashes to /tmp/combination_cache/combination_cache.json
+      ✅ Success: gse19615_gse76275/unadjusted.csv (130.4MB)
+
+[ 10/91]    🔄 Combining gse19615 + gse81538 → gse19615_gse81538/unadjusted.csv
+Input data changed for 'gse19615_gse81538_unadjusted.csv'. Clearing old results.
+DEBUG (PID 1094216): Saved 10 hashes to /tmp/combination_cache/combination_cache.json
+      ✅ Success: gse19615_gse81538/unadjusted.csv (149.4MB)
+
+[ 11/91]    🔄 Combining gse19615 + gse96058_hiseq → gse19615_gse96058_hiseq/unadjusted.csv
+Input data changed for 'gse19615_gse96058_hiseq_unadjusted.csv'. Clearing old results.
+DEBUG (PID 1094216): Saved 11 hashes to /tmp/combination_cache/combination_cache.json
+      ✅ Success: gse19615_gse96058_hiseq/unadjusted.csv (961.2MB)
+
+[ 12/91]    🔄 Combining gse19615 + gse96058_nextseq → gse19615_gse96058_nextseq/unadjusted.csv
+Input data changed for 'gse19615_gse96058_nextseq_unadjusted.csv'. Clearing old results.
+DEBUG (PID 1094216): Saved 12 hashes to /tmp/combination_cache/combination_cache.json
+      ✅ Success: gse19615_gse96058_nextseq/unadjusted.csv (130.4MB)
+
+[ 13/91]    🔄 Combining gse19615 + metabric → gse19615_metabric/unadjusted.csv
+Input data changed for 'gse19615_metabric_unadjusted.csv'. Clearing old results.
+DEBUG (PID 1094216): Saved 13 hashes to /tmp/combination_cache/combination_cache.json
+      ✅ Success: gse19615_metabric/unadjusted.csv (302.5MB)
+
+[ 14/91]    🔄 Combining gse20194 + gse20271 → gse20194_gse20271/unadjusted.csv
+Input data changed for 'gse20194_gse20271_unadjusted.csv'. Clearing old results.
+DEBUG (PID 1094216): Saved 14 hashes to /tmp/combination_cache/combination_cache.json
+      ✅ Success: gse20194_gse20271/unadjusted.csv (91.4MB)
+
+[ 15/91]    🔄 Combining gse20194 + gse23720 → gse20194_gse23720/unadjusted.csv
+Input data changed for 'gse20194_gse23720_unadjusted.csv'. Clearing old results.
+DEBUG (PID 1094216): Saved 15 hashes to /tmp/combination_cache/combination_cache.json
+      ✅ Success: gse20194_gse23720/unadjusted.csv (100.3MB)
+
+[ 16/91]    🔄 Combining gse20194 + gse25065 → gse20194_gse25065/unadjusted.csv
+Input data changed for 'gse20194_gse25065_unadjusted.csv'. Clearing old results.
+DEBUG (PID 1094216): Saved 16 hashes to /tmp/combination_cache/combination_cache.json
+      ✅ Success: gse20194_gse25065/unadjusted.csv (97.7MB)
+
+[ 17/91]    🔄 Combining gse20194 + gse31448 → gse20194_gse31448/unadjusted.csv
+Input data changed for 'gse20194_gse31448_unadjusted.csv'. Clearing old results.
+DEBUG (PID 1094216): Saved 17 hashes to /tmp/combination_cache/combination_cache.json
+      ✅ Success: gse20194_gse31448/unadjusted.csv (136.0MB)
+
+[ 18/91]    🔄 Combining gse20194 + gse45255 → gse20194_gse45255/unadjusted.csv
+Input data changed for 'gse20194_gse45255_unadjusted.csv'. Clearing old results.
+DEBUG (PID 1094216): Saved 18 hashes to /tmp/combination_cache/combination_cache.json
+      ✅ Success: gse20194_gse45255/unadjusted.csv (86.5MB)
+
+[ 19/91]    🔄 Combining gse20194 + gse58644 → gse20194_gse58644/unadjusted.csv
+Input data changed for 'gse20194_gse58644_unadjusted.csv'. Clearing old results.
+DEBUG (PID 1094216): Saved 19 hashes to /tmp/combination_cache/combination_cache.json
+      ✅ Success: gse20194_gse58644/unadjusted.csv (127.8MB)
+
+[ 20/91]    🔄 Combining gse20194 + gse62944_tumor → gse20194_gse62944_tumor/unadjusted.csv
+Input data changed for 'gse20194_gse62944_tumor_unadjusted.csv'. Clearing old results.
+DEBUG (PID 1094216): Saved 20 hashes to /tmp/combination_cache/combination_cache.json
+      ✅ Success: gse20194_gse62944_tumor/unadjusted.csv (266.3MB)
+
+[ 21/91]    🔄 Combining gse20194 + gse76275 → gse20194_gse76275/unadjusted.csv
+Input data changed for 'gse20194_gse76275_unadjusted.csv'. Clearing old results.
+DEBUG (PID 1094216): Saved 21 hashes to /tmp/combination_cache/combination_cache.json
+      ✅ Success: gse20194_gse76275/unadjusted.csv (115.5MB)
+
+[ 22/91]    🔄 Combining gse20194 + gse81538 → gse20194_gse81538/unadjusted.csv
+Input data changed for 'gse20194_gse81538_unadjusted.csv'. Clearing old results.
+DEBUG (PID 1094216): Saved 22 hashes to /tmp/combination_cache/combination_cache.json
+      ✅ Success: gse20194_gse81538/unadjusted.csv (136.1MB)
+
+[ 23/91]    🔄 Combining gse20194 + gse96058_hiseq → gse20194_gse96058_hiseq/unadjusted.csv
+Input data changed for 'gse20194_gse96058_hiseq_unadjusted.csv'. Clearing old results.
+DEBUG (PID 1094216): Saved 23 hashes to /tmp/combination_cache/combination_cache.json
+      ✅ Success: gse20194_gse96058_hiseq/unadjusted.csv (693.1MB)
+
+[ 24/91]    🔄 Combining gse20194 + gse96058_nextseq → gse20194_gse96058_nextseq/unadjusted.csv
+Input data changed for 'gse20194_gse96058_nextseq_unadjusted.csv'. Clearing old results.
+DEBUG (PID 1094216): Saved 24 hashes to /tmp/combination_cache/combination_cache.json
+      ✅ Success: gse20194_gse96058_nextseq/unadjusted.csv (119.1MB)
+
+[ 25/91]    🔄 Combining gse20194 + metabric → gse20194_metabric/unadjusted.csv
+Input data changed for 'gse20194_metabric_unadjusted.csv'. Clearing old results.
+DEBUG (PID 1094216): Saved 25 hashes to /tmp/combination_cache/combination_cache.json
+      ✅ Success: gse20194_metabric/unadjusted.csv (242.5MB)
+
+[ 26/91]    🔄 Combining gse20271 + gse23720 → gse20271_gse23720/unadjusted.csv
+Input data changed for 'gse20271_gse23720_unadjusted.csv'. Clearing old results.
+DEBUG (PID 1094216): Saved 26 hashes to /tmp/combination_cache/combination_cache.json
+      ✅ Success: gse20271_gse23720/unadjusted.csv (79.0MB)
+
+[ 27/91]    🔄 Combining gse20271 + gse25065 → gse20271_gse25065/unadjusted.csv
+Input data changed for 'gse20271_gse25065_unadjusted.csv'. Clearing old results.
+DEBUG (PID 1094216): Saved 27 hashes to /tmp/combination_cache/combination_cache.json
+      ✅ Success: gse20271_gse25065/unadjusted.csv (76.4MB)
+
+[ 28/91]    🔄 Combining gse20271 + gse31448 → gse20271_gse31448/unadjusted.csv
+Input data changed for 'gse20271_gse31448_unadjusted.csv'. Clearing old results.
+DEBUG (PID 1094216): Saved 28 hashes to /tmp/combination_cache/combination_cache.json
+      ✅ Success: gse20271_gse31448/unadjusted.csv (114.7MB)
+
+[ 29/91]    🔄 Combining gse20271 + gse45255 → gse20271_gse45255/unadjusted.csv
+Input data changed for 'gse20271_gse45255_unadjusted.csv'. Clearing old results.
+DEBUG (PID 1094216): Saved 29 hashes to /tmp/combination_cache/combination_cache.json
+      ✅ Success: gse20271_gse45255/unadjusted.csv (65.3MB)
+
+[ 30/91]    🔄 Combining gse20271 + gse58644 → gse20271_gse58644/unadjusted.csv
+Input data changed for 'gse20271_gse58644_unadjusted.csv'. Clearing old results.
+DEBUG (PID 1094216): Saved 30 hashes to /tmp/combination_cache/combination_cache.json
+      ✅ Success: gse20271_gse58644/unadjusted.csv (106.7MB)
+
+[ 31/91]    🔄 Combining gse20271 + gse62944_tumor → gse20271_gse62944_tumor/unadjusted.csv
+Input data changed for 'gse20271_gse62944_tumor_unadjusted.csv'. Clearing old results.
+DEBUG (PID 1094216): Saved 31 hashes to /tmp/combination_cache/combination_cache.json
+      ✅ Success: gse20271_gse62944_tumor/unadjusted.csv (246.6MB)
+
+[ 32/91]    🔄 Combining gse20271 + gse76275 → gse20271_gse76275/unadjusted.csv
+Input data changed for 'gse20271_gse76275_unadjusted.csv'. Clearing old results.
+DEBUG (PID 1094216): Saved 32 hashes to /tmp/combination_cache/combination_cache.json
+      ✅ Success: gse20271_gse76275/unadjusted.csv (94.3MB)
+
+[ 33/91]    🔄 Combining gse20271 + gse81538 → gse20271_gse81538/unadjusted.csv
+Input data changed for 'gse20271_gse81538_unadjusted.csv'. Clearing old results.
+DEBUG (PID 1094216): Saved 33 hashes to /tmp/combination_cache/combination_cache.json
+      ✅ Success: gse20271_gse81538/unadjusted.csv (116.6MB)
+
+[ 34/91]    🔄 Combining gse20271 + gse96058_hiseq → gse20271_gse96058_hiseq/unadjusted.csv
+Input data changed for 'gse20271_gse96058_hiseq_unadjusted.csv'. Clearing old results.
+DEBUG (PID 1094216): Saved 34 hashes to /tmp/combination_cache/combination_cache.json
+      ✅ Success: gse20271_gse96058_hiseq/unadjusted.csv (672.9MB)
+
+[ 35/91]    🔄 Combining gse20271 + gse96058_nextseq → gse20271_gse96058_nextseq/unadjusted.csv
+Input data changed for 'gse20271_gse96058_nextseq_unadjusted.csv'. Clearing old results.
+DEBUG (PID 1094216): Saved 35 hashes to /tmp/combination_cache/combination_cache.json
+      ✅ Success: gse20271_gse96058_nextseq/unadjusted.csv (98.8MB)
+
+[ 36/91]    🔄 Combining gse20271 + metabric → gse20271_metabric/unadjusted.csv
+Input data changed for 'gse20271_metabric_unadjusted.csv'. Clearing old results.
+DEBUG (PID 1094216): Saved 36 hashes to /tmp/combination_cache/combination_cache.json
+      ✅ Success: gse20271_metabric/unadjusted.csv (221.7MB)
+
+[ 37/91]    🔄 Combining gse23720 + gse25065 → gse23720_gse25065/unadjusted.csv
+Input data changed for 'gse23720_gse25065_unadjusted.csv'. Clearing old results.
+DEBUG (PID 1094216): Saved 37 hashes to /tmp/combination_cache/combination_cache.json
+      ✅ Success: gse23720_gse25065/unadjusted.csv (85.3MB)
+
+[ 38/91]    🔄 Combining gse23720 + gse31448 → gse23720_gse31448/unadjusted.csv
+Input data changed for 'gse23720_gse31448_unadjusted.csv'. Clearing old results.
+DEBUG (PID 1094216): Saved 38 hashes to /tmp/combination_cache/combination_cache.json
+      ✅ Success: gse23720_gse31448/unadjusted.csv (189.7MB)
+
+[ 39/91]    🔄 Combining gse23720 + gse45255 → gse23720_gse45255/unadjusted.csv
+Input data changed for 'gse23720_gse45255_unadjusted.csv'. Clearing old results.
+DEBUG (PID 1094216): Saved 39 hashes to /tmp/combination_cache/combination_cache.json
+      ✅ Success: gse23720_gse45255/unadjusted.csv (74.2MB)
+
+[ 40/91]    🔄 Combining gse23720 + gse58644 → gse23720_gse58644/unadjusted.csv
+Input data changed for 'gse23720_gse58644_unadjusted.csv'. Clearing old results.
+DEBUG (PID 1094216): Saved 40 hashes to /tmp/combination_cache/combination_cache.json
+      ✅ Success: gse23720_gse58644/unadjusted.csv (165.0MB)
+
+[ 41/91]    🔄 Combining gse23720 + gse62944_tumor → gse23720_gse62944_tumor/unadjusted.csv
+Input data changed for 'gse23720_gse62944_tumor_unadjusted.csv'. Clearing old results.
+DEBUG (PID 1094216): Saved 41 hashes to /tmp/combination_cache/combination_cache.json
+      ✅ Success: gse23720_gse62944_tumor/unadjusted.csv (353.8MB)
+
+[ 42/91]    🔄 Combining gse23720 + gse76275 → gse23720_gse76275/unadjusted.csv
+Input data changed for 'gse23720_gse76275_unadjusted.csv'. Clearing old results.
+DEBUG (PID 1094216): Saved 42 hashes to /tmp/combination_cache/combination_cache.json
+      ✅ Success: gse23720_gse76275/unadjusted.csv (158.3MB)
+
+[ 43/91]    🔄 Combining gse23720 + gse81538 → gse23720_gse81538/unadjusted.csv
+Input data changed for 'gse23720_gse81538_unadjusted.csv'. Clearing old results.
+DEBUG (PID 1094216): Saved 43 hashes to /tmp/combination_cache/combination_cache.json
+      ✅ Success: gse23720_gse81538/unadjusted.csv (172.6MB)
+
+[ 44/91]    🔄 Combining gse23720 + gse96058_hiseq → gse23720_gse96058_hiseq/unadjusted.csv
+Input data changed for 'gse23720_gse96058_hiseq_unadjusted.csv'. Clearing old results.
+DEBUG (PID 1094216): Saved 44 hashes to /tmp/combination_cache/combination_cache.json
+      ✅ Success: gse23720_gse96058_hiseq/unadjusted.csv (986.4MB)
+
+[ 45/91]    🔄 Combining gse23720 + gse96058_nextseq → gse23720_gse96058_nextseq/unadjusted.csv
+Input data changed for 'gse23720_gse96058_nextseq_unadjusted.csv'. Clearing old results.
+DEBUG (PID 1094216): Saved 45 hashes to /tmp/combination_cache/combination_cache.json
+      ✅ Success: gse23720_gse96058_nextseq/unadjusted.csv (155.5MB)
+
+[ 46/91]    🔄 Combining gse23720 + metabric → gse23720_metabric/unadjusted.csv
+Input data changed for 'gse23720_metabric_unadjusted.csv'. Clearing old results.
+DEBUG (PID 1094216): Saved 46 hashes to /tmp/combination_cache/combination_cache.json
+      ✅ Success: gse23720_metabric/unadjusted.csv (327.9MB)
+
+[ 47/91]    🔄 Combining gse25065 + gse31448 → gse25065_gse31448/unadjusted.csv
+Input data changed for 'gse25065_gse31448_unadjusted.csv'. Clearing old results.
+DEBUG (PID 1094216): Saved 47 hashes to /tmp/combination_cache/combination_cache.json
+      ✅ Success: gse25065_gse31448/unadjusted.csv (121.0MB)
+
+[ 48/91]    🔄 Combining gse25065 + gse45255 → gse25065_gse45255/unadjusted.csv
+Input data changed for 'gse25065_gse45255_unadjusted.csv'. Clearing old results.
+DEBUG (PID 1094216): Saved 48 hashes to /tmp/combination_cache/combination_cache.json
+      ✅ Success: gse25065_gse45255/unadjusted.csv (71.6MB)
+
+[ 49/91]    🔄 Combining gse25065 + gse58644 → gse25065_gse58644/unadjusted.csv
+Input data changed for 'gse25065_gse58644_unadjusted.csv'. Clearing old results.
+DEBUG (PID 1094216): Saved 49 hashes to /tmp/combination_cache/combination_cache.json
+      ✅ Success: gse25065_gse58644/unadjusted.csv (113.0MB)
+
+[ 50/91]    🔄 Combining gse25065 + gse62944_tumor → gse25065_gse62944_tumor/unadjusted.csv
+Input data changed for 'gse25065_gse62944_tumor_unadjusted.csv'. Clearing old results.
+DEBUG (PID 1094216): Saved 50 hashes to /tmp/combination_cache/combination_cache.json
+      ✅ Success: gse25065_gse62944_tumor/unadjusted.csv (252.4MB)
+
+[ 51/91]    🔄 Combining gse25065 + gse76275 → gse25065_gse76275/unadjusted.csv
+Input data changed for 'gse25065_gse76275_unadjusted.csv'. Clearing old results.
+DEBUG (PID 1094216): Saved 51 hashes to /tmp/combination_cache/combination_cache.json
+      ✅ Success: gse25065_gse76275/unadjusted.csv (100.6MB)
+
+[ 52/91]    🔄 Combining gse25065 + gse81538 → gse25065_gse81538/unadjusted.csv
+Input data changed for 'gse25065_gse81538_unadjusted.csv'. Clearing old results.
+DEBUG (PID 1094216): Saved 52 hashes to /tmp/combination_cache/combination_cache.json
+      ✅ Success: gse25065_gse81538/unadjusted.csv (122.4MB)
+
+[ 53/91]    🔄 Combining gse25065 + gse96058_hiseq → gse25065_gse96058_hiseq/unadjusted.csv
+Input data changed for 'gse25065_gse96058_hiseq_unadjusted.csv'. Clearing old results.
+DEBUG (PID 1094216): Saved 53 hashes to /tmp/combination_cache/combination_cache.json
+      ✅ Success: gse25065_gse96058_hiseq/unadjusted.csv (678.9MB)
+
+[ 54/91]    🔄 Combining gse25065 + gse96058_nextseq → gse25065_gse96058_nextseq/unadjusted.csv
+Input data changed for 'gse25065_gse96058_nextseq_unadjusted.csv'. Clearing old results.
+DEBUG (PID 1094216): Saved 54 hashes to /tmp/combination_cache/combination_cache.json
+      ✅ Success: gse25065_gse96058_nextseq/unadjusted.csv (104.8MB)
+
+[ 55/91]    🔄 Combining gse25065 + metabric → gse25065_metabric/unadjusted.csv
+Input data changed for 'gse25065_metabric_unadjusted.csv'. Clearing old results.
+DEBUG (PID 1094216): Saved 55 hashes to /tmp/combination_cache/combination_cache.json
+      ✅ Success: gse25065_metabric/unadjusted.csv (227.9MB)
+
+[ 56/91]    🔄 Combining gse31448 + gse45255 → gse31448_gse45255/unadjusted.csv
+Input data changed for 'gse31448_gse45255_unadjusted.csv'. Clearing old results.
+DEBUG (PID 1094216): Saved 56 hashes to /tmp/combination_cache/combination_cache.json
+      ✅ Success: gse31448_gse45255/unadjusted.csv (109.9MB)
+
+[ 57/91]    🔄 Combining gse31448 + gse58644 → gse31448_gse58644/unadjusted.csv
+Input data changed for 'gse31448_gse58644_unadjusted.csv'. Clearing old results.
+DEBUG (PID 1094216): Saved 57 hashes to /tmp/combination_cache/combination_cache.json
+      ✅ Success: gse31448_gse58644/unadjusted.csv (215.7MB)
+
+[ 58/91]    🔄 Combining gse31448 + gse62944_tumor → gse31448_gse62944_tumor/unadjusted.csv
+Input data changed for 'gse31448_gse62944_tumor_unadjusted.csv'. Clearing old results.
+DEBUG (PID 1094216): Saved 58 hashes to /tmp/combination_cache/combination_cache.json
+      ✅ Success: gse31448_gse62944_tumor/unadjusted.csv (400.3MB)
+
+[ 59/91]    🔄 Combining gse31448 + gse76275 → gse31448_gse76275/unadjusted.csv
+Input data changed for 'gse31448_gse76275_unadjusted.csv'. Clearing old results.
+DEBUG (PID 1094216): Saved 59 hashes to /tmp/combination_cache/combination_cache.json
+      ✅ Success: gse31448_gse76275/unadjusted.csv (213.1MB)
+
+[ 60/91]    🔄 Combining gse31448 + gse81538 → gse31448_gse81538/unadjusted.csv
+Input data changed for 'gse31448_gse81538_unadjusted.csv'. Clearing old results.
+DEBUG (PID 1094216): Saved 60 hashes to /tmp/combination_cache/combination_cache.json
+      ✅ Success: gse31448_gse81538/unadjusted.csv (218.0MB)
+
+[ 61/91]    🔄 Combining gse31448 + gse96058_hiseq → gse31448_gse96058_hiseq/unadjusted.csv
+Input data changed for 'gse31448_gse96058_hiseq_unadjusted.csv'. Clearing old results.
+DEBUG (PID 1094216): Saved 61 hashes to /tmp/combination_cache/combination_cache.json
+      ✅ Success: gse31448_gse96058_hiseq/unadjusted.csv (1035.6MB)
+
+[ 62/91]    🔄 Combining gse31448 + gse96058_nextseq → gse31448_gse96058_nextseq/unadjusted.csv
+Input data changed for 'gse31448_gse96058_nextseq_unadjusted.csv'. Clearing old results.
+DEBUG (PID 1094216): Saved 62 hashes to /tmp/combination_cache/combination_cache.json
+      ✅ Success: gse31448_gse96058_nextseq/unadjusted.csv (204.7MB)
+
+[ 63/91]    🔄 Combining gse31448 + metabric → gse31448_metabric/unadjusted.csv
+Input data changed for 'gse31448_metabric_unadjusted.csv'. Clearing old results.
+DEBUG (PID 1094216): Saved 63 hashes to /tmp/combination_cache/combination_cache.json
+      ✅ Success: gse31448_metabric/unadjusted.csv (377.6MB)
+
+[ 64/91]    🔄 Combining gse45255 + gse58644 → gse45255_gse58644/unadjusted.csv
+Input data changed for 'gse45255_gse58644_unadjusted.csv'. Clearing old results.
+DEBUG (PID 1094216): Saved 64 hashes to /tmp/combination_cache/combination_cache.json
+      ✅ Success: gse45255_gse58644/unadjusted.csv (102.0MB)
+
+[ 65/91]    🔄 Combining gse45255 + gse62944_tumor → gse45255_gse62944_tumor/unadjusted.csv
+Input data changed for 'gse45255_gse62944_tumor_unadjusted.csv'. Clearing old results.
+DEBUG (PID 1094216): Saved 65 hashes to /tmp/combination_cache/combination_cache.json
+      ✅ Success: gse45255_gse62944_tumor/unadjusted.csv (242.1MB)
+
+[ 66/91]    🔄 Combining gse45255 + gse76275 → gse45255_gse76275/unadjusted.csv
+Input data changed for 'gse45255_gse76275_unadjusted.csv'. Clearing old results.
+DEBUG (PID 1094216): Saved 66 hashes to /tmp/combination_cache/combination_cache.json
+      ✅ Success: gse45255_gse76275/unadjusted.csv (89.4MB)
+
+[ 67/91]    🔄 Combining gse45255 + gse81538 → gse45255_gse81538/unadjusted.csv
+Input data changed for 'gse45255_gse81538_unadjusted.csv'. Clearing old results.
+DEBUG (PID 1094216): Saved 67 hashes to /tmp/combination_cache/combination_cache.json
+      ✅ Success: gse45255_gse81538/unadjusted.csv (112.1MB)
+
+[ 68/91]    🔄 Combining gse45255 + gse96058_hiseq → gse45255_gse96058_hiseq/unadjusted.csv
+Input data changed for 'gse45255_gse96058_hiseq_unadjusted.csv'. Clearing old results.
+DEBUG (PID 1094216): Saved 68 hashes to /tmp/combination_cache/combination_cache.json
+      ✅ Success: gse45255_gse96058_hiseq/unadjusted.csv (668.3MB)
+
+[ 69/91]    🔄 Combining gse45255 + gse96058_nextseq → gse45255_gse96058_nextseq/unadjusted.csv
+Input data changed for 'gse45255_gse96058_nextseq_unadjusted.csv'. Clearing old results.
+DEBUG (PID 1094216): Saved 69 hashes to /tmp/combination_cache/combination_cache.json
+      ✅ Success: gse45255_gse96058_nextseq/unadjusted.csv (94.3MB)
+
+[ 70/91]    🔄 Combining gse45255 + metabric → gse45255_metabric/unadjusted.csv
+Input data changed for 'gse45255_metabric_unadjusted.csv'. Clearing old results.
+DEBUG (PID 1094216): Saved 70 hashes to /tmp/combination_cache/combination_cache.json
+      ✅ Success: gse45255_metabric/unadjusted.csv (217.0MB)
+
+[ 71/91]    🔄 Combining gse58644 + gse62944_tumor → gse58644_gse62944_tumor/unadjusted.csv
+Input data changed for 'gse58644_gse62944_tumor_unadjusted.csv'. Clearing old results.
+DEBUG (PID 1094216): Saved 71 hashes to /tmp/combination_cache/combination_cache.json
+      ✅ Success: gse58644_gse62944_tumor/unadjusted.csv (416.2MB)
+
+[ 72/91]    🔄 Combining gse58644 + gse76275 → gse58644_gse76275/unadjusted.csv
+Input data changed for 'gse58644_gse76275_unadjusted.csv'. Clearing old results.
+DEBUG (PID 1094216): Saved 72 hashes to /tmp/combination_cache/combination_cache.json
+      ✅ Success: gse58644_gse76275/unadjusted.csv (186.6MB)
+
+[ 73/91]    🔄 Combining gse58644 + gse81538 → gse58644_gse81538/unadjusted.csv
+Input data changed for 'gse58644_gse81538_unadjusted.csv'. Clearing old results.
+DEBUG (PID 1094216): Saved 73 hashes to /tmp/combination_cache/combination_cache.json
+      ✅ Success: gse58644_gse81538/unadjusted.csv (223.8MB)
+
+[ 74/91]    🔄 Combining gse58644 + gse96058_hiseq → gse58644_gse96058_hiseq/unadjusted.csv
+Input data changed for 'gse58644_gse96058_hiseq_unadjusted.csv'. Clearing old results.
+DEBUG (PID 1094216): Saved 74 hashes to /tmp/combination_cache/combination_cache.json
+      ✅ Success: gse58644_gse96058_hiseq/unadjusted.csv (1097.4MB)
+
+[ 75/91]    🔄 Combining gse58644 + gse96058_nextseq → gse58644_gse96058_nextseq/unadjusted.csv
+Input data changed for 'gse58644_gse96058_nextseq_unadjusted.csv'. Clearing old results.
+DEBUG (PID 1094216): Saved 75 hashes to /tmp/combination_cache/combination_cache.json
+      ✅ Success: gse58644_gse96058_nextseq/unadjusted.csv (208.1MB)
+
+[ 76/91]    🔄 Combining gse58644 + metabric → gse58644_metabric/unadjusted.csv
+Input data changed for 'gse58644_metabric_unadjusted.csv'. Clearing old results.
+DEBUG (PID 1094216): Saved 76 hashes to /tmp/combination_cache/combination_cache.json
+      ✅ Success: gse58644_metabric/unadjusted.csv (390.7MB)
+
+[ 77/91]    🔄 Combining gse62944_tumor + gse76275 → gse62944_tumor_gse76275/unadjusted.csv
+Input data changed for 'gse62944_tumor_gse76275_unadjusted.csv'. Clearing old results.
+DEBUG (PID 1094216): Saved 77 hashes to /tmp/combination_cache/combination_cache.json
+      ✅ Success: gse62944_tumor_gse76275/unadjusted.csv (373.6MB)
+
+[ 78/91]    🔄 Combining gse62944_tumor + gse81538 → gse62944_tumor_gse81538/unadjusted.csv
+Input data changed for 'gse62944_tumor_gse81538_unadjusted.csv'. Clearing old results.
+DEBUG (PID 1094216): Saved 78 hashes to /tmp/combination_cache/combination_cache.json
+      ✅ Success: gse62944_tumor_gse81538/unadjusted.csv (446.7MB)
+
+[ 79/91]    🔄 Combining gse62944_tumor + gse96058_hiseq → gse62944_tumor_gse96058_hiseq/unadjusted.csv
+Input data changed for 'gse62944_tumor_gse96058_hiseq_unadjusted.csv'. Clearing old results.
+DEBUG (PID 1094216): Saved 79 hashes to /tmp/combination_cache/combination_cache.json
+      ✅ Success: gse62944_tumor_gse96058_hiseq/unadjusted.csv (1410.9MB)
+
+[ 80/91]    🔄 Combining gse62944_tumor + gse96058_nextseq → gse62944_tumor_gse96058_nextseq/unadjusted.csv
+Input data changed for 'gse62944_tumor_gse96058_nextseq_unadjusted.csv'. Clearing old results.
+DEBUG (PID 1094216): Saved 80 hashes to /tmp/combination_cache/combination_cache.json
+      ✅ Success: gse62944_tumor_gse96058_nextseq/unadjusted.csv (446.4MB)
+
+[ 81/91]    🔄 Combining gse62944_tumor + metabric → gse62944_tumor_metabric/unadjusted.csv
+Input data changed for 'gse62944_tumor_metabric_unadjusted.csv'. Clearing old results.
+DEBUG (PID 1094216): Saved 81 hashes to /tmp/combination_cache/combination_cache.json
+      ✅ Success: gse62944_tumor_metabric/unadjusted.csv (589.7MB)
+
+[ 82/91]    🔄 Combining gse76275 + gse81538 → gse76275_gse81538/unadjusted.csv
+Input data changed for 'gse76275_gse81538_unadjusted.csv'. Clearing old results.
+DEBUG (PID 1094216): Saved 82 hashes to /tmp/combination_cache/combination_cache.json
+      ✅ Success: gse76275_gse81538/unadjusted.csv (192.0MB)
+
+[ 83/91]    🔄 Combining gse76275 + gse96058_hiseq → gse76275_gse96058_hiseq/unadjusted.csv
+Input data changed for 'gse76275_gse96058_hiseq_unadjusted.csv'. Clearing old results.
+DEBUG (PID 1094216): Saved 83 hashes to /tmp/combination_cache/combination_cache.json
+      ✅ Success: gse76275_gse96058_hiseq/unadjusted.csv (1007.3MB)
+
+[ 84/91]    🔄 Combining gse76275 + gse96058_nextseq → gse76275_gse96058_nextseq/unadjusted.csv
+Input data changed for 'gse76275_gse96058_nextseq_unadjusted.csv'. Clearing old results.
+DEBUG (PID 1094216): Saved 84 hashes to /tmp/combination_cache/combination_cache.json
+      ✅ Success: gse76275_gse96058_nextseq/unadjusted.csv (176.5MB)
+
+[ 85/91]    🔄 Combining gse76275 + metabric → gse76275_metabric/unadjusted.csv
+Input data changed for 'gse76275_metabric_unadjusted.csv'. Clearing old results.
+DEBUG (PID 1094216): Saved 85 hashes to /tmp/combination_cache/combination_cache.json
+      ✅ Success: gse76275_metabric/unadjusted.csv (349.1MB)
+
+[ 86/91]    🔄 Combining gse81538 + gse96058_hiseq → gse81538_gse96058_hiseq/unadjusted.csv
+Input data changed for 'gse81538_gse96058_hiseq_unadjusted.csv'. Clearing old results.
+DEBUG (PID 1094216): Saved 86 hashes to /tmp/combination_cache/combination_cache.json
+      ✅ Success: gse81538_gse96058_hiseq/unadjusted.csv (1095.3MB)
+
+[ 87/91]    🔄 Combining gse81538 + gse96058_nextseq → gse81538_gse96058_nextseq/unadjusted.csv
+Input data changed for 'gse81538_gse96058_nextseq_unadjusted.csv'. Clearing old results.
+DEBUG (PID 1094216): Saved 87 hashes to /tmp/combination_cache/combination_cache.json
+      ✅ Success: gse81538_gse96058_nextseq/unadjusted.csv (230.3MB)
+
+[ 88/91]    🔄 Combining gse81538 + metabric → gse81538_metabric/unadjusted.csv
+Input data changed for 'gse81538_metabric_unadjusted.csv'. Clearing old results.
+DEBUG (PID 1094216): Saved 88 hashes to /tmp/combination_cache/combination_cache.json
+      ✅ Success: gse81538_metabric/unadjusted.csv (394.0MB)
+
+[ 89/91]    🔄 Combining gse96058_hiseq + gse96058_nextseq → gse96058_hiseq_gse96058_nextseq/unadjusted.csv
+Input data changed for 'gse96058_hiseq_gse96058_nextseq_unadjusted.csv'. Clearing old results.
+DEBUG (PID 1094216): Saved 89 hashes to /tmp/combination_cache/combination_cache.json
+      ✅ Success: gse96058_hiseq_gse96058_nextseq/unadjusted.csv (1304.3MB)
+
+[ 90/91]    🔄 Combining gse96058_hiseq + metabric → gse96058_hiseq_metabric/unadjusted.csv
+Input data changed for 'gse96058_hiseq_metabric_unadjusted.csv'. Clearing old results.
+DEBUG (PID 1094216): Saved 90 hashes to /tmp/combination_cache/combination_cache.json
+      ✅ Success: gse96058_hiseq_metabric/unadjusted.csv (1283.8MB)
+
+[ 91/91]    🔄 Combining gse96058_nextseq + metabric → gse96058_nextseq_metabric/unadjusted.csv
+Input data changed for 'gse96058_nextseq_metabric_unadjusted.csv'. Clearing old results.
+DEBUG (PID 1094216): Saved 91 hashes to /tmp/combination_cache/combination_cache.json
+      ✅ Success: gse96058_nextseq_metabric/unadjusted.csv (387.0MB)
+
+================================================================================
+COMBINATION SUMMARY
+================================================================================
+✅ Successful combinations: 91
+❌ Failed combinations: 0
+📊 Success rate: 100.0%
+
+⚡ Performance Statistics:
+   Total processing time: 4794.7s
+   Peak memory usage: 119.7MB
+   Total data processed: 27754.1MB
+   Throughput: 5.8MB/s
+
+💾 Cache Statistics:
+   Cache hits: 0
+   Cache misses: 91
+
+📁 Combined datasets saved to: /data/combined_data
+✅ Successful combination directories (91):
+  - gse19615_gse20194/ (1 files, 82.1MB, 0 cached)
+  - gse19615_gse20271/ (1 files, 60.8MB, 0 cached)
+  - gse19615_gse23720/ (1 files, 107.0MB, 0 cached)
+  - gse19615_gse25065/ (1 files, 67.1MB, 0 cached)
+  - gse19615_gse31448/ (1 files, 161.8MB, 0 cached)
+  - gse19615_gse45255/ (1 files, 56.0MB, 0 cached)
+  - gse19615_gse58644/ (1 files, 139.2MB, 0 cached)
+  - gse19615_gse62944_tumor/ (1 files, 329.9MB, 0 cached)
+  - gse19615_gse76275/ (1 files, 130.4MB, 0 cached)
+  - gse19615_gse81538/ (1 files, 149.4MB, 0 cached)
+  ... and 81 more combination directories
