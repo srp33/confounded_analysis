@@ -17,8 +17,8 @@ DATA_DIR="/data/combined_data"
 
 # Define adjusters to run in PARALLEL (all dataset jobs for an adjuster run at once)
 ADJUSTERS_PARALLEL=(
-    # "min_mean"
-    # "npn"
+    "min_mean"
+    "npn"
     "ranked1"
     "ranked2"
     "ranked_batch"
@@ -26,10 +26,12 @@ ADJUSTERS_PARALLEL=(
 
 # Define adjusters to run SEQUENTIALLY (one dataset job at a time for each adjuster)
 ADJUSTERS_SEQUENTIAL=(
-    # "fastMNN"
-    # "gmm"
+    "fastMNN"
+    "gmm"
     "gmm_scale_separate"
     "gmm_npn"
+    "gmm_global_simple"
+    "gmm_global_npn"
 )
 
 # --- Helper Function ---

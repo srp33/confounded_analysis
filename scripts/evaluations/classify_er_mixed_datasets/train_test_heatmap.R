@@ -68,6 +68,12 @@ read_and_prepare_data <- function(csv_file) {
   cat("Data dimensions:", nrow(data), "rows,", ncol(data), "columns\n")
   cat("Column names:", paste(colnames(data), collapse = ", "), "\n")
   
+  # Check if data is empty
+  if (nrow(data) == 0) {
+    warning("Input CSV file is empty. No data to process.")
+    return(data.frame())  # Return empty data frame
+  }
+  
   # Convert to regular data.frame for easier processing
   data <- as.data.frame(data)
   

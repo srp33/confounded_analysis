@@ -46,26 +46,184 @@ validate_inputs <- function(data, batch = NULL, mixed_strategy = NULL) {
 #' @param variances Component variances
 #' @param weights Component weights
 #' @return Quantile values
-inverse_cdf_gmm_R <- function(p, means, variances, weights) {
-  gmm_cdf <- function(x) {
-    sum(weights * pnorm(x, mean = means, sd = sqrt(variances)))
+inverse_cdf_gmm_R <- function(p, means, variances, weights, initial_guess = NULL) {
+  # Input validation
+  if (any(is.na(means)) || any(is.na(variances)) || any(is.na(weights))) {
+    return(rep(NA, length(p)))
   }
   
-  solve_for_single_p <- function(p_val) {
+  if (length(means) != length(variances) || length(means) != length(weights)) {
+    return(rep(NA, length(p)))
+  }
+  
+  # For large datasets, use approximation for speed
+  if (length(p) > 100000) {
+    # Use linear interpolation on a grid for speed
+    return(inverse_cdf_gmm_fast(p, means, variances, weights))
+  }
+  
+  gmm_cdf <- function(x) {
+    sum(weights * pnorm(x, mean = means, sd = sqrt(pmax(variances, 1e-10))))
+  }
+  
+  stds <- sqrt(pmax(variances, 1e-10))
+  search_interval <- c(min(means - 10 * stds), max(means + 10 * stds))
+  
+  # Expand search interval if needed
+  if (abs(search_interval[2] - search_interval[1]) < 1e-6) {
+    search_interval <- c(search_interval[1] - 10, search_interval[2] + 10)
+  }
+  
+  solve_for_single_p <- function(p_val, prev_result = NULL) {
+    if (is.na(p_val)) return(NA)
     if (p_val <= 0.0) return(-Inf)
     if (p_val >= 1.0) return(Inf)
     
     root_function <- function(x) gmm_cdf(x) - p_val
     
-    stds <- sqrt(variances)
-    search_interval <- c(min(means - 10 * stds), max(means + 10 * stds))
+    # Use previous result as starting point if available
+    start_point <- if (!is.null(prev_result) && is.finite(prev_result)) {
+      prev_result
+    } else {
+      # Use weighted mean as initial guess
+      sum(weights * means)
+    }
     
     tryCatch({
-      uniroot(root_function, interval = search_interval)$root
-    }, error = function(e) NA)
+      # Try with initial guess first
+      if (abs(root_function(start_point)) < 1e-6) {
+        return(start_point)
+      }
+      
+      # Adjust search interval around the starting point
+      local_interval <- c(
+        max(search_interval[1], start_point - 5),
+        min(search_interval[2], start_point + 5)
+      )
+      
+      # Check if root is in local interval
+      if (root_function(local_interval[1]) * root_function(local_interval[2]) <= 0) {
+        result <- uniroot(root_function, interval = local_interval, tol = 1e-4)
+        return(result$root)
+      } else {
+        # Fall back to full interval
+        result <- uniroot(root_function, interval = search_interval, tol = 1e-4)
+        return(result$root)
+      }
+    }, error = function(e) {
+      # Fallback to normal quantile
+      return(qnorm(p_val))
+    })
   }
   
-  sapply(p, solve_for_single_p)
+  # Process with previous results as hints
+  result <- numeric(length(p))
+  prev_result <- NULL
+  
+  for (i in seq_along(p)) {
+    result[i] <- solve_for_single_p(p[i], prev_result)
+    if (is.finite(result[i])) {
+      prev_result <- result[i]
+    }
+  }
+  
+  # Replace any remaining problematic values
+  if (any(is.infinite(result) | is.na(result))) {
+    bad_indices <- which(is.infinite(result) | is.na(result))
+    result[bad_indices] <- qnorm(p[bad_indices])
+  }
+  
+  return(result)
+}
+
+#' Fast approximation of inverse CDF for large datasets
+#' Uses pre-computed grid and linear interpolation
+inverse_cdf_gmm_fast <- function(p, means, variances, weights) {
+  # Create a grid of x values
+  stds <- sqrt(pmax(variances, 1e-10))
+  x_min <- min(means - 8 * stds)
+  x_max <- max(means + 8 * stds)
+  
+  # Use adaptive grid size based on data size
+  grid_size <- min(10000, max(1000, length(p) / 100))
+  x_grid <- seq(x_min, x_max, length.out = grid_size)
+  
+  # Compute CDF values on grid
+  cdf_grid <- sapply(x_grid, function(x) {
+    sum(weights * pnorm(x, mean = means, sd = sqrt(pmax(variances, 1e-10))))
+  })
+  
+  # Remove duplicates and ensure monotonicity to avoid "collapsing" warning
+  # Find unique CDF values and corresponding x values
+  unique_indices <- !duplicated(cdf_grid)
+  cdf_unique <- cdf_grid[unique_indices]
+  x_unique <- x_grid[unique_indices]
+  
+  # Ensure strict monotonicity by adding small increments to duplicates
+  if (length(cdf_unique) < length(cdf_grid)) {
+    # If we lost too many points, create a more refined grid
+    if (length(cdf_unique) < grid_size / 2) {
+      # Use a different approach: create grid based on quantiles
+      prob_grid <- seq(0.001, 0.999, length.out = grid_size)
+      x_grid_new <- numeric(length(prob_grid))
+      
+      for (i in seq_along(prob_grid)) {
+        # Simple bisection for each quantile
+        x_grid_new[i] <- find_quantile_bisection(prob_grid[i], means, variances, weights, x_min, x_max)
+      }
+      
+      cdf_unique <- prob_grid
+      x_unique <- x_grid_new
+    }
+  }
+  
+  # Use linear interpolation with unique values
+  result <- tryCatch({
+    approx(cdf_unique, x_unique, xout = p, rule = 2, ties = "ordered")$y
+  }, warning = function(w) {
+    # If we still get warnings, fall back to simple normal approximation
+    qnorm(p)
+  })
+  
+  # Handle edge cases
+  result[p <= 0] <- -Inf
+  result[p >= 1] <- Inf
+  
+  # Fallback for any NAs
+  na_indices <- is.na(result)
+  if (any(na_indices)) {
+    result[na_indices] <- qnorm(p[na_indices])
+  }
+  
+  return(result)
+}
+
+#' Simple bisection method to find quantile
+find_quantile_bisection <- function(prob, means, variances, weights, x_min, x_max, tol = 1e-4) {
+  gmm_cdf <- function(x) {
+    sum(weights * pnorm(x, mean = means, sd = sqrt(pmax(variances, 1e-10))))
+  }
+  
+  # Bisection method
+  left <- x_min
+  right <- x_max
+  
+  for (i in 1:50) {  # Max 50 iterations
+    mid <- (left + right) / 2
+    cdf_mid <- gmm_cdf(mid)
+    
+    if (abs(cdf_mid - prob) < tol) {
+      return(mid)
+    }
+    
+    if (cdf_mid < prob) {
+      left <- mid
+    } else {
+      right <- mid
+    }
+  }
+  
+  return((left + right) / 2)
 }
 
 #' Bimodal non-paranormal transformation
@@ -273,7 +431,15 @@ apply_adjustment_strategy <- function(X, gene_params, strategy = "simple", debug
     # Non-paranormal transformation
     return(bimodal_npn(X_transformed, m0, m1, v0, v1, w0, w1))
     
-  } else {
+  } else if (strategy == "npn_unit_std") {
+    adjusted = bimodal_npn(X_transformed, m0, m1, v0, v1, w0, w1)
+    new_mean = mean(adjusted, na.rm = TRUE)
+    adjusted = adjusted - new_mean
+    adjusted = adjusted / sd(adjusted, na.rm = TRUE)
+    return(adjusted + new_mean)
+  }
+  
+  else {
     stop("Unknown adjustment strategy: ", strategy)
   }
 }

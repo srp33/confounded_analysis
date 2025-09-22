@@ -24,6 +24,7 @@ suppressPackageStartupMessages({
 })
 
 source("/scripts/adjust/gmm_adjust.R")
+source("/scripts/adjust/gmm_global_simple.R")
 
 get_allocated_cores <- function() {
   # Check SLURM-provided environment variables first
@@ -647,11 +648,6 @@ adjust_gmm <- function(matrix_, batch, debug = FALSE, meta_file = NULL) {
   return(adjust_gmm_common(matrix_, batch, "simple", "Simple", debug, meta_file))
 }
 
-adjust_gmm_scale_separate <- function(matrix_, batch, debug = FALSE, meta_file = NULL) {
-  #' Wrapper for GMM adjustment with scale separate strategy.
-  return(adjust_gmm_common(matrix_, batch, "scale_separate", "Scaling Separately", debug, meta_file))
-}
-
 adjust_gmm_npn <- function(matrix_, batch, debug = FALSE, meta_file = NULL) {
   #' Wrapper for GMM adjustment with NPN strategy.
   return(adjust_gmm_common(matrix_, batch, "npn", "NPN", debug, meta_file))
@@ -660,6 +656,44 @@ adjust_gmm_npn <- function(matrix_, batch, debug = FALSE, meta_file = NULL) {
 adjust_gmm_npn_unit_std <- function(matrix_, batch, debug = FALSE, meta_file = NULL) {
   #' Wrapper for GMM adjustment with NPN unit standard deviation strategy.
   return(adjust_gmm_common(matrix_, batch, "npn_unit_std", "NPN, Unit Std", debug, meta_file))
+}
+
+adjust_gmm_global_simple <- function(matrix_, batch = NULL, debug = FALSE, meta_file = NULL) {
+  #' Simple gene-global GMM adjustment strategy with scaling.
+  #' Computes global distribution by averaging across genes, fits 2-component GMM,
+  #' centers data at midpoint between modes, and scales so modes end up at -1 and +1.
+  #' Works entirely in log space for mathematical consistency.
+  
+  message("Adjusting with simple gene-global GMM (log space).")
+  data_transposed <- t(matrix_)
+  
+  # Apply the simple global adjustment
+  result <- gmm_global_simple_core(data_transposed, debug = debug)
+  
+  return(t(result$adjusted_data))
+}
+
+adjust_gmm_global_npn <- function(matrix_, batch = NULL, debug = FALSE, meta_file = NULL) {
+  #' Gene-global GMM adjustment with bimodal NPN transformation.
+  #' Computes global distribution by averaging across genes, fits 2-component GMM,
+  #' then applies bimodal NPN transformation to all expression values using global parameters.
+  
+  message("Adjusting with gene-global GMM bimodal NPN.")
+  data_transposed <- t(matrix_)
+  
+  # Apply the global NPN adjustment
+  result <- gmm_global_npn_core(data_transposed, debug = debug)
+  
+  # Ensure we have a matrix before transposing
+  adjusted_data <- result$adjusted_data
+  if (!is.matrix(adjusted_data)) {
+    if (debug) {
+      message("Converting to matrix before transpose")
+    }
+    adjusted_data <- as.matrix(adjusted_data)
+  }
+  
+  return(t(adjusted_data))
 }
 
 
@@ -862,9 +896,10 @@ batch_adjust_tidy <- function(df, input_file, adjuster, batch_col, column, full_
   
   adjusted_matrix <- switch(adjuster,
     "gmm" = adjust_gmm(mat_genes, batch, debug=debug, meta_file=meta_file),
-    "gmm_scale_separate" = adjust_gmm_scale_separate(mat_genes, batch, debug=debug, meta_file=meta_file),
     "gmm_npn" = adjust_gmm_npn(mat_genes, batch, debug=debug, meta_file=meta_file),
     "gmm_npn_unit_std" = adjust_gmm_npn_unit_std(mat_genes, batch, debug=debug, meta_file=meta_file),
+    "gmm_global_simple" = adjust_gmm_global_simple(mat_genes, batch, debug=TRUE, meta_file=meta_file),
+    "gmm_global_npn" = adjust_gmm_global_npn(mat_genes, batch, debug=TRUE, meta_file=meta_file),
     "ranked1" = adjust_ranked(mat_genes, debug = debug),
     "ranked2" = adjust_ranked_twice(mat_genes, debug = debug),
     "ranked_batch" = adjust_ranked_with_batch_info(mat_genes, batch, debug = debug),
