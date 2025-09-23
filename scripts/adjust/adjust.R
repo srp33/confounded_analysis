@@ -727,6 +727,14 @@ adjust_ranked_twice <- function(matrix_, debug = FALSE) {
   return(rank_normalized(rank_normalized(matrix_, 1), 2))
 }
 
+adjust_ranked_projection <- function(matrix_, debug = FALSE) {
+  message("Adjusting with ranked projection.")
+  # This is equivalent to projecting the ranks onto a n-1 dimensional ball.
+  ranked <- apply(matrix_, 1, rank, ties.method = "average")
+  centered <- ranked - rowMeans(ranked)
+  return(centered / sqrt(rowSums(centered^2)))
+}
+
 adjust_ranked_with_batch_info <- function(matrix_, batch, debug = FALSE) {
   #' Normalize sample-wise by ranking the genes within the sample, and then by batch.
   #' @param matrix_ The matrix to adjust (features x samples).
@@ -903,6 +911,7 @@ batch_adjust_tidy <- function(df, input_file, adjuster, batch_col, column, full_
     "ranked1" = adjust_ranked(mat_genes, debug = debug),
     "ranked2" = adjust_ranked_twice(mat_genes, debug = debug),
     "ranked_batch" = adjust_ranked_with_batch_info(mat_genes, batch, debug = debug),
+    "ranked_projection" = adjust_ranked_projection(mat_genes, debug = debug),
     "min_mean" = adjust_min_mean(mat_genes, batch, debug = debug),
     "combat" = adjust_combat(mat_genes, batch, design, data_are_counts, debug = debug),
     "limma" = adjust_limma(mat_genes, batch, design, debug = debug),
