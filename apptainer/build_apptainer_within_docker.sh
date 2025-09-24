@@ -23,4 +23,4 @@ docker run --rm --privileged \
   --env HOME=/ \
   --workdir / \
   "$image" \
-  apptainer build /output/remove-batch-effects.sif /apptainer.def
+  apptainer build --force /output/remove-batch-effects.sif /apptainer.def
