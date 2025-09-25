@@ -149,6 +149,8 @@ def run_combined_dataset(filepath, output_file, pred_col, source_col, adjustment
     cols_to_drop = [pred_col, source_col]
     feature_df = df.drop(columns=[col for col in cols_to_drop if col in df.columns]).select_dtypes(include=[np.number])
 
+    results = {}
+
     for train_key, test_key in combinations:
         # Select training data
         if ';' in train_key:
@@ -205,8 +207,13 @@ def run_combined_dataset(filepath, output_file, pred_col, source_col, adjustment
         # Reorder columns and append to output file
         output_cols = ['Train', 'Test', 'ROC AUC', 'True Negative', 'False Negative', 'False Positive', 'True Positive', 
         'Classifier', 'Adjustment', 'Prediction', 'Run_ID']
-        safe_write_to_csv(metrics_df[output_cols], output_file)
-        print_now(f"Classification results for {filepath} saved.")
+        results[output_file] = metrics_df[output_cols]
+    
+    # Make sure the whole run completes before writing to the file.
+    for output_file, metrics_df in results.items():
+        safe_write_to_csv(metrics_df, output_file)
+
+    print_now(f"All classification results for {filepath} saved.")
 
 def load_dataframe(filename, pred_col):
     """Read the file into a pandas dataframe and check it has the required columns."""
