@@ -231,8 +231,7 @@ class HashCache:
         
         try:
             yield action, n_to_run, n_existing
-            if action == "RUN_FULL":
-                self.hashes[key] = current_hash
+            self.hashes[key] = current_hash
         except Exception as e:
             print(f"ERROR during processing for key '{key}'. Hash will NOT be updated. Error: {e}")
             raise e

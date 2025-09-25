@@ -17,6 +17,9 @@ import zipfile
 # Suppress pandas warnings for cleaner output
 warnings.filterwarnings('ignore', category=pd.errors.DtypeWarning)
 
+def print_now(*args, **kwargs):
+    print(*args, flush=True, **kwargs)
+
 
 def smart_read_dataframe(file_path: Path, debug: bool = False, **kwargs) -> tuple:
     """
@@ -39,7 +42,7 @@ def smart_read_dataframe(file_path: Path, debug: bool = False, **kwargs) -> tupl
                 return df, f"Success (delimiter: '{delimiter}')"
         except Exception as e:
             if debug:
-                print(f"DEBUG: Failed with delimiter '{delimiter}'. Error: {e}")
+                print_now(f"DEBUG: Failed with delimiter '{delimiter}'. Error: {e}")
             continue
     
     # Fallback: try letting pandas infer everything.
@@ -55,7 +58,7 @@ def smart_read_dataframe(file_path: Path, debug: bool = False, **kwargs) -> tupl
             return df, "Success (Pandas auto-inference)"
     except Exception as e:
         if debug:
-            print(f"DEBUG: Initial pandas read failed. Error: {e}")
+            print_now(f"DEBUG: Initial pandas read failed. Error: {e}")
         pass
 
     # If the first attempt fails, run diagnostics.
@@ -105,7 +108,7 @@ def smart_read_dataframe(file_path: Path, debug: bool = False, **kwargs) -> tupl
         diagnostics.append("Could not detect a common delimiter in the first line.")
     except Exception as e:
         if debug:
-            print(f"DEBUG: Delimiter check failed. Error: {e}")
+            print_now(f"DEBUG: Delimiter check failed. Error: {e}")
         diagnostics.append("Could not read first line (possible encoding or corruption issue).")
 
     # Format the final diagnostic report.
@@ -170,24 +173,24 @@ def _should_transpose(expr_df: pd.DataFrame, meta_df: pd.DataFrame | None) -> tu
 
 def process_dataset(raw_folder_path: Path, dataset_id: str, output_base_dir: Path, debug: bool):
     """Process a single dataset: combine expression and metadata, save to the output directory."""
-    print(f"\n🔄 Processing dataset: {dataset_id}")
+    print_now(f"\n🔄 Processing dataset: {dataset_id}")
     
     try:
         # 1. Find and read files (this is the first validation step)
         expression_file, meta_file = find_dataset_files(raw_folder_path, dataset_id)
         if not expression_file or not meta_file:
-            print("   ❌ Validation failed: Expression or metadata file not found. Skipping.")
+            print_now("   ❌ Validation failed: Expression or metadata file not found. Skipping.")
             return False
             
         expr_df, _ = smart_read_dataframe(expression_file)
         meta_df, _ = smart_read_dataframe(meta_file)
         if expr_df is None or meta_df is None:
-            print("   ❌ Validation failed: Could not read expression or metadata file. Skipping.")
+            print_now("   ❌ Validation failed: Could not read expression or metadata file. Skipping.")
             return False
 
         # 2. Transpose expression data if necessary
         needs_transpose, reason = _should_transpose(expr_df, meta_df)
-        print(f"   🔍 Transpose decision: {'YES' if needs_transpose else 'NO'} - {reason}")
+        print_now(f"   🔍 Transpose decision: {'YES' if needs_transpose else 'NO'} - {reason}")
         if needs_transpose:
             # Identify gene info columns vs sample data columns
             gene_info_cols = []
@@ -250,7 +253,7 @@ def process_dataset(raw_folder_path: Path, dataset_id: str, output_base_dir: Pat
                 sample_id_col = meta_df.columns[0]
             
         if debug:
-            print(f"DEBUG: Using metadata column '{sample_id_col}' as sample ID")
+            print_now(f"DEBUG: Using metadata column '{sample_id_col}' as sample ID")
             
         meta_df = meta_df.set_index(sample_id_col)
         # Prefix columns with 'meta_'
@@ -262,48 +265,48 @@ def process_dataset(raw_folder_path: Path, dataset_id: str, output_base_dir: Pat
         for er_column in other_er_columns:
             if er_column in lower_to_full_case_columns:
                 er_column = lower_to_full_case_columns[er_column]
-                print(f"Using {er_column} as ER status column")
+                print_now(f"Using {er_column} as ER status column")
                 meta_df = meta_df.rename(columns={er_column: 'meta_er_status'})
                 break
 
         if "meta_er_status" not in meta_df.columns.tolist():
-            print(f"   ❌ ER status column not found. ")
-            print(f"DEBUG: Available columns: {meta_df.columns.tolist()}")
+            print_now(f"   ❌ ER status column not found. ")
+            print_now(f"DEBUG: Available columns: {meta_df.columns.tolist()}")
         else:
-            print(f"Unique er values: ")
-            print(meta_df['meta_er_status'].value_counts())
+            print_now(f"Unique er values: ")
+            print_now(meta_df['meta_er_status'].value_counts())
 
         # Standardize pr status column name
         other_pr_columns = ['meta_pr', 'meta_pr_status', 'meta_pr_status_ihc', 'meta_pr_ihc', 'meta_prihc', 'meta_per_status_by_ihc']
         for pr_column in other_pr_columns:
             if pr_column in lower_to_full_case_columns:
                 pr_column = lower_to_full_case_columns[pr_column]
-                print(f"Using {pr_column} as PR status column")
+                print_now(f"Using {pr_column} as PR status column")
                 meta_df = meta_df.rename(columns={pr_column: 'meta_pr_status'})
                 break
 
         if "meta_pr_status" not in meta_df.columns.tolist():
-            print(f"   ❌ PR status column not found. ")
-            print(f"DEBUG: Available columns: {meta_df.columns.tolist()}")
+            print_now(f"   ❌ PR status column not found. ")
+            print_now(f"DEBUG: Available columns: {meta_df.columns.tolist()}")
         else:
-            print(f"Unique pr values: ")
-            print(meta_df['meta_pr_status'].value_counts())
+            print_now(f"Unique pr values: ")
+            print_now(meta_df['meta_pr_status'].value_counts())
 
         # Standardize her2 status column name
         other_her2_columns = ['meta_her2', 'meta_her_2', 'meta_her2_status', 'meta_her_2_status', 'meta_her2_status_by_ihc', 'meta_her2_consensus']
         for her2_column in other_her2_columns:
             if her2_column in lower_to_full_case_columns:
                 her2_column = lower_to_full_case_columns[her2_column]
-                print(f"Using {her2_column} as HER2 status column")
+                print_now(f"Using {her2_column} as HER2 status column")
                 meta_df = meta_df.rename(columns={her2_column: 'meta_her2_status'})
                 break
 
         if "meta_her2_status" not in meta_df.columns.tolist():
-            print(f"   ❌ HER2 status column not found. ")
-            print(f"DEBUG: Available columns: {meta_df.columns.tolist()}")
+            print_now(f"   ❌ HER2 status column not found. ")
+            print_now(f"DEBUG: Available columns: {meta_df.columns.tolist()}")
         else:
-            print(f"Unique her2 values: ")
-            print(meta_df['meta_her2_status'].value_counts())
+            print_now(f"Unique her2 values: ")
+            print_now(meta_df['meta_her2_status'].value_counts())
 
         # Map column values to 0 for negative and 1 for positive.
         expected_cols = ['meta_er_status', 'meta_pr_status', 'meta_her2_status']
@@ -340,31 +343,37 @@ def process_dataset(raw_folder_path: Path, dataset_id: str, output_base_dir: Pat
 
             return np.nan
 
-        meta_df[cols_to_convert] = meta_df[cols_to_convert].applymap(status_to_binary)
+        meta_df[cols_to_convert] = meta_df[cols_to_convert].map(status_to_binary)
 
-        #print("Number of values that couldn't be classified: ", meta_df[cols_to_convert].isnull().sum())
+        # print_now("Number of values that couldn't be classified: ", meta_df[cols_to_convert].isnull().sum())
         for col in cols_to_convert:
             unclassified = meta_df[col][meta_df[col].isnull()]
             if not unclassified.empty:
-                print(f"❓ Unclassified values in {col}:")
-                print(unclassified.value_counts(dropna=False))
+                print_now(f"❓ Unclassified values in {col}:")
+                print_now(unclassified.value_counts(dropna=False))
+
+        
+        # Print new unique values in the target columns:
+        for col in cols_to_convert:
+            print_now(f"Post-conversion unique values in {col}:")
+            print_now(meta_df[col].value_counts(dropna=False))
 
 
         # 4. Align and combine (the final and most critical validation)
         common_samples = expr_df.index.intersection(meta_df.index)
         if len(common_samples) == 0:
-            print(f"   ❌ Validation failed: No common samples found between files. Skipping.")
+            print_now(f"   ❌ Validation failed: No common samples found between files. Skipping.")
             if debug:
                 # DEBUG: Show sample ID examples to help diagnose mismatches.
                 expr_samples = sorted(list(expr_df.index))[:5]
                 meta_samples = sorted(list(meta_df.index))[:5]
-                print(f"DEBUG: Expression sample IDs: {expr_samples}")
-                print(f"DEBUG: Metadata sample IDs: {meta_samples}")
-                print(f"DEBUG: Expression index type: {type(expr_df.index[0]) if len(expr_df.index) > 0 else 'empty'}")
-                print(f"DEBUG: Metadata index type: {type(meta_df.index[0]) if len(meta_df.index) > 0 else 'empty'}")
+                print_now(f"DEBUG: Expression sample IDs: {expr_samples}")
+                print_now(f"DEBUG: Metadata sample IDs: {meta_samples}")
+                print_now(f"DEBUG: Expression index type: {type(expr_df.index[0]) if len(expr_df.index) > 0 else 'empty'}")
+                print_now(f"DEBUG: Metadata index type: {type(meta_df.index[0]) if len(meta_df.index) > 0 else 'empty'}")
             return False
             
-        print(f"   🔗 Found {len(common_samples)} common samples.")
+        print_now(f"   🔗 Found {len(common_samples)} common samples.")
         combined_df = pd.concat([expr_df.loc[common_samples], meta_df.loc[common_samples]], axis=1)
 
         # 5. Save result
@@ -373,11 +382,11 @@ def process_dataset(raw_folder_path: Path, dataset_id: str, output_base_dir: Pat
         output_file = output_dir / "unadjusted.csv"
         combined_df.to_csv(output_file)
         
-        print(f"   ✅ Successfully saved: {output_file} ({output_file.stat().st_size:,} bytes)")
+        print_now(f"   ✅ Successfully saved: {output_file} ({output_file.stat().st_size:,} bytes)")
         return True
 
     except Exception as e:
-        print(f"   ❌ Error processing {dataset_id}: {e}")
+        print_now(f"   ❌ Error processing {dataset_id}: {e}")
         if debug:
             import traceback
             traceback.print_exc()
@@ -387,7 +396,7 @@ def scan_for_datasets(raw_data_dir: Path) -> list[dict]:
     """Scan the raw data directory for valid dataset folders."""
     datasets = []
     if not raw_data_dir.exists():
-        print(f"Warning: Raw data directory not found at {raw_data_dir}")
+        print_now(f"Warning: Raw data directory not found at {raw_data_dir}")
         return datasets
     for item_path in raw_data_dir.iterdir():
         if item_path.is_dir():
@@ -407,14 +416,14 @@ if __name__ == "__main__":
     parser.add_argument('--debug', action='store_true', help='Enable detailed debug output.')
     args = parser.parse_args()
     
-    print("="*80)
-    print(f"PROCESSING RAW DATASETS -> {args.target_dir}", flush=True)
-    print("="*80)
+    print_now("="*80)
+    print_now(f"PROCESSING RAW DATASETS -> {args.target_dir}")
+    print_now("="*80)
 
     datasets_info = scan_for_datasets(args.raw_dir)
-    print(f"\nFound {len(datasets_info)} datasets to process in {args.raw_dir}:")
+    print_now(f"\nFound {len(datasets_info)} datasets to process in {args.raw_dir}:")
     for info in datasets_info:
-        print(f"  - {info['dataset_id']}")
+        print_now(f"  - {info['dataset_id']}")
     
     # Process each dataset
     successful_count = 0
@@ -422,9 +431,9 @@ if __name__ == "__main__":
         if process_dataset(info['folder'], info['dataset_id'], args.target_dir, args.debug):
             successful_count += 1
 
-    print("\n" + "="*80)
-    print("PROCESSING SUMMARY")
-    print("="*80)
-    print(f"✅ Successfully processed: {successful_count}/{len(datasets_info)} datasets")
-    print(f"❌ Failed to process: {len(datasets_info) - successful_count}/{len(datasets_info)} datasets")
-    print(f"📁 Output directory: {args.target_dir}")
+    print_now("\n" + "="*80)
+    print_now("PROCESSING SUMMARY")
+    print_now("="*80)
+    print_now(f"✅ Successfully processed: {successful_count}/{len(datasets_info)} datasets")
+    print_now(f"❌ Failed to process: {len(datasets_info) - successful_count}/{len(datasets_info)} datasets")
+    print_now(f"📁 Output directory: {args.target_dir}")
