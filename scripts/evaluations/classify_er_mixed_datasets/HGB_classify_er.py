@@ -378,7 +378,7 @@ def main():
     # Execute runs in parallel
     n_jobs = min(len(runs), os.cpu_count() or 1, args.num_workers)
     print_now(f"Running {len(runs)} runs in parallel with {n_jobs} jobs. args.num_workers: {args.num_workers}. os.cpu_count: {os.cpu_count()}")
-    if n_jobs:
+    if runs:
         Parallel(n_jobs=n_jobs)(
             delayed(execute_run)(args, run, model) for run in runs
         )
