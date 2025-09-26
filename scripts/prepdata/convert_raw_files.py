@@ -376,6 +376,9 @@ def process_dataset(raw_folder_path: Path, dataset_id: str, output_base_dir: Pat
         print_now(f"   🔗 Found {len(common_samples)} common samples.")
         combined_df = pd.concat([expr_df.loc[common_samples], meta_df.loc[common_samples]], axis=1)
 
+        # Name the index "meta_Sample_ID"
+        combined_df.index.name = 'meta_Sample_ID'
+
         # 5. Save result
         output_dir = output_base_dir / dataset_id.lower()
         output_dir.mkdir(parents=True, exist_ok=True)
@@ -404,6 +407,50 @@ def scan_for_datasets(raw_data_dir: Path) -> list[dict]:
             if expression_file and meta_file:
                 datasets.append({'folder': item_path, 'dataset_id': item_path.name})
     return datasets
+
+
+def verify_datasets(datasets_info):
+    """Verify processed datasets by reporting null value statistics."""
+    print_now("\n" + "="*80)
+    print_now("DATASET VERIFICATION - NULL VALUE ANALYSIS")
+    print_now("="*80)
+    
+    for info in datasets_info:
+        dataset_id = info['dataset_id']
+        output_file = Path(args.target_dir) / dataset_id.lower() / "unadjusted.csv"
+        
+        if not output_file.exists():
+            print_now(f"❌ {dataset_id}: Output file not found - {output_file}")
+            continue
+            
+        try:
+            # Read the processed dataset
+            df = pd.read_csv(output_file, index_col=0)
+            
+            # Calculate null statistics
+            total_rows, total_cols = df.shape
+            rows_with_nulls = df.isnull().any(axis=1).sum()
+            cols_with_nulls = df.isnull().any(axis=0).sum()
+            
+            print_now(f"\n📊 {dataset_id}:")
+            print_now(f"   Shape: {total_rows} rows × {total_cols} columns")
+            print_now(f"   Rows with null values: {rows_with_nulls}/{total_rows} ({rows_with_nulls/total_rows*100:.1f}%)")
+            print_now(f"   Columns with null values: {cols_with_nulls}/{total_cols} ({cols_with_nulls/total_cols*100:.1f}%)")
+
+            # Calculate expression null statistics
+            metadata_cols =  [col for col in df.columns if col.startswith('meta_')]
+            expression_df = df.drop(columns=metadata_cols)
+            exp_rows_with_nulls = expression_df.isnull().any(axis=1).sum()
+            exp_cols_with_nulls = expression_df.isnull().any(axis=0).sum()
+
+            print_now(f"   Expression data:")
+            print_now(f"     Rows with null values: {exp_rows_with_nulls}/{total_rows} ({exp_rows_with_nulls/total_rows*100:.1f}%)")
+            print_now(f"     Columns with null values: {exp_cols_with_nulls}/{total_cols-len(metadata_cols)} ({exp_cols_with_nulls/(total_cols-len(metadata_cols))*100:.1f}%)")
+            print_now(f"   Metadata columns: {len(metadata_cols)}")
+            
+        except Exception as e:
+            print_now(f"❌ {dataset_id}: Error reading file - {e}")
+
 
 # --- MAIN EXECUTION BLOCK ---
 if __name__ == "__main__":
@@ -437,3 +484,5 @@ if __name__ == "__main__":
     print_now(f"✅ Successfully processed: {successful_count}/{len(datasets_info)} datasets")
     print_now(f"❌ Failed to process: {len(datasets_info) - successful_count}/{len(datasets_info)} datasets")
     print_now(f"📁 Output directory: {args.target_dir}")
+
+    verify_datasets(datasets_info)

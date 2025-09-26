@@ -30,20 +30,13 @@ log_message <- function(..., log_file_path = NULL, iter = NULL, debug = TRUE) {
 
 #' Process single gene using pre-extracted GMM parameters
 #' 
-#' Note: GMM parameters are now always pre-extracted alize via extract_gmm_parameter
-#' This function no longer handles plogging extraction as a fall
-#' 
 #' @param X Gene expression vector
 #' @param iter Iteration number for logging
 #' @param gene_id Gene identifier
 #' @param debug Whether to enable debug logging
 #' @param log_file Path to log file
 #' @param gmm_params Pre-extracted GMM parameters (required)
-process_single_gene <- function(X, iter, gene_id, debug, log_file, strategy, gmm_params= NULL) {
-  if (is.null(gmm_params)) {
-    stop("GMM parameters are NULL for gene '", gene_id, "'. This should not happen with the new parameter extraction approach.")
-  }
-  
+process_single_gene <- function(X, iter, gene_id, debug, log_file, strategy, gmm_params) {
   if (!"gene_name" %in% colnames(gmm_params)) {
     stop("GMM parameters missing 'gene_name' column. Structure: ", paste(colnames(gmm_params), collapse = ", "))
   }
