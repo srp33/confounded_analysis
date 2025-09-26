@@ -94,7 +94,7 @@ def run_single_dataset(filepath, source, output_file, pred_col, adjustment, clas
 
     print_now(f"Shapes: Y : {y.shape} Y pred: {y_pred.shape} Y proba: {y_proba.shape} Uniques: Y : {np.unique(y)} Y pred: {np.unique(y_pred)} for dataset: {filepath}")
 
-    if y.isnull.any():
+    if y.isnull().any():
         print_now(f"Dtype: {y.dtype}")
         raise ValueError(f"Found {np.isnan(y).sum()} NaN(s) in y for dataset: {filepath}")
     
@@ -193,7 +193,7 @@ def run_combined_dataset(filepath, output_file, pred_col, source_col, adjustment
 
         print_now(f"Shapes: Y true: {y_true.shape} Y pred: {y_pred.shape} Y proba: {y_proba.shape} Uniques: Y true: {np.unique(y_true)} Y pred: {np.unique(y_pred)} for dataset: {filepath}")
 
-        if y_true.isnull.any():
+        if y_true.isnull().any():
             print_now(f"Dtype: {y_true.dtype}")
             raise ValueError(f"Found {np.isnan(y_true).sum()} NaN(s) in y_true for dataset: {filepath}")
     
