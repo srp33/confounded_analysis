@@ -8,7 +8,7 @@ printf "\033[0;32mRunning Classification experiment\033[0m\n"
 # --- Configuration ---
 # Define paths and parameters used in the script.
 script_path="$(dirname "$0")/hist_gradient_er_classification.py"
-input_base="/data/combined_data/gse20194_gse96058_hiseq"
+input_base="/data/paired_datasets/gse20194_gse96058_hiseq"
 out_path="/outputs/metrics/er_classification_all_combinations.csv"
 matrix_path="/outputs/metrics/confusion_matrix.txt"
 summary_path="/outputs/metrics/hist_gradient_er_summary_gse20194_gse96058_hiseq.csv"

@@ -833,6 +833,21 @@ adjust_log <- function(matrix_, batch, debug = FALSE) {
   return(adjusted)
 }
 
+adjust_log_combat <- function(matrix_, batch, debug = FALSE) {
+  message("Adjusting with log combat.")
+  # For each batch, subtract the minimum from every entry. Then take the log of the data.
+  # On this data, run combat
+  batch_levels <- unique(batch)
+  adjusted <- matrix(NA, nrow = nrow(matrix_), ncol = ncol(matrix_))
+  for (b in batch_levels) {
+    batch_indices <- which(batch == b)
+    batch_data <- matrix_[, batch_indices, drop = FALSE]
+    min_val <- min(batch_data, na.rm = TRUE)
+    adjusted[, batch_indices] <- log(batch_data - min_val + 1)
+  }
+  return(combat(adjusted))
+}
+
 
 # Main Orchestration Function -------------------------------------------------
 
@@ -958,6 +973,7 @@ batch_adjust_tidy <- function(df, input_file, adjuster, batch_col, column, full_
     "min_mean" = adjust_min_mean(mat_genes, batch, debug = debug),
     "combat" = adjust_combat(mat_genes, batch, design, data_are_counts, debug = debug),
     "log" = adjust_log(mat_genes, batch, debug = debug),
+    "log_combat" = adjust_log_combat(mat_genes, batch, design, data_are_counts, debug = debug),
     "limma" = adjust_limma(mat_genes, batch, design, debug = debug),
     "quantile" = adjust_quantile(mat_genes, batch, debug = debug),
     "npn" = adjust_npn(mat_genes, batch, debug = debug),
