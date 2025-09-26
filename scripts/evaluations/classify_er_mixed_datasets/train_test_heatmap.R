@@ -5,14 +5,6 @@
 # Usage: Rscript train_test_heatmap.R <adjuster>
 # Example: Rscript train_test_heatmap.R unadjusted
 
-# Install necessary packages if they are not already installed
-if (!require(ggplot2)) install.packages("ggplot2")
-if (!require(readr)) install.packages("readr")
-if (!require(dplyr)) install.packages("dplyr")
-if (!require(tidyr)) install.packages("tidyr")
-if (!require(stringr)) install.packages("stringr")
-if (!require(ggtext)) install.packages("ggtext")
-
 # Load libraries
 library(ggplot2)
 library(readr)
