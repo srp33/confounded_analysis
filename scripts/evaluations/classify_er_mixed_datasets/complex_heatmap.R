@@ -81,7 +81,7 @@ read_and_prepare_data <- function(csv_file) {
   # Check if data is empty
   if (nrow(input_data) == 0) {
     warning("Input CSV file is empty. No data to process.")
-    return(input_data.frame())  # Return empty data frame
+    return(data.frame())  # Return empty data frame
   }
   
   # Convert to regular data.frame for easier processing
@@ -128,6 +128,143 @@ prepare_metric_data <- function(input_data, metric_col) {
 
 # # Read and prepare data
 input_data <- read_and_prepare_data(CSV_FILE)
+
+generate_metric_difference_heatmap <- function(adjuster, metric_col, metric_display_name) {
+  cat("\nGenerating", metric_display_name, "Difference Heatmap (", adjuster, " vs unadjusted)...\n")
+
+  # Load both datasets
+  adj_file <- paste0("/outputs/metrics/er_classification_", adjuster, ".csv")
+  unadj_file <- "outputs/metrics/er_classification_ranked1.csv"
+
+  adj_input <- read_and_prepare_data(adj_file)
+  unadj_input <- read_and_prepare_data(unadj_file)
+
+  adj_metric <- prepare_metric_data(adj_input, metric_col) %>%
+    rename(Adj = Mean_Metric)
+  unadj_metric <- prepare_metric_data(unadj_input, metric_col) %>%
+    rename(Unadj = Mean_Metric)
+
+  # Compute delta
+  delta_data <- full_join(adj_metric, unadj_metric, by = c("Train", "Test")) %>%
+    mutate(Delta = Adj - Unadj)
+
+  # Create full matrix
+  all_datasets <- sort(union(delta_data$Train, delta_data$Test))
+
+  delta_matrix <- expand.grid(Train = all_datasets, Test = all_datasets) %>%
+    left_join(delta_data, by = c("Train", "Test")) %>%
+    pivot_wider(names_from = Test, values_from = Delta) %>%
+    column_to_rownames("Train") %>%
+    as.matrix()
+
+  delta_matrix <- delta_matrix[all_datasets, all_datasets]
+
+  # Platform annotations
+  row_platform <- dataset_to_platform[rownames(delta_matrix)]
+  col_platform <- dataset_to_platform[colnames(delta_matrix)]
+  row_platform[is.na(row_platform)] <- "Unknown"
+  col_platform[is.na(col_platform)] <- "Unknown"
+
+  platform_type_map <- c(
+    "Affymetrix Human Genome U133 Plus 2.0 Array" = "Microarray",
+    "Affymetrix Human Genome U133A Array" = "Microarray",
+    "Affymetrix Human Gene 1.0 ST Array [transcript (gene) version]" = "Microarray",
+    "Affymetrix Human Transcriptome Array 2.0 [probe set (exon) version] / Custom Affymetrix Human Transcriptome Array" = "Microarray",
+    "Illumina HumanHT-12 V3.0 expression beadchip" = "Microarray",
+    "Illumina Genome Analyzer (Homo sapiens)" = "RNAseq",
+    "Illumina HiSeq 2000 (Homo sapiens)" = "RNAseq",
+    "Illumina NextSeq 500 (Homo sapiens)" = "RNAseq",
+    "Illumina HiSeq 2500 (Homo sapiens)" = "RNAseq"
+  )
+
+  row_platform_type <- platform_type_map[row_platform]
+  col_platform_type <- platform_type_map[col_platform]
+  row_platform_type[is.na(row_platform_type)] <- "Unknown"
+  col_platform_type[is.na(col_platform_type)] <- "Unknown"
+
+  row_split <- list(
+    factor(row_platform_type, levels = c("Microarray", "RNAseq", "Unknown")),
+    factor(row_platform, levels = unique(row_platform))
+  )
+
+  col_split <- list(
+    factor(col_platform_type, levels = c("Microarray", "RNAseq", "Unknown")),
+    factor(col_platform, levels = unique(col_platform))
+  )
+
+  platform_colors <- c(
+    "Affymetrix Human Genome U133 Plus 2.0 Array" = "#56B4E9FF",
+    "Affymetrix Human Genome U133A Array" = "#009E73FF",
+    "Illumina HiSeq 2000 (Homo sapiens)" = "#E69F00FF",
+    "Illumina NextSeq 500 (Homo sapiens)" = "#D55E00FF",
+    "Illumina HiSeq 2500 (Homo sapiens)" = "#CC79A7FF",
+    "Illumina Genome Analyzer (Homo sapiens)" = "#F0E442FF",
+    "Affymetrix Human Gene 1.0 ST Array [transcript (gene) version]" = "#0072B2FF",
+    "Affymetrix Human Transcriptome Array 2.0 [probe set (exon) version] / Custom Affymetrix Human Transcriptome Array" = "#4682B4FF",
+    "Illumina HumanHT-12 V3.0 expression beadchip" = "#6A9FB5FF",
+    "Unknown" = "#000000"
+  )
+
+  row_ha <- rowAnnotation(
+    Platform = row_platform,
+    col = list(Platform = platform_colors),
+    show_annotation_name = FALSE
+  )
+  col_ha <- HeatmapAnnotation(
+    Platform = col_platform,
+    col = list(Platform = platform_colors),
+    show_annotation_name = FALSE
+  )
+
+  # Color scale for differences
+  diff_range <- if (metric_col == "MCC") c(-1, 0, 1) else c(-0.5, 0, 0.5)
+  col_fun <- circlize::colorRamp2(diff_range, c("#d73027", "#fad6b2ff", "#66c2a5"))
+
+  # Title and legend
+  title_text <- paste0("Δ ", metric_display_name, ": ", adjuster, " - unadjusted")
+  legend_title <- paste0("Δ ", metric_display_name)
+
+  ht <- Heatmap(delta_matrix,
+    name = legend_title,
+    col = col_fun,
+    na_col = "white",
+    row_split = row_split,
+    column_split = col_split,
+    top_annotation = col_ha,
+    left_annotation = row_ha,
+    cluster_rows = FALSE,
+    cluster_columns = FALSE,
+    show_row_names = TRUE,
+    row_names_gp = gpar(fontsize = 10, fontface = "plain"),
+    show_column_names = TRUE,
+    column_names_gp = gpar(fontsize = 10, fontface = "plain"),
+    column_names_rot = 45,
+    column_title = title_text,
+    column_title_gp = gpar(fontsize = 16, fontface = "bold"),
+    row_title = "Train Dataset",
+    row_title_gp = gpar(fontsize = 14),
+    heatmap_legend_param = list(title = legend_title),
+    heatmap_width = unit(1, "npc"),
+    heatmap_height = unit(1, "npc"),
+    cell_fun = function(j, i, x, y, width, height, fill) {
+      value <- delta_matrix[i, j]
+      if (!is.na(value)) {
+        grid.text(sprintf("%.2f", value), x, y,
+          gp = gpar(fontsize = 10, col = ifelse(abs(value) > 0.2, "white", "black"))
+        )
+      }
+    }
+  )
+
+  dir.create(FIG_DIR, showWarnings = FALSE, recursive = TRUE)
+  pdf_file <- file.path(FIG_DIR, paste0("delta_", tolower(metric_col), "_heatmap_", adjuster, ".pdf"))
+  pdf(pdf_file, width = 14, height = 8)
+  draw(ht, padding = unit(c(10, 10, 10, 10), "mm"), merge_legend = TRUE, heatmap_legend_side = "right", annotation_legend_side = "right")
+  grid.text("Test Dataset", x = unit(0.3, "npc"), y = unit(0.02, "npc"), gp = gpar(fontsize = 14))
+  dev.off()
+
+  cat("Saved:", pdf_file, "\n")
+}
 
 # Function to generate heatmap for a specific metric
 generate_metric_heatmap <- function(input_data, metric_name, metric_col, adjuster) {
@@ -299,8 +436,12 @@ unique_tests <- unique(filtered_data$Test)
 cat("Unique Train datasets:", paste(unique_trains, collapse = ", "), "\n")
 cat("Unique Test datasets:", paste(unique_tests, collapse = ", "), "\n\n")
 
-# Generate both heatmaps
+# Generate all heatmaps
 auc_data <- generate_metric_heatmap(input_data, "ROC AUC", "ROC AUC", adjuster)
 mcc_data <- generate_metric_heatmap(input_data, "MCC", "MCC", adjuster)
+if (adjuster != "unadjusted") {
+  generate_metric_difference_heatmap(adjuster, "ROC AUC", "ROC AUC")
+  generate_metric_difference_heatmap(adjuster, "MCC", "MCC")
+}
 
 cat("All heatmaps generated successfully for adjuster:", adjuster, "\n")
