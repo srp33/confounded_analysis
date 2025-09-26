@@ -34,7 +34,7 @@ Arguments:
     --dry-run              Show what would be done without actually doing it
     --force                Force regeneration of all combinations (bypass cache)
     --parallel N           Number of parallel processes (default: 1)
-    --output-dir PATH      Output directory for combined datasets (default: /data/combined_data)
+    --output-dir PATH      Output directory for combined datasets (default: /data/paired_datasets)
     --data-dir PATH        Input directory containing processed datasets (default: /data/gold)
     --cache-dir PATH       Directory for cache files (default: /tmp/combination_cache)
     --max-combinations N   Maximum number of combinations to process (for testing)
@@ -389,7 +389,7 @@ def main():
     parser.add_argument('--debug', action='store_true', help='Enable detailed debug output')
     parser.add_argument('--dry-run', action='store_true', help='Show what would be done without actually doing it')
     parser.add_argument('--force', action='store_true', help='Force regeneration of all combinations (bypass cache)')
-    parser.add_argument('--output-dir', default='/data/combined_data', help='Output directory for combined datasets')
+    parser.add_argument('--output-dir', default='/data/paired_datasets', help='Output directory for combined datasets')
     parser.add_argument('--data-dir', default='/data/gold', help='Input directory containing processed datasets')
     parser.add_argument('--cache-dir', default='/tmp/combination_cache', help='Directory for cache files')
     parser.add_argument('--max-combinations', type=int, help='Maximum number of combinations to process (for testing)')

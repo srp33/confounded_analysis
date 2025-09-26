@@ -8,7 +8,7 @@ set -e
 
 # --- Configuration ---
 SCRIPT_PATH="/scripts/metrics/classify.py"
-BASE_DATA_DIR="/data/combined_data"
+BASE_DATA_DIR="/data/paired_datasets"
 OUTPUT_DIR="/outputs/metrics"
 # Directory to store the cache files with MD5 hashes
 HASH_DIR="/data/.cache/classify_hashes"

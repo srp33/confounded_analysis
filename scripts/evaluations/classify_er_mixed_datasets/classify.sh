@@ -2,13 +2,13 @@
 
 # /scripts/evaluations/classify_er_mixed_datasets/classify.sh
 # Given an adjuster name, create lists of files from dataset directories 
-# in /data/combined_data and pass them to HGB_classify_er.py
+# in /data/paired_datasets and pass them to HGB_classify_er.py
 
 # Exit immediately if a command exits with a non-zero status
 set -e
 
 # --- Configuration ---
-COMBINED_DATA_DIR="/data/combined_data"
+COMBINED_DATA_DIR="/data/paired_datasets"
 SINGLE_DATA_DIR="/data/gold"
 SCRIPT_PATH="$(dirname "$0")/HGB_classify_er.py"
 OUTPUT_DIR="/outputs/metrics"

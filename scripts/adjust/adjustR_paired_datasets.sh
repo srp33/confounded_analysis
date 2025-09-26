@@ -13,7 +13,7 @@ ulimit -s unlimited
 
 # Path to the R script that performs the adjustment
 ADJUST_SCRIPT="/scripts/adjust/adjust.R"
-DATA_DIR="/data/combined_data"
+DATA_DIR="/data/paired_datasets"
 
 # Define adjusters to run in PARALLEL (all dataset jobs for an adjuster run at once)
 ADJUSTERS_PARALLEL=(

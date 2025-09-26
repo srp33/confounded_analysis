@@ -140,7 +140,7 @@ def run_single_dataset(filepath, source, output_file, pred_col, adjustment, clas
 
 
 
-def run_combined_dataset(filepath, output_file, pred_col, source_col, adjustment, classifier, clf_model, n_splits, current_repeat):
+def run_paired_datasetsset(filepath, output_file, pred_col, source_col, adjustment, classifier, clf_model, n_splits, current_repeat):
     """Generate metrics for combined datasets
     with each training and testing combination."""
     # Load pandas dataframe
@@ -318,7 +318,7 @@ def execute_run(args, run, model):
         )
 
     elif run['type'] == 'combined':
-        run_combined_dataset(
+        run_paired_datasetsset(
             filepath=run['filename'],
             output_file=args.output,
             pred_col=args.prediction_column,
