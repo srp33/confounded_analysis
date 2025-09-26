@@ -105,7 +105,7 @@ data/
 ├── annotations/         # Gene annotation and mapping files
 │   ├── entrez_to_symbol_map.csv    # Gene ID mappings
 │   └── GPL96-annotation*.csv       # Platform annotation files
-├── combined_data/       # Merged datasets for batch effect analysis
+├── paired_datasets/       # Merged datasets for batch effect analysis
 │   └── gse*_gse*/      # Pairwise dataset combinations (e.g., gse19697_gse20194/)
 ├── gold/               # Processed, analysis-ready datasets
 │   ├── gse*/           # Individual GSE datasets (e.g., gse20194/, gse24080/)
@@ -179,7 +179,7 @@ The batch effect adjustment phase implements multiple methods for removing unwan
 - **`all.sh`** - Master script that executes all adjustment methods in sequence
 - **`adjustR_data.sh`** - Runs R-based methods on individual datasets in parallel/sequential modes
 - **`adjustR_individual_prep.sh`** - Applies R methods to individual datasets with global batch correction
-- **`adjustR_combined_data.sh`** - Processes combined dataset pairs for cross-study batch correction
+- **`adjustR_paired_datasets.sh`** - Processes combined dataset pairs for cross-study batch correction
 
 ### Deep Learning Methods
 

@@ -11,7 +11,7 @@ echo "Dataset: $dataset"
 
 # Path to the R script that performs the adjustment
 ADJUST_SCRIPT="/scripts/adjust/adjust.R"
-DATA_DIR="/data/combined_data"
+DATA_DIR="/data/paired_datasets"
 
 input_file="${DATA_DIR}/${dataset}/unadjusted.csv"
 output_file="${DATA_DIR}/${dataset}/${adjuster}.csv"

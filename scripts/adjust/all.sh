@@ -10,6 +10,6 @@ set -e
 bash /scripts/adjust/adjustR_data.sh
 # bash /scripts/adjust/adjustR_individual_prep.sh
 
-# bash /scripts/adjust/adjustR_combined_data.sh
+# bash /scripts/adjust/adjustR_paired_datasets.sh
 
 

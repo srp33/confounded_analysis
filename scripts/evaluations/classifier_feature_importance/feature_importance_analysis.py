@@ -279,24 +279,24 @@ def create_comparison_plots(all_results, output_dir):
         return
     
     # Combine all results into a single DataFrame
-    combined_data = []
+    paired_datasets = []
     for result in all_results:
         if result is None:
             continue
         
         for i, feature in enumerate(result['feature_names']):
-            combined_data.append({
+            paired_datasets.append({
                 'model': result['model_name'],
                 'feature': feature,
                 'perm_importance_mean': result['perm_importances_mean'][i],
                 'perm_importance_std': result['perm_importances_std'][i]
             })
     
-    if not combined_data:
+    if not paired_datasets:
         print_now("No data to plot")
         return
     
-    df_plot = pd.DataFrame(combined_data)
+    df_plot = pd.DataFrame(paired_datasets)
     
     # Get top 20 features by average permutation importance across all models
     top_features = (df_plot.groupby('feature')['perm_importance_mean']
@@ -420,11 +420,11 @@ def main():
         
         # Save combined results
         combined_csv_path = output_dir / "all_feature_importances_combined.csv"
-        combined_data = []
+        paired_datasets = []
         
         for result in all_results:
             for i, feature in enumerate(result['feature_names']):
-                combined_data.append({
+                paired_datasets.append({
                     'model': result['model_name'],
                     'feature': feature,
                     'perm_importance_mean': result['perm_importances_mean'][i],
@@ -434,7 +434,7 @@ def main():
                     'model_auc': result['auc']
                 })
         
-        combined_df = pd.DataFrame(combined_data)
+        combined_df = pd.DataFrame(paired_datasets)
         combined_df.to_csv(combined_csv_path, index=False, float_format='%.6f')
         print_now(f"Saved combined results to: {combined_csv_path}")
         
