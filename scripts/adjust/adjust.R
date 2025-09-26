@@ -25,6 +25,7 @@ suppressPackageStartupMessages({
 
 source("/scripts/adjust/gmm_adjust.R")
 source("/scripts/adjust/gmm_global_simple.R")
+source("/scripts/adjust/gmm_adjust_streamlined.R")
 
 get_allocated_cores <- function() {
   # Check SLURM-provided environment variables first
@@ -696,6 +697,32 @@ adjust_gmm_global_npn <- function(matrix_, batch = NULL, debug = FALSE, meta_fil
   return(t(adjusted_data))
 }
 
+adjust_gmm_streamlined <- function(matrix_, batch, debug = FALSE, meta_file = NULL) {
+  #' Streamlined GMM adjustment using the fast implementation.
+  #' Applies bimodal GMM transformation to all genes with full inverse CDF.
+  #' @param matrix_ The matrix to adjust (features x samples).
+  #' @param batch The batch variable vector.
+  #' @param debug Logical flag for debug output.
+  #' @param meta_file Path to save metadata (currently unused in streamlined version).
+  #' @return The adjusted matrix (features x samples).
+  
+  message("Adjusting with streamlined GMM (bimodal for all genes).")
+  
+  # Convert to the format expected by gmm_adjust_streamlined (samples x genes)
+  genes_df <- as.data.frame(t(matrix_))
+  
+  if (is.null(batch)) {
+    # Single batch - create dummy batch
+    batch <- rep("batch1", nrow(genes_df))
+  }
+  
+  # Apply streamlined adjustment
+  adjusted_genes_df <- gmm_adjust_streamlined(genes_df, batch, alpha0 = 10, debug = debug)
+  
+  # Convert back to matrix format (features x samples)
+  return(t(as.matrix(adjusted_genes_df)))
+}
+
 
 rank_normalized <- function(matrix_, dim) {
   if (dim < 1 || dim > 2) {
@@ -789,6 +816,21 @@ adjust_ranked_with_batch_info <- function(matrix_, batch, debug = FALSE) {
   }
   
   return(ranked2 / max_val)
+}
+
+
+adjust_log <- function(matrix_, batch, debug = FALSE) {
+  message("Adjusting with log.")
+  # For each batch, subtract the minimum from every entry. Then take the log of the data.
+  batch_levels <- unique(batch)
+  adjusted <- matrix(NA, nrow = nrow(matrix_), ncol = ncol(matrix_))
+  for (b in batch_levels) {
+    batch_indices <- which(batch == b)
+    batch_data <- matrix_[, batch_indices, drop = FALSE]
+    min_val <- min(batch_data, na.rm = TRUE)
+    adjusted[, batch_indices] <- log(batch_data - min_val + 1)
+  }
+  return(adjusted)
 }
 
 
@@ -906,6 +948,7 @@ batch_adjust_tidy <- function(df, input_file, adjuster, batch_col, column, full_
     "gmm" = adjust_gmm(mat_genes, batch, debug=debug, meta_file=meta_file),
     "gmm_npn" = adjust_gmm_npn(mat_genes, batch, debug=debug, meta_file=meta_file),
     "gmm_npn_unit_std" = adjust_gmm_npn_unit_std(mat_genes, batch, debug=debug, meta_file=meta_file),
+    "gmm_streamlined" = adjust_gmm_streamlined(mat_genes, batch, debug=debug, meta_file=meta_file),
     "gmm_global_simple" = adjust_gmm_global_simple(mat_genes, batch, debug=TRUE, meta_file=meta_file),
     "gmm_global_npn" = adjust_gmm_global_npn(mat_genes, batch, debug=TRUE, meta_file=meta_file),
     "ranked1" = adjust_ranked(mat_genes, debug = debug),
@@ -914,6 +957,7 @@ batch_adjust_tidy <- function(df, input_file, adjuster, batch_col, column, full_
     "ranked_projection" = adjust_ranked_projection(mat_genes, debug = debug),
     "min_mean" = adjust_min_mean(mat_genes, batch, debug = debug),
     "combat" = adjust_combat(mat_genes, batch, design, data_are_counts, debug = debug),
+    "log" = adjust_log(mat_genes, batch, debug = debug),
     "limma" = adjust_limma(mat_genes, batch, design, debug = debug),
     "quantile" = adjust_quantile(mat_genes, batch, debug = debug),
     "npn" = adjust_npn(mat_genes, batch, debug = debug),
