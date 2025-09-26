@@ -209,10 +209,6 @@ bimodal_normalize_streamlined <- function(data, alpha0 = 10, debug = FALSE) {
   n_genes <- length(gene_names)
   n_samples <- nrow(data)
   
-  if (debug) {
-    cat("Processing", n_genes, "genes for bimodal normalization...\n")
-  }
-  
   # Initialize results
   bimodal_data <- matrix(NA, nrow = n_samples, ncol = n_genes)
   
