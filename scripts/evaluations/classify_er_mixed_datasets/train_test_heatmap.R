@@ -278,8 +278,8 @@ create_heatmap <- function(metric_data, title, subtitle, legend_name,
 data <- read_and_prepare_data(CSV_FILE)
 
 # Map the dataset to platform
-platform_map_file <- "../geo_metadata.csv"
-platform_df <= read_csv(platform_map_file, show_col_types=FALSE)
+platform_map_file <- "/scripts/evaluations/geo_metadata.csv"
+platform_df <- read_csv(platform_map_file, show_col_types=FALSE)
 platform_df$GSE_ID <- str_trim(platform_df$GSE_ID)
 dataset_platform_map <- setNames(platform_df$platform, platform_df$GSE_ID)
 
