@@ -18,7 +18,7 @@ all_other_packages <- c(
     "gridExtra", "png", "magick", "colorspace", "pracma", "kableExtra", 
     "Rtsne", "argparse", "docstring", "R.devices", "doParallel", "readxl", 
     "sva", "SCAN.UPC", "SummarizedExperiment", "ExperimentHub", "limma", 
-    "vsn", "ggpubr", "itertools", "ComplexHeatmap",
+    "vsn", "ggpubr", "itertools", "ComplexHeatmap", "ggtext"
 
     # From install_adjuster_specific_packages.R
     "BatchQC", "batchelor", "ranger", "fairadapt", "rliger", "huge",
