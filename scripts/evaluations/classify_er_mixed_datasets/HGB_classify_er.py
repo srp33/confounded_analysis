@@ -28,14 +28,6 @@ def print_now(*args, **kwargs):
 
 def calculate_metrics(y_true, y_pred, y_proba):
     """Calculate a standard set of classification metrics."""
-
-    print_now("Y true shape: ", y_true.shape)
-    print_now("Y pred shape: ", y_pred.shape)
-    print_now("Y proba shape: ", y_proba.shape)
-
-    print_now("Y true unique: ", np.unique(y_true))
-    print_now("Y pred unique: ", np.unique(y_pred))
-
     # Return NaN for metrics that fail if only one class is present.
     if len(pd.unique(y_true)) < 2:
         return {
@@ -99,6 +91,16 @@ def run_single_dataset(filepath, source, output_file, pred_col, adjustment, clas
         # Take the second column of probabilistic predictions from x test
         y_proba = model.predict_proba(X_test)[:,1]
         predictions.loc[test_index, 'y_probability'] = y_proba
+
+    print_now(f"Shapes: Y : {y.shape} Y pred: {y_pred.shape} Y proba: {y_proba.shape} Uniques: Y : {np.unique(y)} Y pred: {np.unique(y_pred)} for dataset: {filepath}")
+
+    if y.isnull.any():
+        print_now(f"Dtype: {y.dtype}")
+        raise ValueError(f"Found {np.isnan(y).sum()} NaN(s) in y for dataset: {filepath}")
+    
+    if predictions['y_predicted'].isnull().any():
+        print_now(f"Dtype: {predictions['y_predicted'].dtype}")
+        raise ValueError(f"Found {np.isnan(y_pred).sum()} NaN(s) in y_pred for dataset: {filepath}")
 
     # Generate the metrics from y, y predictions, and y probabilistic predictions
     metrics = calculate_metrics(y, predictions['y_predicted'], predictions['y_probability'])
@@ -188,6 +190,16 @@ def run_combined_dataset(filepath, output_file, pred_col, source_col, adjustment
         y_true = y_test
         y_pred_all = y_pred
         y_proba_all = y_proba
+
+        print_now(f"Shapes: Y true: {y_true.shape} Y pred: {y_pred.shape} Y proba: {y_proba.shape} Uniques: Y true: {np.unique(y_true)} Y pred: {np.unique(y_pred)} for dataset: {filepath}")
+
+        if y_true.isnull.any():
+            print_now(f"Dtype: {y_true.dtype}")
+            raise ValueError(f"Found {np.isnan(y_true).sum()} NaN(s) in y_true for dataset: {filepath}")
+    
+        if y_pred_all.isnull().any():
+            print_now(f"Dtype: {y_pred_all.dtype}")
+            raise ValueError(f"Found {np.isnan(y_pred_all).sum()} NaN(s) in y_pred_all for dataset: {filepath}")
 
         # Calculate metrics
         metrics = calculate_metrics(y_true, y_pred_all, y_proba_all)
