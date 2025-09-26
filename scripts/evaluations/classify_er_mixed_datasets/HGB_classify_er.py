@@ -28,8 +28,16 @@ def print_now(*args, **kwargs):
 
 def calculate_metrics(y_true, y_pred, y_proba):
     """Calculate a standard set of classification metrics."""
+    # PENDING: Handle both pandas Series and numpy arrays. Might fix AttributeError.
+    if isinstance(y_pred, np.ndarray):
+        # For numpy arrays, filter out NaN values before checking uniqueness
+        y_pred_cleaned = y_pred[~np.isnan(y_pred)]
+    else:
+        # For pandas Series, use the dropna() method
+        y_pred_cleaned = y_pred.dropna()
+
     # Return NaN for metrics that fail if only one class is present.
-    if len(pd.unique(y_true)) < 2 or len(pd.unique(y_pred.dropna())) < 2:
+    if len(pd.unique(y_true)) < 2 or len(pd.unique(y_pred_cleaned)) < 2:
         return {
             'ROC AUC': np.nan,
             'True Negative': np.nan,
@@ -238,7 +246,8 @@ def run_combined_dataset(filepath, output_file, pred_col, source_col, adjustment
 def load_dataframe(filename, pred_col):
     """Read the file into a pandas dataframe and check it has the required columns."""
     print_now(f"Loading data from {filename}")
-    df = pd.read_csv(filename)
+    # PENDING: Set low_memory=False to address DtypeWarning.
+    df = pd.read_csv(filename, low_memory=False)
 
     if pred_col not in df.columns :
         meta_cols = [col for col in df.columns if col.startswith('meta_')]
@@ -369,14 +378,14 @@ def main():
     # Execute runs in parallel
     n_jobs = min(len(runs), os.cpu_count() or 1, args.num_workers)
     print_now(f"Running {len(runs)} runs in parallel with {n_jobs} jobs. args.num_workers: {args.num_workers}. os.cpu_count: {os.cpu_count()}")
-
-    Parallel(n_jobs=n_jobs)(
-        delayed(execute_run)(args, run, model) for run in runs
-    )
-
+    if n_jobs:
+        Parallel(n_jobs=n_jobs)(
+            delayed(execute_run)(args, run, model) for run in runs
+        )
     print_now("\nPipeline finished.")
     print_now(f"Detailed results are in: {args.output}")
     print_now("="*60)
 
 if __name__ == "__main__":
     main()
+
