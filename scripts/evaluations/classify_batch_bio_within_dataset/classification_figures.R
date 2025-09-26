@@ -62,7 +62,7 @@ all_info_df <- tribble(
   "structured_synthetic", "Structured Synthetic", "meta_batch", "meta_bio"
 )
 
-order <- c("unadjusted", "seurat_scaling", "liger", "seurat_integration", "monotonic", "non_monotonic", "wasserstein", "autoclass", "min_mean", "combat_target", "fastMNN", "combat", "quantile", "npn", "simple", "gmm", "gmm_scale_separate", "gmm_npn") #, "icvae", "fair_adapt", "limma_target", "limma", "harmony", 
+order <- c("unadjusted", "seurat_scaling", "liger", "seurat_integration", "monotonic", "non_monotonic", "wasserstein", "autoclass", "min_mean", "combat_target", "mnn", "combat", "quantile", "npn", "simple", "gmm", "gmm_scale_separate", "gmm_npn") #, "icvae", "fair_adapt", "limma_target", "limma", "harmony", 
 
 score_functions <- c("roc_auc_score", "mutual_info_score", "accuracy_score")
 

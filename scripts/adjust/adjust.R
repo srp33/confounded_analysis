@@ -549,19 +549,19 @@ adjust_liger <- function(df_, batch, data_are_counts, debug = FALSE) {
 }
 
 
-adjust_fastMNN <- function(df_, batch, data_are_counts, debug = FALSE) {
-  #' Adjust using the fastMNN method from batchelor.
+adjust_mnn <- function(df_, batch, data_are_counts, debug = FALSE) {
+  #' Adjust using the mnnCorrect method from batchelor.
   #' @param df_ The data matrix (features x samples).
   #' @param batch The batch variable vector.
   #' @param data_are_counts Logical, TRUE if data is raw counts.
   #' @param debug Logical flag for debug output.
   #' @return The adjusted matrix.
   
-  message("Adjusting with fastMNN.")
+  message("Adjusting with MNN.")
   prep_list <- prep_seurat_like(df_, batch, data_are_counts)
   sce_list <- lapply(unique(batch), function(b) as.SingleCellExperiment(prep_list$obj[, prep_list$obj$Batch == b]))
-  sce_corrected <- do.call(batchelor::fastMNN, c(sce_list, list(assay.type = "logcounts")))
-  corrected_matrix <- as.matrix(assay(sce_corrected, "reconstructed"))
+  sce_corrected <- do.call(batchelor::mnnCorrect, c(sce_list, list(assay.type = "logcounts")))
+  corrected_matrix <- as.matrix(assay(sce_corrected, "corrected"))
   
   return(restore_names(corrected_matrix, prep_list))
 }
@@ -980,7 +980,7 @@ batch_adjust_tidy <- function(df, input_file, adjuster, batch_col, column, full_
     "seurat_scaling" = adjust_seurat_scaling(mat_genes, batch, data_are_counts, debug = debug),
     "seurat_integration" = adjust_seurat_integration(mat_genes, batch, data_are_counts, debug = debug),
     "fairadapt" = adjust_fairadapt(genes, batch, design, debug = debug),
-    "fastMNN" = adjust_fastMNN(mat_genes, batch, data_are_counts, debug = debug),
+    "mnn" = adjust_mnn(mat_genes, batch, data_are_counts, debug = debug),
     "liger" = adjust_liger(mat_genes, batch, data_are_counts, debug = debug),
     stop(sprintf("Unknown adjuster '%s'", adjuster))
   )

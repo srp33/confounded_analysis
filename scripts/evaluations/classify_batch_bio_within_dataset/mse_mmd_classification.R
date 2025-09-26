@@ -11,7 +11,7 @@ TAB_DIR = "/outputs/tables/"
 mse <- read_csv(paste(c(IN_DIR, "/mse.csv"), collapse = ""))
 mmd <- read_csv(paste(c(IN_DIR, "/mmd.csv"), collapse = ""))
 
-order <- c("unadjusted", "limma_target", "limma", "quantile", "harmony", "liger", "seurat_scaling", "seurat_integration", "wasserstein", "autoclass", "fastMNN", "combat_target", "combat")
+order <- c("unadjusted", "limma_target", "limma", "quantile", "harmony", "liger", "seurat_scaling", "seurat_integration", "wasserstein", "autoclass", "mnn", "combat_target", "combat")
 
 metrics <- rbind(mse, mmd) %>%
     filter(!str_detect(adjuster, "pretrained")) %>%

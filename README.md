@@ -208,7 +208,7 @@ The batch effect adjustment phase implements multiple methods for removing unwan
 - **`adjust.R`** - Main R adjustment framework supporting multiple statistical methods:
   - **Combat** - Empirical Bayes batch correction
   - **Quantile normalization** - Distribution-based normalization
-  - **FastMNN** - Mutual nearest neighbors batch correction
+  - **MNN** - Mutual nearest neighbors batch correction
   - **Seurat integration** - Single-cell RNA-seq integration methods
   - **LIGER** - Integrative non-negative matrix factorization
   - **Limma** - Linear modeling for batch correction
@@ -229,7 +229,7 @@ The batch effect adjustment phase implements multiple methods for removing unwan
 - Min-mean normalization
 
 **Sequential Processing Methods** (run one at a time):
-- FastMNN - Memory-intensive mutual nearest neighbors
+- MNN - Memory-intensive mutual nearest neighbors
 - LIGER - Integrative matrix factorization
 - GMM variants - Gaussian mixture model approaches
 

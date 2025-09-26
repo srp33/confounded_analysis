@@ -26,7 +26,7 @@ ADJUSTERS_PARALLEL=(
 
 # Define adjusters to run SEQUENTIALLY (one dataset job at a time for each adjuster)
 ADJUSTERS_SEQUENTIAL=(
-    "fastMNN"
+    "mnn"
     "gmm"
     "gmm_scale_separate"
     "gmm_npn"
