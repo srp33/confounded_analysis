@@ -14,4 +14,5 @@ shift  # remove the first arg, leaving only the rest
 source ~/confounded_analysis/init_apptainer.sh
 
 # Execute the specified script inside the Apptainer container, forwarding all args
+newgrp grp_batch_effects
 apptainer exec --contain "$APPTAINER_IMAGE" "$SCRIPT_TO_RUN" "$@"
