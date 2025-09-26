@@ -29,7 +29,7 @@ def print_now(*args, **kwargs):
 def calculate_metrics(y_true, y_pred, y_proba):
     """Calculate a standard set of classification metrics."""
     # Return NaN for metrics that fail if only one class is present.
-    if len(pd.unique(y_true)) < 2:
+    if len(pd.unique(y_true)) < 2 or len(pd.unique(y_pred.dropna())) < 2:
         return {
             'ROC AUC': np.nan,
             'True Negative': np.nan,
@@ -96,14 +96,20 @@ def run_single_dataset(filepath, source, output_file, pred_col, adjustment, clas
 
     if y.isnull().any():
         print_now(f"Dtype: {y.dtype}")
-        raise ValueError(f"Found {np.isnan(y).sum()} NaN(s) in y for dataset: {filepath}")
+        # PENDING: Use pandas .isnull() to avoid TypeError on non-numeric data.
+        raise ValueError(f"Found {y.isnull().sum()} NaN(s) in y for dataset: {filepath}")
     
-    if predictions['y_predicted'].isnull().any():
-        print_now(f"Dtype: {predictions['y_predicted'].dtype}")
-        raise ValueError(f"Found {np.isnan(y_pred).sum()} NaN(s) in y_pred for dataset: {filepath}")
+    y_predicted_series = predictions['y_predicted']
+    if y_predicted_series.isnull().any():
+        print_now(f"Dtype: {y_predicted_series.dtype}")
+        # PENDING: Use pandas .isnull() for the Series, not the temporary y_pred variable.
+        raise ValueError(f"Found {y_predicted_series.isnull().sum()} NaN(s) in y_pred for dataset: {filepath}")
+
+    # PENDING: Convert to a numeric type that supports integers and NaNs. Might fix ValueError.
+    y_predicted_series = y_predicted_series.astype(float).astype('Int64')
 
     # Generate the metrics from y, y predictions, and y probabilistic predictions
-    metrics = calculate_metrics(y, predictions['y_predicted'], predictions['y_probability'])
+    metrics = calculate_metrics(y, y_predicted_series, predictions['y_probability'])
     metrics_df = pd.DataFrame([metrics])
 
     # Add other columns
@@ -195,9 +201,11 @@ def run_combined_dataset(filepath, output_file, pred_col, source_col, adjustment
 
         if y_true.isnull().any():
             print_now(f"Dtype: {y_true.dtype}")
-            raise ValueError(f"Found {np.isnan(y_true).sum()} NaN(s) in y_true for dataset: {filepath}")
+            # PENDING: Use pandas .isnull() to avoid TypeError on non-numeric data.
+            raise ValueError(f"Found {y_true.isnull().sum()} NaN(s) in y_true for dataset: {filepath}")
     
-        if y_pred_all.isnull().any():
+        # PENDING: Use np.isnan for NumPy arrays. Might fix AttributeError.
+        if np.isnan(y_pred_all).any():
             print_now(f"Dtype: {y_pred_all.dtype}")
             raise ValueError(f"Found {np.isnan(y_pred_all).sum()} NaN(s) in y_pred_all for dataset: {filepath}")
 
@@ -276,7 +284,7 @@ def filter_runs(runs, output_file):
         return runs
     
     try:
-        existing_df = pd.read_csv(output_file)
+        existing_df = pd.read_csv(output_file, header=0, names=['Train', 'Test', 'ROC AUC', 'True Negative', 'False Negative', 'False Positive', 'True Positive', 'Classifier', 'Adjustment', 'Prediction', 'Run_ID'])
         completed_ids = set(existing_df.get('Run_ID', []))
         filtered_runs = [run for run in runs if run['run_id'] not in completed_ids]
         print_now(f"Filtered {len(runs)} runs down to {len(filtered_runs)} remaining runs.")
@@ -355,7 +363,8 @@ def main():
     # Generate a list of dictionaries with the parameters for each run
     runs = generate_runs(args.single_list, args.single_source_names, args.combined_list, args.n)
 
-    runs = filter_runs(runs, args.output)
+    if not args.force_rerun:
+        runs = filter_runs(runs, args.output)
 
     # Execute runs in parallel
     n_jobs = min(len(runs), os.cpu_count() or 1, args.num_workers)
@@ -371,5 +380,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
-    
