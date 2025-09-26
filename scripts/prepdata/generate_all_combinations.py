@@ -4,7 +4,7 @@ Enhanced Dataset Combination Generation Script
 
 This script finds all processed datasets containing 'meta_er_status', creates all
 possible pairwise combinations for multiple CSV file types (unadjusted, combat, limma, etc.),
-and saves them to the /data/combined_data/ directory with caching and performance
+and saves them to the /data/paired_datasets/ directory with caching and performance
 optimizations.
 
 Key Features:

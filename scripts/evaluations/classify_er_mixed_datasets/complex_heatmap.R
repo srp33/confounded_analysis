@@ -42,7 +42,7 @@ cat("Processing adjuster:", adjuster, "\n")
 CSV_FILE <- paste0("/outputs/metrics/er_classification_", adjuster, ".csv")
 FIG_DIR <- "/outputs/figures"
 
-platform_df <- read.csv("../geo_metadata.csv")
+platform_df <- read.csv("/scripts/evaluations/geo_metadata.csv")
 platform_df$platform <- trimws(platform_df$platform)
 dataset_to_platform <- setNames(platform_df$platform, platform_df$GSE_ID)
 
@@ -406,7 +406,7 @@ generate_metric_heatmap <- function(input_data, metric_name, metric_col, adjuste
 
     # Save heatmap to PDF
     dir.create(FIG_DIR, showWarnings = FALSE, recursive = TRUE)
-    pdf_file <- file.path(FIG_DIR, paste0(tolower(metric_name), "_heatmap_", adjuster, ".pdf"))
+    pdf_file <- file.path(FIG_DIR, paste0(tolower(gsub(" ", "_", metric_name)), "_heatmap_", adjuster, ".pdf"))
 
     pdf(pdf_file, width = 14, height = 8)
     draw(ht, padding = unit(c(10, 10, 10, 10), "mm"), merge_legend = TRUE, heatmap_legend_side = "right", annotation_legend_side = "right")
