@@ -29,9 +29,9 @@ library(tibble)
 args <- commandArgs(trailingOnly = TRUE)
 
 if (length(args) != 1) {
-  cat("Usage: Rscript train_test_heatmap.R <adjuster>\n")
-  cat("Example: Rscript train_test_heatmap.R unadjusted\n")
-  cat("Example: Rscript train_test_heatmap.R combat\n")
+  cat("Usage: Rscript complex_heatmap.R <adjuster>\n")
+  cat("Example: Rscript complex_heatmap.R unadjusted\n")
+  cat("Example: Rscript complex_heatmap.R combat\n")
   quit(status = 1)
 }
 
@@ -175,8 +175,15 @@ generate_metric_heatmap <- function(input_data, metric_name, metric_col, adjuste
     col_platform_type[is.na(col_platform_type)] <- "Unknown"
 
     # Group by platform type and platform name (no manual ordering)
-    row_split <- interaction(row_platform_type, row_platform, drop = TRUE, sep = " | ")
-    col_split <- interaction(col_platform_type, col_platform, drop = TRUE, sep = " | ")
+    row_split <- list(
+      factor(row_platform_type, levels = c("Microarray", "RNAseq", "Unknown")),
+      factor(row_platform, levels = unique(row_platform))
+    )
+
+    col_split <- list(
+      factor(col_platform_type, levels = c("Microarray", "RNAseq", "Unknown")),
+      factor(col_platform, levels = unique(col_platform))
+    )
 
     # Define colors
     platform_colors <- c(
@@ -209,20 +216,22 @@ generate_metric_heatmap <- function(input_data, metric_name, metric_col, adjuste
 
     # Define color function for heatmap fill
     if (metric_col == "MCC") {
-        col_fun <- circlize::colorRamp2(c(-1, 0, 1), c("darkred", "lightgrey", "darkgreen"))
+        col_fun <- circlize::colorRamp2(c(-1, 0, 1), c("#d73027", "#fad6b2ff", "#66c2a5"))
     } else {
-        col_fun <- circlize::colorRamp2(c(0, 0.5, 1), c("darkred", "lightgrey", "darkgreen"))
+        col_fun <- circlize::colorRamp2(c(0, 0.5, 1), c("#d73027", "#fad6b2ff", "#66c2a5"))
     }
+
+    
 
     # Update titles
     if (metric_col == "MCC") {
         title_text <- paste0("Matthews Correlation Coefficient Heatmap: Dataset Combinations (", adjuster, ")")
         legend_title <- "Mean MCC"
-        col_fun <- circlize::colorRamp2(c(-1, 0, 1), c("darkred", "lightgrey", "darkgreen"))
+        col_fun <- circlize::colorRamp2(c(-1, 0, 1), c("#d73027", "#fad6b2ff", "#66c2a5"))
     }   else {
         title_text <- paste0("ROC AUC Heatmap: Dataset Combinations (", adjuster, ")")
         legend_title <- "Mean ROC AUC"
-        col_fun <- circlize::colorRamp2(c(0, 0.5, 1), c("darkred", "lightgrey", "darkgreen"))
+        col_fun <- circlize::colorRamp2(c(0, 0.5, 1), c("#d73027", "#fad6b2ff", "#66c2a5"))
     }
 
     # Create heatmap object
@@ -237,7 +246,10 @@ generate_metric_heatmap <- function(input_data, metric_name, metric_col, adjuste
                     cluster_rows = FALSE, 
                     cluster_columns = FALSE, 
                     show_row_names = TRUE,
+                    row_names_gp = gpar(fontsize=10, fontface="plain"),
                     show_column_names = TRUE, 
+                    column_names_gp = gpar(fontsize=10, fontface="plain"),
+                    column_names_rot = 45,
                     heatmap_legend_param = list(title = legend_title),
                     column_title = title_text,
                     column_title_gp = gpar(fontsize = 16, fontface = "bold"),

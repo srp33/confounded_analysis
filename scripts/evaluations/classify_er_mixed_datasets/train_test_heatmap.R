@@ -11,7 +11,6 @@ if (!require(readr)) install.packages("readr")
 if (!require(dplyr)) install.packages("dplyr")
 if (!require(tidyr)) install.packages("tidyr")
 if (!require(stringr)) install.packages("stringr")
-if (!require(ggtext)) install.packages("ggtext")
 
 # Load libraries
 library(ggplot2)
@@ -19,7 +18,6 @@ library(readr)
 library(dplyr)
 library(tidyr)
 library(stringr)
-library(ggtext)
 
 # --- Parse Command Line Arguments ---
 args <- commandArgs(trailingOnly = TRUE)
