@@ -168,7 +168,7 @@ def run_paired_datasetsset(filepath, output_file, pred_col, source_col, adjustme
     cols_to_drop = [pred_col, source_col] + meta_columns
     feature_df = df.drop(columns=[col for col in cols_to_drop if col in df.columns]).select_dtypes(include=[np.number])
 
-    results = {}
+    results = []
 
     for train_key, test_key in combinations:
         # Select training data
@@ -238,10 +238,10 @@ def run_paired_datasetsset(filepath, output_file, pred_col, source_col, adjustme
         # Reorder columns and append to output file
         output_cols = ['Train', 'Test', 'ROC AUC', 'True Negative', 'False Negative', 'False Positive', 'True Positive', 
         'Classifier', 'Adjustment', 'Prediction', 'Run_ID']
-        results[output_file] = metrics_df[output_cols].copy()
+        results.append(metrics_df[output_cols].copy())
     
     # Make sure the whole run completes before writing to the file.
-    for output_file, metrics_df_selection in results.items():
+    for metrics_df_selection in results:
         safe_write_to_csv(metrics_df_selection, output_file)
 
     print_now(f"All classification results for {filepath} saved.")

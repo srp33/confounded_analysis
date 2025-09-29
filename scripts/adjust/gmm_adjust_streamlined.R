@@ -112,38 +112,81 @@ predict_proba.GaussianMixture2D <- function(model, X) {
 # INVERSE CDF TRANSFORMATION
 # ============================================================================
 
-#' Inverse CDF for GMM distribution
+#' Inverse CDF for GMM distribution with robust error handling
 inverse_cdf_gmm <- function(p, means, variances, weights) {
   # Input validation
   if (any(is.na(means)) || any(is.na(variances)) || any(is.na(weights))) {
     return(rep(NA, length(p)))
   }
   
+  # Check for degenerate cases
+  if (length(unique(means)) == 1 || any(variances < 1e-12)) {
+    # Fallback to normal quantiles if parameters are degenerate
+    return(qnorm(p))
+  }
+  
   gmm_cdf <- function(x) {
     sum(weights * pnorm(x, mean = means, sd = sqrt(pmax(variances, 1e-10))))
   }
   
+  # More robust search interval calculation
   stds <- sqrt(pmax(variances, 1e-10))
-  search_interval <- c(min(means - 10 * stds), max(means + 10 * stds))
+  min_bound <- min(means - 15 * stds)
+  max_bound <- max(means + 15 * stds)
   
-  # Expand search interval if needed
-  if (abs(search_interval[2] - search_interval[1]) < 1e-6) {
-    search_interval <- c(search_interval[1] - 10, search_interval[2] + 10)
+  # Ensure minimum interval width
+  interval_width <- max_bound - min_bound
+  if (interval_width < 20) {
+    center <- (min_bound + max_bound) / 2
+    min_bound <- center - 10
+    max_bound <- center + 10
   }
   
   solve_for_single_p <- function(p_val) {
     if (is.na(p_val)) return(NA)
-    if (p_val <= 0.0) return(-Inf)
-    if (p_val >= 1.0) return(Inf)
+    if (p_val <= 1e-10) return(min_bound - 5)
+    if (p_val >= 1 - 1e-10) return(max_bound + 5)
     
     root_function <- function(x) gmm_cdf(x) - p_val
     
-    return(uniroot(root_function, interval = search_interval, tol = 1e-4)$root)
+    # Try with initial search interval
+    search_interval <- c(min_bound, max_bound)
+    
+    # Check if root exists in interval by evaluating endpoints
+    f_left <- root_function(search_interval[1])
+    f_right <- root_function(search_interval[2])
+    
+    # If same sign, try expanding the interval
+    expansion_attempts <- 0
+    max_expansions <- 3
+    
+    while (sign(f_left) == sign(f_right) && expansion_attempts < max_expansions) {
+      expansion_factor <- 2^(expansion_attempts + 1)
+      search_interval[1] <- min_bound - 10 * expansion_factor
+      search_interval[2] <- max_bound + 10 * expansion_factor
+      
+      f_left <- root_function(search_interval[1])
+      f_right <- root_function(search_interval[2])
+      expansion_attempts <- expansion_attempts + 1
+    }
+    
+    # Try uniroot with error handling
+    tryCatch({
+      if (sign(f_left) != sign(f_right)) {
+        return(uniroot(root_function, interval = search_interval, tol = 1e-4)$root)
+      } else {
+        # If still same sign, use normal quantile as fallback
+        return(qnorm(p_val))
+      }
+    }, error = function(e) {
+      # Fallback to normal quantile on any error
+      return(qnorm(p_val))
+    })
   }
   
   result <- sapply(p, solve_for_single_p)
   
-  # Replace any remaining problematic values
+  # Final cleanup for any remaining problematic values
   if (any(is.infinite(result) | is.na(result))) {
     bad_indices <- which(is.infinite(result) | is.na(result))
     result[bad_indices] <- qnorm(p[bad_indices])
@@ -157,13 +200,36 @@ inverse_cdf_gmm <- function(p, means, variances, weights) {
 # ============================================================================
 #' Get GMM parameters and apply mean-only centering and scaling transformation
 get_gene_gmm_transform <- function(gene_exp, alpha0 = 10, mean_only = FALSE) {
+  # Input validation
+  if (all(is.na(gene_exp))) {
+    return(gene_exp)
+  }
+  
+  # Check for constant values
+  unique_vals <- unique(gene_exp[!is.na(gene_exp)])
+  if (length(unique_vals) <= 1) {
+    return(rep(0, length(gene_exp)))
+  }
+  
   # Apply log transformation first
   min_val <- min(gene_exp, na.rm = TRUE)
   x_transformed <- log(gene_exp - min_val + 1)
+  
+  # Check if log-transformed data has sufficient variation
+  if (var(x_transformed, na.rm = TRUE) < 1e-10) {
+    # Fallback to simple standardization
+    return(scale(x_transformed)[, 1])
+  }
 
   # Fit 2-component GMM
   gmm <- GaussianMixture2D(alpha0 = alpha0)
   gmm <- fit(gmm, x_transformed)
+
+  # Validate GMM parameters
+  if (any(is.na(gmm$means_)) || any(is.na(gmm$variances_)) || any(is.na(gmm$weights_))) {
+    # Fallback to simple standardization
+    return(scale(x_transformed)[, 1])
+  }
 
   # Extract parameters (ensure lower component is first)
   if (gmm$means_[1] > gmm$means_[2]) {
@@ -175,6 +241,12 @@ get_gene_gmm_transform <- function(gene_exp, alpha0 = 10, mean_only = FALSE) {
     variances <- gmm$variances_
     weights <- gmm$weights_
   }
+  
+  # Check for degenerate parameters
+  if (abs(means[2] - means[1]) < 1e-6 || any(variances < 1e-10)) {
+    # Fallback to simple standardization
+    return(scale(x_transformed)[, 1])
+  }
 
   if (mean_only) {
     # Move mean center to 0
@@ -183,7 +255,7 @@ get_gene_gmm_transform <- function(gene_exp, alpha0 = 10, mean_only = FALSE) {
 
     # Compute variance as if weights were 0.5 each
     avg_variance <- sum(0.5 * (variances + (means - mean_center)^2))
-    scale_factor <- sqrt(avg_variance)
+    scale_factor <- sqrt(max(avg_variance, 1e-10))
 
     # Scale down the data
     result <- x_centered / scale_factor
@@ -196,23 +268,42 @@ get_gene_gmm_transform <- function(gene_exp, alpha0 = 10, mean_only = FALSE) {
     old_mean_diff <- means[2] - means[1]
     new_mean_diff <- new_mean2 - new_mean1
 
+    # Ensure we don't divide by zero or very small numbers
+    if (abs(old_mean_diff) < 1e-6) {
+      # Fallback to simple standardization
+      return(scale(x_transformed)[, 1])
+    }
+
     new_sd1 <- sqrt(variances[1]) * new_mean_diff / old_mean_diff
     new_sd2 <- sqrt(variances[2]) * new_mean_diff / old_mean_diff
 
-    new_var1 <- new_sd1^2
-    new_var2 <- new_sd2^2
+    new_var1 <- max(new_sd1^2, 1e-10)
+    new_var2 <- max(new_sd2^2, 1e-10)
 
     # Get quantiles from original data
     ranks <- rank(x_transformed, na.last = "keep", ties.method = "average")
-    quantiles <- ranks / (sum(!is.na(x_transformed)) + 1)
+    n_valid <- sum(!is.na(x_transformed))
+    quantiles <- ranks / (n_valid + 1)
 
-    # Apply inverse CDF transformation
-    result <- inverse_cdf_gmm(
-      quantiles,
-      means = c(new_mean1, new_mean2),
-      variances = c(new_var1, new_var2),
-      weights = weights
-    )
+    # Apply inverse CDF transformation with error handling
+    tryCatch({
+      result <- inverse_cdf_gmm(
+        quantiles,
+        means = c(new_mean1, new_mean2),
+        variances = c(new_var1, new_var2),
+        weights = weights
+      )
+      
+      # Check if result is valid
+      if (any(is.infinite(result) | is.na(result))) {
+        # Fallback to quantile normalization
+        result <- qnorm(quantiles)
+      }
+      
+    }, error = function(e) {
+      # Fallback to quantile normalization
+      result <<- qnorm(quantiles)
+    })
   }
 
   return(result)
@@ -251,6 +342,12 @@ bimodal_normalize_streamlined <- function(data, alpha0 = 10, mean_only = FALSE, 
     tryCatch({
       # Apply GMM transformation (with or without inverse CDF)
       bimodal_result <- get_gene_gmm_transform(gene_exp, alpha0, mean_only)
+      
+      # Validate result
+      if (all(is.na(bimodal_result)) || all(is.infinite(bimodal_result))) {
+        stop("Invalid transformation result")
+      }
+      
       bimodal_data[, i] <- bimodal_result
       
     }, error = function(e) {
@@ -258,11 +355,30 @@ bimodal_normalize_streamlined <- function(data, alpha0 = 10, mean_only = FALSE, 
         cat("Error processing gene", gene_name, ":", e$message, "\n")
       }
       # Fallback to simple quantile normalization
-      min_val <- min(gene_exp, na.rm = TRUE)
-      x_transformed <- log(gene_exp - min_val + 1)
-      quantiles <- rank(x_transformed, na.last = "keep", ties.method = "average") / (sum(!is.na(x_transformed)) + 1)
-      fallback_result <- qnorm(quantiles)
-      bimodal_data[, i] <- fallback_result / sd(fallback_result, na.rm = TRUE)
+      tryCatch({
+        min_val <- min(gene_exp, na.rm = TRUE)
+        x_transformed <- log(gene_exp - min_val + 1)
+        n_valid <- sum(!is.na(x_transformed))
+        
+        if (n_valid > 1) {
+          quantiles <- rank(x_transformed, na.last = "keep", ties.method = "average") / (n_valid + 1)
+          fallback_result <- qnorm(quantiles)
+          
+          # Standardize if possible
+          result_sd <- sd(fallback_result, na.rm = TRUE)
+          if (!is.na(result_sd) && result_sd > 1e-10) {
+            bimodal_data[, i] <- fallback_result / result_sd
+          } else {
+            bimodal_data[, i] <- fallback_result
+          }
+        } else {
+          # If only one valid value or all NA, keep original
+          bimodal_data[, i] <- gene_exp
+        }
+      }, error = function(e2) {
+        # Ultimate fallback - keep original data
+        bimodal_data[, i] <- gene_exp
+      })
     })
   }
   
