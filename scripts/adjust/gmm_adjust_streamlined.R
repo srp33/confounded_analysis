@@ -28,48 +28,55 @@ normal_pdf <- function(x, mean, sd) {
   exp(-0.5 * ((x - mean) / sd)^2) / (sd * sqrt(2 * pi))
 }
 
-#' Fit 2-component GMM model
-fit.GaussianMixture2D <- function(model, X) {
+#' Fit 2-component GMM model with prior on means and weights
+fit.GaussianMixture2D <- function(model, X, prior_alpha = 0.5) {
   X <- as.vector(X)
   n <- length(X)
   K <- 2  # Always 2 components
   eps <- 1e-12
-  
+
   # Initialize means using percentiles (25th and 75th percentiles)
   percentiles <- c(25, 75)
   means <- quantile(X, percentiles / 100, na.rm = TRUE)
-  
+
   variances <- rep(var(X, na.rm = TRUE), K)
   weights <- rep(0.5, K)  # Equal weights initially
-  
+
   log_likelihood_old <- -Inf
-  
+
+  # Prior centers c_k from percentiles
+  centers <- means
+  # Prior variance s_k^2 = prior_alpha * data variance
+  data_var <- var(X, na.rm = TRUE)
+  prior_var <- prior_alpha * data_var + eps
+
   for (iter in 1:model$max_iter) {
     # E-step: responsibilities
     pdfs <- matrix(0, nrow = n, ncol = K)
     for (k in 1:K) {
       pdfs[, k] <- weights[k] * normal_pdf(X, means[k], sqrt(variances[k]))
     }
-    
     responsibilities <- pdfs / (rowSums(pdfs) + eps)
-    
+
     # M-step: update parameters
     Nk <- colSums(responsibilities)
-    
+
     # Update weights with Dirichlet prior (MAP estimate)
     weights <- (Nk + model$alpha0 - 1) / (n + K * (model$alpha0 - 1))
-    
-    # Update means
+
+    # Update means with prior (MAP)
     for (k in 1:K) {
-      means[k] <- sum(responsibilities[, k] * X) / (Nk[k] + eps)
+      shrink_factor <- variances[k] / prior_var
+      weighted_sum <- sum(responsibilities[, k] * X)
+      means[k] <- (weighted_sum + shrink_factor * centers[k]) / (Nk[k] + shrink_factor + eps)
     }
-    
+
     # Update variances
     for (k in 1:K) {
       variances[k] <- sum(responsibilities[, k] * (X - means[k])^2) / (Nk[k] + eps)
     }
     variances <- pmax(variances, 1e-6)  # Variance floor
-    
+
     # Check convergence
     log_likelihood <- sum(log(rowSums(pdfs) + eps))
     if (abs(log_likelihood - log_likelihood_old) < model$tol) {
@@ -77,14 +84,15 @@ fit.GaussianMixture2D <- function(model, X) {
     }
     log_likelihood_old <- log_likelihood
   }
-  
+
   model$means_ <- means
   model$variances_ <- variances
   model$weights_ <- weights
   model$resp_ <- responsibilities
-  
+
   return(model)
 }
+
 
 #' Predict probabilities
 predict_proba.GaussianMixture2D <- function(model, X) {
@@ -130,13 +138,7 @@ inverse_cdf_gmm <- function(p, means, variances, weights) {
     
     root_function <- function(x) gmm_cdf(x) - p_val
     
-    tryCatch({
-      result <- uniroot(root_function, interval = search_interval, tol = 1e-4)
-      return(result$root)
-    }, error = function(e) {
-      # Fallback to normal quantile
-      return(qnorm(p_val))
-    })
+    return(uniroot(root_function, interval = search_interval, tol = 1e-4)$root)
   }
   
   result <- sapply(p, solve_for_single_p)
@@ -153,17 +155,16 @@ inverse_cdf_gmm <- function(p, means, variances, weights) {
 # ============================================================================
 # STREAMLINED ADJUSTMENT FUNCTIONS
 # ============================================================================
-
-#' Get GMM parameters and apply bimodal transformation
-get_gene_gmm_transform <- function(gene_exp, alpha0 = 10) {
+#' Get GMM parameters and apply mean-only centering and scaling transformation
+get_gene_gmm_transform <- function(gene_exp, alpha0 = 10, mean_only = FALSE) {
   # Apply log transformation first
   min_val <- min(gene_exp, na.rm = TRUE)
   x_transformed <- log(gene_exp - min_val + 1)
-  
+
   # Fit 2-component GMM
   gmm <- GaussianMixture2D(alpha0 = alpha0)
   gmm <- fit(gmm, x_transformed)
-  
+
   # Extract parameters (ensure lower component is first)
   if (gmm$means_[1] > gmm$means_[2]) {
     means <- c(gmm$means_[2], gmm$means_[1])
@@ -174,37 +175,52 @@ get_gene_gmm_transform <- function(gene_exp, alpha0 = 10) {
     variances <- gmm$variances_
     weights <- gmm$weights_
   }
-  
-  # Transform to bimodal normal with means at -1 and 1
-  new_mean1 <- -1
-  new_mean2 <- 1
-  
-  old_mean_diff <- means[2] - means[1]
-  new_mean_diff <- new_mean2 - new_mean1
-  
-  new_sd1 <- sqrt(variances[1]) * new_mean_diff / old_mean_diff
-  new_sd2 <- sqrt(variances[2]) * new_mean_diff / old_mean_diff
-  
-  new_var1 <- new_sd1^2
-  new_var2 <- new_sd2^2
-  
-  # Get quantiles from original data
-  ranks <- rank(x_transformed, na.last = "keep", ties.method = "average")
-  quantiles <- ranks / (sum(!is.na(x_transformed)) + 1)
-  
-  # Apply inverse CDF transformation
-  result <- inverse_cdf_gmm(
-    quantiles,
-    means = c(new_mean1, new_mean2),
-    variances = c(new_var1, new_var2),
-    weights = weights
-  )
-  
+
+  if (mean_only) {
+    # Move mean center to 0
+    mean_center <- sum(means * weights)  # weighted mean of components
+    x_centered <- x_transformed - mean_center
+
+    # Compute variance as if weights were 0.5 each
+    avg_variance <- sum(0.5 * (variances + (means - mean_center)^2))
+    scale_factor <- sqrt(avg_variance)
+
+    # Scale down the data
+    result <- x_centered / scale_factor
+
+  } else {
+    # Transform to bimodal normal with means at -1 and 1
+    new_mean1 <- -1
+    new_mean2 <- 1
+
+    old_mean_diff <- means[2] - means[1]
+    new_mean_diff <- new_mean2 - new_mean1
+
+    new_sd1 <- sqrt(variances[1]) * new_mean_diff / old_mean_diff
+    new_sd2 <- sqrt(variances[2]) * new_mean_diff / old_mean_diff
+
+    new_var1 <- new_sd1^2
+    new_var2 <- new_sd2^2
+
+    # Get quantiles from original data
+    ranks <- rank(x_transformed, na.last = "keep", ties.method = "average")
+    quantiles <- ranks / (sum(!is.na(x_transformed)) + 1)
+
+    # Apply inverse CDF transformation
+    result <- inverse_cdf_gmm(
+      quantiles,
+      means = c(new_mean1, new_mean2),
+      variances = c(new_var1, new_var2),
+      weights = weights
+    )
+  }
+
   return(result)
 }
 
+
 #' Bimodal normalization using streamlined GMM with full inverse CDF
-bimodal_normalize_streamlined <- function(data, alpha0 = 10, debug = FALSE) {
+bimodal_normalize_streamlined <- function(data, alpha0 = 10, mean_only = FALSE, debug = FALSE) {
   gene_names <- colnames(data)
   n_genes <- length(gene_names)
   n_samples <- nrow(data)
@@ -233,8 +249,8 @@ bimodal_normalize_streamlined <- function(data, alpha0 = 10, debug = FALSE) {
     }
     
     tryCatch({
-      # Apply full GMM transformation with inverse CDF
-      bimodal_result <- get_gene_gmm_transform(gene_exp, alpha0)
+      # Apply GMM transformation (with or without inverse CDF)
+      bimodal_result <- get_gene_gmm_transform(gene_exp, alpha0, mean_only)
       bimodal_data[, i] <- bimodal_result
       
     }, error = function(e) {
@@ -257,7 +273,18 @@ bimodal_normalize_streamlined <- function(data, alpha0 = 10, debug = FALSE) {
 }
 
 #' Streamlined GMM adjustment for multiple batches
-gmm_adjust_streamlined <- function(data, batch, alpha0 = 10, debug = FALSE) {
+#' 
+#' @param data Matrix of gene expression data (samples x genes)
+#' @param batch Vector of batch labels for each sample
+#' @param alpha0 Dirichlet prior parameter for GMM weights
+#' @param mean_only If TRUE, only adjust means without using inverse CDF transformation
+#' @param debug If TRUE, print progress messages
+#' 
+#' @details When mean_only=TRUE, the function performs a simpler adjustment that
+#' only shifts the means of the two GMM components to -1 and 1, without applying
+#' the full inverse CDF transformation. This preserves more of the original data
+#' structure while still achieving bimodal normalization.
+gmm_adjust_streamlined <- function(data, batch, alpha0 = 10, mean_only = FALSE, debug = FALSE) {
   if (debug) {
     cat("Starting streamlined GMM adjustment...\n")
     cat("Input data dimensions:", nrow(data), "rows,", ncol(data), "columns\n")
@@ -281,7 +308,7 @@ gmm_adjust_streamlined <- function(data, batch, alpha0 = 10, debug = FALSE) {
     batch_data <- data[batch_indices, , drop = FALSE]
     
     # Apply bimodal normalization to all genes
-    batch_adjusted <- bimodal_normalize_streamlined(batch_data, alpha0, debug)
+    batch_adjusted <- bimodal_normalize_streamlined(batch_data, alpha0, mean_only, debug)
     adjusted_data[batch_indices, ] <- batch_adjusted
   }
   
@@ -289,27 +316,4 @@ gmm_adjust_streamlined <- function(data, batch, alpha0 = 10, debug = FALSE) {
   rownames(adjusted_data) <- rownames(data)
   
   return(adjusted_data)
-}
-
-# ============================================================================
-# EXAMPLE USAGE
-# ============================================================================
-
-# Example function to demonstrate usage
-example_usage <- function() {
-  # Generate example data
-  set.seed(42)
-  n_samples <- 1000
-  n_genes <- 100
-  
-  data <- matrix(rnorm(n_samples * n_genes), nrow = n_samples, ncol = n_genes)
-  colnames(data) <- paste0("Gene_", 1:n_genes)
-  rownames(data) <- paste0("Sample_", 1:n_samples)
-  
-  batch <- rep(c("Batch1", "Batch2"), each = n_samples / 2)
-  
-  # Run streamlined adjustment
-  adjusted <- gmm_adjust_streamlined(data, batch, debug = TRUE)
-  
-  return(adjusted)
 }
