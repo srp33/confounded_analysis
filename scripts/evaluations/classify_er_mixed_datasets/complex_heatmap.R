@@ -98,12 +98,20 @@ read_and_prepare_data <- function(csv_file) {
 }
 
 # Function to filter data (common filtering logic)
-filter_datasets <- function(input_data) {
-  input_data %>%
-    filter(!str_detect(Train, regex("combined", ignore_case = TRUE)),
-           !str_detect(Test, regex("combined", ignore_case = TRUE)),
-           !str_detect(Train, ";"),
-           !str_detect(Test, ";"))
+filter_datasets <- function(input_data, train_combined) {
+  if (train_combined) {
+    # Use train on both datasets
+    result <- input_data %>%
+      filter(str_detect(Train, ";"), !str_detect(Test, ";")) %>%
+      mutate(
+      Train = str_split(Train, ";", simplify = TRUE)[,2]
+    )
+    return(result)
+  } else {
+    # Use cross-training data
+    return(input_data %>%
+      filter(!str_detect(Train, ";"), !str_detect(Test, ";")))
+  }
 }
 
 # Function to prepare metric data
@@ -260,12 +268,12 @@ generate_jitter_plot <- function(all_diff_data, fig_dir) {
   cat("Jitter plot saved to:", file.path(fig_dir, "jitter_plot_adjusters.png"), "\n")
 }
 
-generate_all_heatmaps_to_pdf <- function(adjuster, fig_dir = "/outputs/figures") {
+generate_all_heatmaps_to_pdf <- function(adjuster, train_combined, fig_dir = "/outputs/figures") {
   file_adjusted <- paste0("/outputs/metrics/er_classification_", adjuster, ".csv")
   file_unadjusted <- "/outputs/metrics/er_classification_unadjusted.csv"
 
-  df_adj <- read_and_prepare_data(file_adjusted) %>% filter_datasets()
-  df_unadj <- read_and_prepare_data(file_unadjusted) %>% filter_datasets()
+  df_adj <- read_and_prepare_data(file_adjusted) %>% filter_datasets(train_combined)
+  df_unadj <- read_and_prepare_data(file_unadjusted) %>% filter_datasets(train_combined)
 
   # Prepare data for each metric
   heatmap_list <- list()
@@ -292,7 +300,8 @@ generate_all_heatmaps_to_pdf <- function(adjuster, fig_dir = "/outputs/figures")
 
   ## Save all to one PDF
   dir.create(fig_dir, recursive = TRUE, showWarnings = FALSE)
-  pdf_file <- file.path(fig_dir, paste0("combined_heatmaps_", adjuster, ".pdf"))
+  combined_suffix = ifelse(train_combined, "_train_combined", "")
+  pdf_file <- file.path(fig_dir, paste0("combined_heatmaps_", adjuster, combined_suffix, ".pdf"))
   pdf(pdf_file, width = 14, height = 8)
 
   for (ht in heatmap_list) {
@@ -314,12 +323,18 @@ for (adjuster in adjusters) {
   file_adjusted <- paste0("/outputs/metrics/er_classification_", adjuster, ".csv")
   file_unadjusted <- "/outputs/metrics/er_classification_unadjusted.csv"
 
-  df_adj <- read_and_prepare_data(file_adjusted) %>% filter_datasets()
-  df_unadj <- read_and_prepare_data(file_unadjusted) %>% filter_datasets()
 
-  # Prepare the differences
-  delta_mcc_data <- prepare_delta_metric_data(df_adj, df_unadj, "MCC")
-  delta_auc_data <- prepare_delta_metric_data(df_adj, df_unadj, "ROC AUC")
+  # Display unique train/test combinations (after filtering)
+  for(train_combined in c(TRUE, FALSE)) {
+    filtered_data <- filter_datasets(input_data, train_combined)
+    unique_trains <- unique(filtered_data$Train)
+    unique_tests <- unique(filtered_data$Test)
+    cat("Unique Train datasets:", paste(unique_trains, collapse = ", "), "\n")
+    cat("Unique Test datasets:", paste(unique_tests, collapse = ", "), "\n\n")
+
+    # Generate all heatmaps
+    generate_all_heatmaps_to_pdf(adjuster, train_combined)
+  }
 
   # Add Adjuster column to each
   delta_mcc_data$Adjuster <- adjuster
