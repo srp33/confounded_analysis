@@ -178,10 +178,12 @@ def run_paired_datasetsset(filepath, output_file, pred_col, source_col, adjustme
             train_df = df[df[source_col] == train_key]
 
         # Select testing data
-        if ';' in train_key:
+        if ';' in test_key:
             test_df = df
         else:
             test_df = df[df[source_col] == test_key]
+
+        should_split = test_key in train_key
 
         # Get features and targets
         X_train = feature_df.loc[train_df.index]
@@ -196,19 +198,50 @@ def run_paired_datasetsset(filepath, output_file, pred_col, source_col, adjustme
         # Clone model
         model = clone(clf_model)
 
-        # Fit the model and create predictions
-        model.fit(X_train, y_train)
-        y_pred = model.predict(X_test)
-        y_proba = model.predict_proba(X_test)[:,1]
+        if should_split:
+            # Use cross-validation splitting similar to run_single_dataset
+            cv_random_seed = RANDOM_SEED + current_repeat
+            cv = RepeatedStratifiedKFold(n_splits=n_splits, random_state=cv_random_seed)
+            try:
+                splits = list(cv.split(X_test, y_test))
+            except ValueError as e:
+                print_now(f"Error splitting data: {e} for {filepath}")
+                print_now(f"y_test shape: {y_test.shape} for {filepath}")
+                print_now(f"y_test unique: {y_test.unique()} for {filepath}")
+                print_now(f"X_test shape: {X_test.shape} for {filepath}")
+                raise e
 
-        predictions.loc[y_test.index, 'y_predicted'] = y_pred
-        predictions.loc[y_test.index, 'y_probability'] = y_proba
+            # Fit the model, test, and calculate metrics using cross-validation
+            for train_index, test_index in splits:
+                X_train_cv, X_test_cv = X_train.iloc[train_index], X_test.iloc[test_index]
+                y_train_cv, y_test_cv = y_train.iloc[train_index], y_test.iloc[test_index]
+                model.fit(X_train_cv, y_train_cv)
+            
+                # Predict off of x test to get y test predictions
+                y_pred = model.predict(X_test_cv)
+                predictions.loc[y_test_cv.index, 'y_predicted'] = y_pred
 
-        y_true = y_test
-        y_pred_all = y_pred
-        y_proba_all = y_proba
+                # Take the second column of probabilistic predictions from x test
+                y_proba = model.predict_proba(X_test_cv)[:,1]
+                predictions.loc[y_test_cv.index, 'y_probability'] = y_proba
 
-        print_now(f"Shapes: Y true: {y_true.shape} Y pred: {y_pred.shape} Y proba: {y_proba.shape} Uniques: Y true: {np.unique(y_true)} Y pred: {np.unique(y_pred)} for dataset: {filepath}")
+            y_true = y_test
+            y_pred_all = predictions.loc[y_test.index, 'y_predicted'].values
+            y_proba_all = predictions.loc[y_test.index, 'y_probability'].values
+        else:
+            # Fit the model and create predictions without cross-validation
+            model.fit(X_train, y_train)
+            y_pred = model.predict(X_test)
+            y_proba = model.predict_proba(X_test)[:,1]
+
+            predictions.loc[y_test.index, 'y_predicted'] = y_pred
+            predictions.loc[y_test.index, 'y_probability'] = y_proba
+
+            y_true = y_test
+            y_pred_all = y_pred
+            y_proba_all = y_proba
+
+        print_now(f"Shapes: Y true: {y_true.shape} Y pred: {y_pred_all.shape} Y proba: {y_proba_all.shape} Uniques: Y true: {np.unique(y_true)} Y pred: {np.unique(y_pred_all)} for dataset: {filepath}")
 
         if y_true.isnull().any():
             print_now(f"Dtype: {y_true.dtype}")
