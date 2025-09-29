@@ -238,11 +238,11 @@ def run_paired_datasetsset(filepath, output_file, pred_col, source_col, adjustme
         # Reorder columns and append to output file
         output_cols = ['Train', 'Test', 'ROC AUC', 'True Negative', 'False Negative', 'False Positive', 'True Positive', 
         'Classifier', 'Adjustment', 'Prediction', 'Run_ID']
-        results[output_file] = metrics_df[output_cols]
+        results[output_file] = metrics_df[output_cols].copy()
     
     # Make sure the whole run completes before writing to the file.
-    for output_file, metrics_df in results.items():
-        safe_write_to_csv(metrics_df, output_file)
+    for output_file, metrics_df_selection in results.items():
+        safe_write_to_csv(metrics_df_selection, output_file)
 
     print_now(f"All classification results for {filepath} saved.")
 
