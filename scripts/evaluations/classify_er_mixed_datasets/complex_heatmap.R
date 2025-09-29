@@ -2,18 +2,18 @@
 #
 # This script creates 2x2 heatmaps of AUC scores and Matthews Correlation Coefficient (MCC)
 # for dataset combinations from the ER classification results CSV file.
-# Usage: Rscript train_test_heatmap.R <adjuster>
-# Example: Rscript train_test_heatmap.R unadjusted
+# Usage: Rscript train_test_heatmap.R 
+# Example: Rscript train_test_heatmap.R 
 
 # Install necessary packages if they are not already installed
-if (!require(ggplot2)) install.packages("ggplot2")
-if (!require(readr)) install.packages("readr")
-if (!require(dplyr)) install.packages("dplyr")
-if (!require(tidyr)) install.packages("tidyr")
-if (!require(stringr)) install.packages("stringr")
-if (!require(ComplexHeatmap)) install.packages("ComplexHeatmap")
-if (!require(circlize)) install.packages("circlize")
-if (!require(tibble)) install.packages("tibble")
+# if (!require(ggplot2)) install.packages("ggplot2")
+# if (!require(readr)) install.packages("readr")
+# if (!require(dplyr)) install.packages("dplyr")
+# if (!require(tidyr)) install.packages("tidyr")
+# if (!require(stringr)) install.packages("stringr")
+# if (!require(ComplexHeatmap)) install.packages("ComplexHeatmap")
+# if (!require(circlize)) install.packages("circlize")
+# if (!require(tibble)) install.packages("tibble")
 
 # Load libraries
 library(ggplot2)
@@ -25,21 +25,8 @@ library(ComplexHeatmap)
 library(circlize)
 library(tibble)
 
-# --- Parse Command Line Arguments ---
-args <- commandArgs(trailingOnly = TRUE)
-
-if (length(args) != 1) {
-  cat("Usage: Rscript complex_heatmap.R <adjuster>\n")
-  cat("Example: Rscript complex_heatmap.R unadjusted\n")
-  cat("Example: Rscript complex_heatmap.R combat\n")
-  quit(status = 1)
-}
-
-adjuster <- args[1]
-cat("Processing adjuster:", adjuster, "\n")
-
 # --- Configuration ---
-CSV_FILE <- paste0("/outputs/metrics/er_classification_", adjuster, ".csv")
+adjusters <- c("unadjusted", "ranked1", "ranked2", "ranked_batch", "npn", "log", "log_combat", "gmm", "gmm_streamlined", "gmm_streamlined_mean_only")
 FIG_DIR <- "/outputs/figures"
 
 platform_df <- read.csv("/scripts/evaluations/geo_metadata.csv")
@@ -57,6 +44,23 @@ calculate_mcc <- function(tp, tn, fp, fn) {
   result <- ifelse(denominator == 0, 0, numerator / denominator)
   
   return(result)
+}
+
+prepare_metric_matrix <- function(metric_data, metric_col) {
+  all_datasets <- sort(union(metric_data$Train, metric_data$Test))
+  
+  # Ensure metric_data is unique for (Train, Test)
+  metric_data_unique <- metric_data %>%
+    group_by(Train, Test) %>%
+    summarise(Mean_Metric = mean(Mean_Metric, na.rm = TRUE), .groups = "drop")
+  
+  metric_matrix <- expand.grid(Train = all_datasets, Test = all_datasets) %>%
+    left_join(metric_data_unique, by = c("Train", "Test")) %>%
+    pivot_wider(names_from = Test, values_from = Mean_Metric) %>%
+    column_to_rownames("Train") %>%
+    as.matrix()
+  
+  return(metric_matrix)
 }
 
 # Function to read and prepare data
@@ -117,13 +121,6 @@ prepare_delta_metric_data <- function(df_adj, df_unadj, metric_col) {
   full_join(data_adj, data_unadj, by = c("Train", "Test")) %>%
     mutate(Mean_Metric = Adj - Unadj)
 }
-
-
-
-# # --- Main Execution ---
-
-# # Read and prepare data
-input_data <- read_and_prepare_data(CSV_FILE)
 
 get_platform_annotations <- function(datasets) {
   platforms <- dataset_to_platform[datasets]
@@ -241,22 +238,27 @@ draw_heatmap <- function(data_matrix, metric_col, adjuster, is_difference = FALS
   return(ht)
 }
 
+# # --- Main Execution ---
+generate_jitter_plot <- function(all_diff_data, fig_dir) {
+  p <- ggplot(all_diff_data, aes(x = Adjuster, y = Mean_Metric, color = Metric)) +
+  geom_jitter(width = 0.25, height = 0, size = 2, alpha = 0.7) +
+  scale_fill_manual(values = c("MCC" = "skyblue", "AUC" = "orange")) +
+  stat_summary(fun = mean, geom = "crossbar", width = 0.5, color = "black", size = 1, fatten = 1) +
+  theme_minimal() +
+  labs(
+    title = "Distribution of Metric Differences for Adjusters",
+    x = "Adjuster",
+    y = "Difference in Metric (Adjusted - Unadjusted)",
+    fill = "Metric"
+  ) +
+  theme(
+    axis.text.x = element_text(angle = 45, hjust = 1),
+    text = element_text(size = 12)
+  ) +
+  facet_wrap(~ Metric, scales = "free_y")
 
-prepare_metric_matrix <- function(metric_data, metric_col) {
-  all_datasets <- sort(union(metric_data$Train, metric_data$Test))
-  
-  # Ensure metric_data is unique for (Train, Test)
-  metric_data_unique <- metric_data %>%
-    group_by(Train, Test) %>%
-    summarise(Mean_Metric = mean(Mean_Metric, na.rm = TRUE), .groups = "drop")
-  
-  metric_matrix <- expand.grid(Train = all_datasets, Test = all_datasets) %>%
-    left_join(metric_data_unique, by = c("Train", "Test")) %>%
-    pivot_wider(names_from = Test, values_from = Mean_Metric) %>%
-    column_to_rownames("Train") %>%
-    as.matrix()
-  
-  return(metric_matrix)
+  ggsave(file.path(fig_dir, "jitter_plot_adjusters.png"), plot = p, width = 10, height = 6)
+  cat("Jitter plot saved to:", file.path(fig_dir, "jitter_plot_adjusters.png"), "\n")
 }
 
 generate_all_heatmaps_to_pdf <- function(adjuster, fig_dir = "/outputs/figures") {
@@ -307,14 +309,46 @@ generate_all_heatmaps_to_pdf <- function(adjuster, fig_dir = "/outputs/figures")
   cat("All heatmaps saved to:", pdf_file, "\n")
 }
 
+all_adjuster_diffs <- data.frame()
+for (adjuster in adjusters) {
+  CSV_FILE <- paste0("/outputs/metrics/er_classification_", adjuster, ".csv")
+  file_adjusted <- paste0("/outputs/metrics/er_classification_", adjuster, ".csv")
+  file_unadjusted <- "/outputs/metrics/er_classification_unadjusted.csv"
+
+  df_adj <- read_and_prepare_data(file_adjusted) %>% filter_datasets()
+  df_unadj <- read_and_prepare_data(file_unadjusted) %>% filter_datasets()
+
+  # Prepare the differences
+  delta_mcc_data <- prepare_delta_metric_data(df_adj, df_unadj, "MCC")
+  delta_auc_data <- prepare_delta_metric_data(df_adj, df_unadj, "ROC AUC")
+
+  # Add Adjuster column to each
+  delta_mcc_data$Adjuster <- adjuster
+  delta_auc_data$Adjuster <- adjuster
+
+  # Combine the data
+  all_adjuster_diffs <- bind_rows(
+    all_adjuster_diffs,
+    delta_mcc_data %>% mutate(Metric = "MCC"),
+    delta_auc_data %>% mutate(Metric = "AUC")
+  )
+
+  # Generate Heatmaps for the current adjuster
+  generate_all_heatmaps_to_pdf(adjuster, FIG_DIR)
+}
+
+# Generate jitter Plot
+generate_jitter_plot(all_adjuster_diffs, FIG_DIR)
+
+cat("All heatmaps and scatter plot generated successfully for adjuster:", adjuster, "\n")
+
 # Display unique train/test combinations (after filtering)
-filtered_data <- filter_datasets(input_data)
+combined_data <- bind_rows(df_adj, df_unadj)
+
+filtered_data <- filter_datasets(combined_data)
 unique_trains <- unique(filtered_data$Train)
 unique_tests <- unique(filtered_data$Test)
 cat("Unique Train datasets:", paste(unique_trains, collapse = ", "), "\n")
 cat("Unique Test datasets:", paste(unique_tests, collapse = ", "), "\n\n")
 
-# Generate all heatmaps
-generate_all_heatmaps_to_pdf(adjuster)
-
-cat("All heatmaps generated successfully for adjuster:", adjuster, "\n")
+cat("All heatmaps generated successfully.")
