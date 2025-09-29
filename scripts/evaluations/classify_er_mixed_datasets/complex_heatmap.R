@@ -1,9 +1,11 @@
-# train_test_heatmap.R
+# complex_heatmap.R
 #
 # This script creates 2x2 heatmaps of AUC scores and Matthews Correlation Coefficient (MCC)
-# for dataset combinations from the ER classification results CSV file.
-# Usage: Rscript train_test_heatmap.R <adjuster>
-# Example: Rscript train_test_heatmap.R unadjusted
+# for dataset combinations from the ER classification results CSV files.
+# The script automatically detects all available adjusters from CSV files matching:
+# /outputs/metrics/er_classification_*.csv
+# Usage: Rscript complex_heatmap.R
+# No arguments required - processes all found adjusters automatically
 
 # Install necessary packages if they are not already installed
 if (!require(ggplot2)) install.packages("ggplot2")
@@ -25,21 +27,20 @@ library(ComplexHeatmap)
 library(circlize)
 library(tibble)
 
-# --- Parse Command Line Arguments ---
-args <- commandArgs(trailingOnly = TRUE)
+# --- Auto-detect Available Adjusters ---
+# Find all CSV files matching the pattern er_classification_*.csv
+csv_files <- list.files("/outputs/metrics", pattern = "^er_classification_.*\\.csv$", full.names = FALSE)
 
-if (length(args) != 1) {
-  cat("Usage: Rscript complex_heatmap.R <adjuster>\n")
-  cat("Example: Rscript complex_heatmap.R unadjusted\n")
-  cat("Example: Rscript complex_heatmap.R combat\n")
+if (length(csv_files) == 0) {
+  cat("Error: No CSV files found matching pattern 'er_classification_*.csv' in /outputs/metrics/\n")
   quit(status = 1)
 }
 
-adjuster <- args[1]
-cat("Processing adjuster:", adjuster, "\n")
+# Extract adjuster names from filenames
+adjusters <- gsub("^er_classification_(.+)\\.csv$", "\\1", csv_files)
+cat("Found adjusters:", paste(adjusters, collapse = ", "), "\n")
 
 # --- Configuration ---
-CSV_FILE <- paste0("/outputs/metrics/er_classification_", adjuster, ".csv")
 FIG_DIR <- "/outputs/figures"
 
 platform_df <- read.csv("/scripts/evaluations/geo_metadata.csv")
@@ -93,7 +94,6 @@ read_and_prepare_data <- function(csv_file) {
   return(input_data)
 }
 
-
 # Function to filter data (common filtering logic)
 filter_datasets <- function(input_data) {
   input_data %>%
@@ -117,13 +117,6 @@ prepare_delta_metric_data <- function(df_adj, df_unadj, metric_col) {
   full_join(data_adj, data_unadj, by = c("Train", "Test")) %>%
     mutate(Mean_Metric = Adj - Unadj)
 }
-
-
-
-# # --- Main Execution ---
-
-# # Read and prepare data
-input_data <- read_and_prepare_data(CSV_FILE)
 
 get_platform_annotations <- function(datasets) {
   platforms <- dataset_to_platform[datasets]
@@ -241,7 +234,6 @@ draw_heatmap <- function(data_matrix, metric_col, adjuster, is_difference = FALS
   return(ht)
 }
 
-
 prepare_metric_matrix <- function(metric_data, metric_col) {
   all_datasets <- sort(union(metric_data$Train, metric_data$Test))
   
@@ -307,14 +299,29 @@ generate_all_heatmaps_to_pdf <- function(adjuster, fig_dir = "/outputs/figures")
   cat("All heatmaps saved to:", pdf_file, "\n")
 }
 
-# Display unique train/test combinations (after filtering)
-filtered_data <- filter_datasets(input_data)
-unique_trains <- unique(filtered_data$Train)
-unique_tests <- unique(filtered_data$Test)
-cat("Unique Train datasets:", paste(unique_trains, collapse = ", "), "\n")
-cat("Unique Test datasets:", paste(unique_tests, collapse = ", "), "\n\n")
+# Process all found adjusters
+for (adjuster in adjusters) {
+  cat("\nProcessing adjuster:", adjuster, "\n")
+  
+  # --- Configuration ---
+  CSV_FILE <- paste0("/outputs/metrics/er_classification_", adjuster, ".csv")
+  
+  # --- Main Execution ---
+  
+  # Read and prepare data
+  input_data <- read_and_prepare_data(CSV_FILE)
 
-# Generate all heatmaps
-generate_all_heatmaps_to_pdf(adjuster)
+  # Display unique train/test combinations (after filtering)
+  filtered_data <- filter_datasets(input_data)
+  unique_trains <- unique(filtered_data$Train)
+  unique_tests <- unique(filtered_data$Test)
+  cat("Unique Train datasets:", paste(unique_trains, collapse = ", "), "\n")
+  cat("Unique Test datasets:", paste(unique_tests, collapse = ", "), "\n\n")
 
-cat("All heatmaps generated successfully for adjuster:", adjuster, "\n")
+  # Generate all heatmaps
+  generate_all_heatmaps_to_pdf(adjuster)
+
+  cat("All heatmaps generated successfully for adjuster:", adjuster, "\n")
+}
+
+cat("\nProcessing complete for all adjusters.\n")
