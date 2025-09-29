@@ -188,7 +188,7 @@ draw_heatmap <- function(data_matrix, metric_col, adjuster, is_difference = FALS
   )
 
   # Fix scale to [-1, 1] for all heatmaps
-  col_fun <- circlize::colorRamp2(c(-1, 0, 1), c("#d73027", "#fad6b2ff", "#66c2a5"))
+  col_fun <- circlize::colorRamp2(c(-1, 0, 1), c("#D62728", "#FFFFFF", "#2CA02C"))
 
   legend_title <- if (is_difference) {
     paste0("Diff ", metric_col)
