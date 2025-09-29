@@ -1,4 +1,4 @@
-# train_test_heatmap.R
+# complex_heatmap.R
 #
 # This script creates 2x2 heatmaps of AUC scores and Matthews Correlation Coefficient (MCC)
 # for dataset combinations from the ER classification results CSV file.
@@ -96,7 +96,6 @@ read_and_prepare_data <- function(csv_file) {
 
   return(input_data)
 }
-
 
 # Function to filter data (common filtering logic)
 filter_datasets <- function(input_data) {
