@@ -158,11 +158,14 @@ def run_paired_datasetsset(filepath, output_file, pred_col, source_col, adjustme
         (f'{source1};{source2}', source1),
         (f'{source1};{source2}', source2),
         (source1, source2),
-        (source2, source1)
+        (source2, source1),
+        (source1, source1),
+        (source2, source2)
     ]
 
     # Drop unwanted columns to get features
-    cols_to_drop = [pred_col, source_col]
+    meta_columns = [col for col in df.columns if "meta_" in col]
+    cols_to_drop = [pred_col, source_col] + meta_columns
     feature_df = df.drop(columns=[col for col in cols_to_drop if col in df.columns]).select_dtypes(include=[np.number])
 
     results = {}
@@ -209,10 +212,10 @@ def run_paired_datasetsset(filepath, output_file, pred_col, source_col, adjustme
 
         if y_true.isnull().any():
             print_now(f"Dtype: {y_true.dtype}")
-            # PENDING: Use pandas .isnull() to avoid TypeError on non-numeric data.
+            # Use pandas .isnull() to avoid TypeError on non-numeric data.
             raise ValueError(f"Found {y_true.isnull().sum()} NaN(s) in y_true for dataset: {filepath}")
     
-        # PENDING: Use np.isnan for NumPy arrays. Might fix AttributeError.
+        # Use np.isnan for NumPy arrays.
         if np.isnan(y_pred_all).any():
             print_now(f"Dtype: {y_pred_all.dtype}")
             raise ValueError(f"Found {np.isnan(y_pred_all).sum()} NaN(s) in y_pred_all for dataset: {filepath}")
@@ -246,7 +249,6 @@ def run_paired_datasetsset(filepath, output_file, pred_col, source_col, adjustme
 def load_dataframe(filename, pred_col):
     """Read the file into a pandas dataframe and check it has the required columns."""
     print_now(f"Loading data from {filename}")
-    # PENDING: Set low_memory=False to address DtypeWarning.
     df = pd.read_csv(filename, low_memory=False)
 
     if pred_col not in df.columns :
