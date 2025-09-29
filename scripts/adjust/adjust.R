@@ -104,6 +104,11 @@ create_design_matrix <- function(categorical_df, columns_to_use = NULL, use_all 
   #' @param use_all A boolean indicating whether to use all columns in the data frame.
   #' @return A design matrix.
   
+  # Ensure use_all is a proper logical value
+  if (is.null(use_all) || length(use_all) == 0) {
+    use_all <- FALSE
+  }
+  
   if (!is.null(columns_to_use)) {
     if (!all(columns_to_use %in% colnames(categorical_df))) {
       stop("One or more specified columns for the design matrix were not found in the metadata.")
@@ -697,16 +702,21 @@ adjust_gmm_global_npn <- function(matrix_, batch = NULL, debug = FALSE, meta_fil
   return(t(adjusted_data))
 }
 
-adjust_gmm_streamlined <- function(matrix_, batch, debug = FALSE, meta_file = NULL) {
+adjust_gmm_streamlined <- function(matrix_, batch, debug = FALSE, meta_file = NULL, mean_only = FALSE) {
   #' Streamlined GMM adjustment using the fast implementation.
-  #' Applies bimodal GMM transformation to all genes with full inverse CDF.
+  #' Applies bimodal GMM transformation to all genes.
   #' @param matrix_ The matrix to adjust (features x samples).
   #' @param batch The batch variable vector.
   #' @param debug Logical flag for debug output.
   #' @param meta_file Path to save metadata (currently unused in streamlined version).
+  #' @param mean_only If TRUE, only adjust means without using inverse CDF transformation.
   #' @return The adjusted matrix (features x samples).
   
-  message("Adjusting with streamlined GMM (bimodal for all genes).")
+  if (mean_only) {
+    message("Adjusting with streamlined GMM (mean-only adjustment, no inverse CDF).")
+  } else {
+    message("Adjusting with streamlined GMM (bimodal for all genes with inverse CDF).")
+  }
   
   # Convert to the format expected by gmm_adjust_streamlined (samples x genes)
   genes_df <- as.data.frame(t(matrix_))
@@ -716,11 +726,23 @@ adjust_gmm_streamlined <- function(matrix_, batch, debug = FALSE, meta_file = NU
     batch <- rep("batch1", nrow(genes_df))
   }
   
-  # Apply streamlined adjustment
-  adjusted_genes_df <- gmm_adjust_streamlined(genes_df, batch, alpha0 = 10, debug = debug)
+  # Apply streamlined adjustment with mean_only option
+  adjusted_genes_df <- gmm_adjust_streamlined(genes_df, batch, alpha0 = 10, mean_only = mean_only, debug = debug)
   
   # Convert back to matrix format (features x samples)
   return(t(as.matrix(adjusted_genes_df)))
+}
+
+adjust_gmm_streamlined_mean_only <- function(matrix_, batch, debug = FALSE, meta_file = NULL) {
+  #' Streamlined GMM adjustment with mean-only transformation.
+  #' Applies bimodal GMM transformation to all genes but only adjusts means without inverse CDF.
+  #' @param matrix_ The matrix to adjust (features x samples).
+  #' @param batch The batch variable vector.
+  #' @param debug Logical flag for debug output.
+  #' @param meta_file Path to save metadata (currently unused in streamlined version).
+  #' @return The adjusted matrix (features x samples).
+  
+  return(adjust_gmm_streamlined(matrix_, batch, debug = debug, meta_file = meta_file, mean_only = TRUE))
 }
 
 
@@ -833,10 +855,10 @@ adjust_log <- function(matrix_, batch, debug = FALSE) {
   return(adjusted)
 }
 
-adjust_log_combat <- function(matrix_, batch, debug = FALSE) {
+adjust_log_combat <- function(matrix_, batch, design, debug = FALSE) {
   message("Adjusting with log combat.")
   # For each batch, subtract the minimum from every entry. Then take the log of the data.
-  # On this data, run combat
+  # On this data, run ComBat
   batch_levels <- unique(batch)
   adjusted <- matrix(NA, nrow = nrow(matrix_), ncol = ncol(matrix_))
   for (b in batch_levels) {
@@ -845,7 +867,8 @@ adjust_log_combat <- function(matrix_, batch, debug = FALSE) {
     min_val <- min(batch_data, na.rm = TRUE)
     adjusted[, batch_indices] <- log(batch_data - min_val + 1)
   }
-  return(combat(adjusted))
+  
+  return(ComBat_ignore_nonvariance(adjusted, batch, design))
 }
 
 
@@ -964,6 +987,7 @@ batch_adjust_tidy <- function(df, input_file, adjuster, batch_col, column, full_
     "gmm_npn" = adjust_gmm_npn(mat_genes, batch, debug=debug, meta_file=meta_file),
     "gmm_npn_unit_std" = adjust_gmm_npn_unit_std(mat_genes, batch, debug=debug, meta_file=meta_file),
     "gmm_streamlined" = adjust_gmm_streamlined(mat_genes, batch, debug=debug, meta_file=meta_file),
+    "gmm_streamlined_mean_only" = adjust_gmm_streamlined_mean_only(mat_genes, batch, debug=debug, meta_file=meta_file),
     "gmm_global_simple" = adjust_gmm_global_simple(mat_genes, batch, debug=TRUE, meta_file=meta_file),
     "gmm_global_npn" = adjust_gmm_global_npn(mat_genes, batch, debug=TRUE, meta_file=meta_file),
     "ranked1" = adjust_ranked(mat_genes, debug = debug),
@@ -973,7 +997,7 @@ batch_adjust_tidy <- function(df, input_file, adjuster, batch_col, column, full_
     "min_mean" = adjust_min_mean(mat_genes, batch, debug = debug),
     "combat" = adjust_combat(mat_genes, batch, design, data_are_counts, debug = debug),
     "log" = adjust_log(mat_genes, batch, debug = debug),
-    "log_combat" = adjust_log_combat(mat_genes, batch, design, data_are_counts, debug = debug),
+    "log_combat" = adjust_log_combat(mat_genes, batch, design, debug = debug),
     "limma" = adjust_limma(mat_genes, batch, design, debug = debug),
     "quantile" = adjust_quantile(mat_genes, batch, debug = debug),
     "npn" = adjust_npn(mat_genes, batch, debug = debug),
@@ -1050,12 +1074,14 @@ parser$add_argument("-a", "--adjuster",
   help = "Batch adjustment method to use."
 )
 parser$add_argument("-b", "--batch-col", default = NULL, help = "Name of the column identifying the batch for each sample.")
-parser$add_argument("-c", "--column", nargs = "+", default = NULL, help = "Predictive columns to preserve. If specified, these are used to build the design matrix.")
-parser$add_argument("-f", "--full-design-matrix", action = "store_true", help = "If set, the design matrix will include all categorical metadata variables.")
+parser$add_argument("-c", "--debug", action = "store_true", help = "Enable verbose debugging messages.")
 parser$add_argument("-R", "--reduce-rows", default = NULL, help = "Number of rows to reduce to.")
 parser$add_argument("-r", "--reduce-cols", default = NULL, help = "Number of columns to reduce to.")
 parser$add_argument("-m", "--meta-file", default = NULL, help = "Path to save the recommended modes for each gene.")
-parser$add_argument("--debug", action = "store_true", help = "Enable verbose debugging messages.")
+parser$add_argument("--mean-only", action = "store_true", help = "For GMM streamlined methods, only adjust means without using inverse CDF transformation.")
+parser$add_argument("--column", default = NULL, help = "Specific metadata columns to include in the design matrix.")
+parser$add_argument("--full-design-matrix", action = "store_true", help = "Use all metadata columns in the design matrix.")
+
 
 args <- parser$parse_args()
 
@@ -1089,7 +1115,7 @@ adjusted_data <- batch_adjust_tidy(
   adjuster = args$adjuster,
   batch_col = args$batch_col,
   column = args$column,
-  full_design_matrix = args$full_design_matrix,
+  full_design_matrix = args$`full-design-matrix`,
   debug = args$debug,
   meta_file = args$meta_file
 )
