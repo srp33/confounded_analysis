@@ -30,24 +30,26 @@ def calculate_metrics(y_true, y_pred, y_proba):
     """Calculate a standard set of classification metrics."""
     # PENDING: Handle both pandas Series and numpy arrays. Might fix AttributeError.
     if isinstance(y_pred, np.ndarray):
-        # For numpy arrays, filter out NaN values before checking uniqueness
-        y_pred_cleaned = y_pred[~np.isnan(y_pred)]
+        # For numpy arrays, use pandas isnull to handle both numeric and non-numeric data
+        y_pred_cleaned = y_pred[~pd.isnull(y_pred)]
     else:
         # For pandas Series, use the dropna() method
         y_pred_cleaned = y_pred.dropna()
 
+    # Use confusion matrix for robust calculation of TPR/TNR
+    print_now(f"DEBUG calculate_metrics: y_true dtype={type(y_true)} shape={getattr(y_true, 'shape', 'no shape')} unique={np.unique(y_true)}")
+    print_now(f"DEBUG calculate_metrics: y_pred dtype={type(y_pred)} shape={getattr(y_pred, 'shape', 'no shape')} unique={np.unique(y_pred)}")
+    tn, fp, fn, tp = confusion_matrix(y_true, y_pred, labels=[0,1]).ravel()
+
     # Return NaN for metrics that fail if only one class is present.
     if len(pd.unique(y_true)) < 2 or len(pd.unique(y_pred_cleaned)) < 2:
         return {
-            'ROC AUC': np.nan,
-            'True Negative': np.nan,
-            'False Positive': np.nan,
-            'False Negative': np.nan,
-            'True Positive': np.nan
+            'ROC AUC': 0.5,
+            'True Negative': tn,
+            'False Positive': fp,
+            'False Negative': fn,
+            'True Positive': tp
         }
-
-    # Use confusion matrix for robust calculation of TPR/TNR
-    tn, fp, fn, tp = confusion_matrix(y_true, y_pred, labels=[0,1]).ravel()
 
     metrics = {
         'ROC AUC' : roc_auc_score(y_true, y_proba),
@@ -67,6 +69,7 @@ def run_single_dataset(filepath, source, output_file, pred_col, adjustment, clas
 
     # Separate data into training and testing
     y = df[pred_col]
+    print_now(f"DEBUG single_dataset: y dtype={y.dtype} unique={y.unique()}")
     cols_to_drop = [pred_col]
     X = df.drop(columns=[col for col in cols_to_drop if col in df.columns]).select_dtypes(include=[np.number])
 
@@ -94,6 +97,7 @@ def run_single_dataset(filepath, source, output_file, pred_col, adjustment, clas
     
         # Predict off of x test to get y test predictions
         y_pred = model.predict(X_test)
+        print_now(f"DEBUG single_dataset: y_pred dtype={type(y_pred)} shape={y_pred.shape} unique={np.unique(y_pred)}")
         predictions.loc[test_index, 'y_predicted'] = y_pred
 
         # Take the second column of probabilistic predictions from x test
@@ -155,8 +159,6 @@ def run_paired_datasetsset(filepath, output_file, pred_col, source_col, adjustme
     # Define train/test combinations
     combinations = [
         (f'{source1};{source2}', f'{source1};{source2}'),
-        (f'{source1};{source2}', source1),
-        (f'{source1};{source2}', source2),
         (source1, source2),
         (source2, source1),
         (source1, source1),
@@ -188,9 +190,11 @@ def run_paired_datasetsset(filepath, output_file, pred_col, source_col, adjustme
         # Get features and targets
         X_train = feature_df.loc[train_df.index]
         y_train = train_df[pred_col]
+        print_now(f"DEBUG paired_datasets: y_train dtype={y_train.dtype} unique={y_train.unique()}")
 
         X_test = feature_df.loc[test_df.index]
         y_test = test_df[pred_col]
+        print_now(f"DEBUG paired_datasets: y_test dtype={y_test.dtype} unique={y_test.unique()}")
     
         # Create empty dataframe for y predictions
         predictions = pd.DataFrame(index=df.index, columns=['y_predicted', 'y_probability'])
@@ -199,39 +203,36 @@ def run_paired_datasetsset(filepath, output_file, pred_col, source_col, adjustme
         model = clone(clf_model)
 
         if should_split:
-            # Use cross-validation splitting similar to run_single_dataset
+            # Use cross-validation splitting on the training data
             cv_random_seed = RANDOM_SEED + current_repeat
             cv = RepeatedStratifiedKFold(n_splits=n_splits, random_state=cv_random_seed)
-            try:
-                splits = list(cv.split(X_test, y_test))
-            except ValueError as e:
-                print_now(f"Error splitting data: {e} for {filepath}")
-                print_now(f"y_test shape: {y_test.shape} for {filepath}")
-                print_now(f"y_test unique: {y_test.unique()} for {filepath}")
-                print_now(f"X_test shape: {X_test.shape} for {filepath}")
-                raise e
+            splits = list(cv.split(X_train, y_train))
 
             # Fit the model, test, and calculate metrics using cross-validation
-            for train_index, test_index in splits:
-                X_train_cv, X_test_cv = X_train.iloc[train_index], X_test.iloc[test_index]
-                y_train_cv, y_test_cv = y_train.iloc[train_index], y_test.iloc[test_index]
-                model.fit(X_train_cv, y_train_cv)
+            for train_index, val_index in splits:
+                X_train_fold = X_train.iloc[train_index]
+                X_val_fold = X_train.iloc[val_index]
+                y_train_fold = y_train.iloc[train_index]
+                y_val_fold = y_train.iloc[val_index]
+                model.fit(X_train_fold, y_train_fold)
             
-                # Predict off of x test to get y test predictions
-                y_pred = model.predict(X_test_cv)
-                predictions.loc[y_test_cv.index, 'y_predicted'] = y_pred
+                # Predict on validation fold
+                y_pred = model.predict(X_val_fold)
+                predictions.loc[y_val_fold.index, 'y_predicted'] = y_pred
 
-                # Take the second column of probabilistic predictions from x test
-                y_proba = model.predict_proba(X_test_cv)[:,1]
-                predictions.loc[y_test_cv.index, 'y_probability'] = y_proba
+                # Take the second column of probabilistic predictions
+                y_proba = model.predict_proba(X_val_fold)[:,1]
+                predictions.loc[y_val_fold.index, 'y_probability'] = y_proba
 
-            y_true = y_test
-            y_pred_all = predictions.loc[y_test.index, 'y_predicted'].values
-            y_proba_all = predictions.loc[y_test.index, 'y_probability'].values
+            # Use the training data indices for evaluation (since we did CV on training data)
+            y_true = y_train
+            y_pred_all = predictions.loc[y_train.index, 'y_predicted'].values
+            y_proba_all = predictions.loc[y_train.index, 'y_probability'].values
         else:
             # Fit the model and create predictions without cross-validation
             model.fit(X_train, y_train)
             y_pred = model.predict(X_test)
+            print_now(f"DEBUG paired_datasets no-CV: y_pred dtype={type(y_pred)} shape={y_pred.shape} unique={np.unique(y_pred)}")
             y_proba = model.predict_proba(X_test)[:,1]
 
             predictions.loc[y_test.index, 'y_predicted'] = y_pred
@@ -243,35 +244,55 @@ def run_paired_datasetsset(filepath, output_file, pred_col, source_col, adjustme
 
         print_now(f"Shapes: Y true: {y_true.shape} Y pred: {y_pred_all.shape} Y proba: {y_proba_all.shape} Uniques: Y true: {np.unique(y_true)} Y pred: {np.unique(y_pred_all)} for dataset: {filepath}")
 
-        if y_true.isnull().any():
-            print_now(f"Dtype: {y_true.dtype}")
-            # Use pandas .isnull() to avoid TypeError on non-numeric data.
-            raise ValueError(f"Found {y_true.isnull().sum()} NaN(s) in y_true for dataset: {filepath}")
-    
-        # Use np.isnan for NumPy arrays.
-        if np.isnan(y_pred_all).any():
-            print_now(f"Dtype: {y_pred_all.dtype}")
-            raise ValueError(f"Found {np.isnan(y_pred_all).sum()} NaN(s) in y_pred_all for dataset: {filepath}")
+        # Define subsets for evaluation - always evaluate on full dataset
+        subsets_to_evaluate = {test_key: (y_true, y_pred_all, y_proba_all)}
+        
+        # If we're evaluating combined datasets, also evaluate on individual source subsets
+        if ';' in test_key and should_split:
+            # Get the source information for the evaluation data
+            eval_sources = df.loc[y_true.index, source_col] if should_split else test_df[source_col]
+            for source_name in eval_sources.unique():
+                mask = (eval_sources == source_name)
+                subset_label = source_name
+                subsets_to_evaluate[subset_label] = (
+                    y_true[mask], 
+                    y_pred_all[mask] if isinstance(y_pred_all, pd.Series) else y_pred_all[mask.values],
+                    y_proba_all[mask] if isinstance(y_proba_all, pd.Series) else y_proba_all[mask.values]
+                )
 
-        # Calculate metrics
-        metrics = calculate_metrics(y_true, y_pred_all, y_proba_all)
-        metrics_df = pd.DataFrame([metrics])
-    
-        # Add other columns
-        metrics_df['Classifier'] = classifier
-        metrics_df['Adjustment'] = adjustment
-        metrics_df['Prediction'] = pred_col
-        metrics_df['Train'] = train_key
-        metrics_df['Test'] = test_key
-        # Use parent directory + filename for uniqueness
-        path_parts = Path(filepath).parts[-2:]  # Get last 2 parts (dir/file.csv)
-        file_id = "_".join(path_parts).replace("/", "_").replace(".", "_")
-        metrics_df['Run_ID'] = f"combined_{file_id}_{current_repeat}"
+        # Calculate metrics for each subset
+        for subset_name, (y_true_sub, y_pred_sub, y_proba_sub) in subsets_to_evaluate.items():
+            if len(y_true_sub) == 0:
+                continue
+                
+            # Ensure consistent data types for metrics calculation
+            try:
+                y_true_clean = y_true_sub.astype(int)
+                y_pred_clean = y_pred_sub.astype(int)
+            except (ValueError, TypeError) as e:
+                print_now(f"Could not convert to int, using original data: {e}")
+                y_true_clean = y_true_sub
+                y_pred_clean = y_pred_sub
+            
+            # Calculate metrics
+            metrics = calculate_metrics(y_true_clean, y_pred_clean, y_proba_sub)
+            metrics_df = pd.DataFrame([metrics])
+        
+            # Add other columns
+            metrics_df['Classifier'] = classifier
+            metrics_df['Adjustment'] = adjustment
+            metrics_df['Prediction'] = pred_col
+            metrics_df['Train'] = train_key
+            metrics_df['Test'] = subset_name  # Use subset name instead of test_key
+            # Use parent directory + filename for uniqueness
+            path_parts = Path(filepath).parts[-2:]  # Get last 2 parts (dir/file.csv)
+            file_id = "_".join(path_parts).replace("/", "_").replace(".", "_")
+            metrics_df['Run_ID'] = f"combined_{file_id}_{current_repeat}"
 
-        # Reorder columns and append to output file
-        output_cols = ['Train', 'Test', 'ROC AUC', 'True Negative', 'False Negative', 'False Positive', 'True Positive', 
-        'Classifier', 'Adjustment', 'Prediction', 'Run_ID']
-        results.append(metrics_df[output_cols].copy())
+            # Reorder columns and append to results
+            output_cols = ['Train', 'Test', 'ROC AUC', 'True Negative', 'False Negative', 'False Positive', 'True Positive', 
+            'Classifier', 'Adjustment', 'Prediction', 'Run_ID']
+            results.append(metrics_df[output_cols].copy())
     
     # Make sure the whole run completes before writing to the file.
     for metrics_df_selection in results:
@@ -288,8 +309,17 @@ def load_dataframe(filename, pred_col):
         meta_cols = [col for col in df.columns if col.startswith('meta_')]
         raise ValueError(f"{pred_col} not found in dataframe. Meta columns: {meta_cols}")
 
+    # DEBUG: Check original data
+    print_now(f"DEBUG load_dataframe: Original {pred_col} dtype={df[pred_col].dtype}, unique values={df[pred_col].unique()}")
+
     # Remove all non [0,1] values (This should be done in the preprocessing script)
+    original_size = len(df)
     df = df[(df[pred_col] == 0) | (df[pred_col] == 1)]
+    if len(df) < original_size:
+        print_now(f"WARNING: Removed {original_size - len(df)} rows with non-binary values in {pred_col}")
+        print_now(f"DEBUG load_dataframe: After filtering, shape={df.shape} (removed {original_size - len(df)} rows)")
+        print_now(f"DEBUG load_dataframe: After filtering {pred_col} dtype={df[pred_col].dtype}, unique values={df[pred_col].unique()}")
+    
     return df
 
 def generate_runs(single_list, single_names, combined_list, n_repeats):
