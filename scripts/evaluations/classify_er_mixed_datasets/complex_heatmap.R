@@ -5,16 +5,6 @@
 # Usage: Rscript train_test_heatmap.R 
 # Example: Rscript train_test_heatmap.R 
 
-# Install necessary packages if they are not already installed
-# if (!require(ggplot2)) install.packages("ggplot2")
-# if (!require(readr)) install.packages("readr")
-# if (!require(dplyr)) install.packages("dplyr")
-# if (!require(tidyr)) install.packages("tidyr")
-# if (!require(stringr)) install.packages("stringr")
-# if (!require(ComplexHeatmap)) install.packages("ComplexHeatmap")
-# if (!require(circlize)) install.packages("circlize")
-# if (!require(tibble)) install.packages("tibble")
-
 # Load libraries
 library(ggplot2)
 library(readr)
@@ -26,15 +16,37 @@ library(circlize)
 library(tibble)
 library(purrr)
 
+# --- Configuration ---
+CONFIG <- list(
+  metrics_dir = "/outputs/metrics",
+  figures_dir = "/outputs/figures",
+  metadata_file = "/scripts/evaluations/geo_metadata.csv",
+  pattern = "^er_classification_.*\\.csv$",
+  adjuster_pattern = "^er_classification_(.+)\\.csv$",  # Pattern to extract adjuster names
+  unadjusted_file = "er_classification_unadjusted.csv"
+)
+
 # --- Auto-detect Available Adjusters ---
-# Find all CSV files matching the pattern er_classification_*.csv
-csv_files <- list.files("/outputs/metrics", pattern = "^er_classification_.*\\.csv$", full.names = FALSE)
+discover_adjusters <- function(config) {
+  valid_adjusters <- list.files(config$metrics_dir, pattern = config$pattern, full.names = TRUE) %>%
+    .[sapply(., has_meaningful_data)] %>%
+    basename() %>%
+    gsub(config$adjuster_pattern, "\\1", .)
+  
+  if (length(valid_adjusters) == 0) {
+    stop("No adjusters found with meaningful data.", call. = FALSE)
+  }
+  
+  cat("Found adjusters:", paste(valid_adjusters, collapse = ", "), "\n")
+  return(valid_adjusters)
+}
 
-# Extract adjuster names from filenames
-all_adjusters <- gsub("^er_classification_(.+)\\.csv$", "\\1", csv_files)
-cat("Found potential adjusters:", paste(all_adjusters, collapse = ", "), "\n")
+# Helper function to construct adjuster file paths
+get_adjuster_file_path <- function(adjuster, config) {
+  file.path(config$metrics_dir, paste0("er_classification_", adjuster, ".csv"))
+}
 
-# Function to check if a CSV file has meaningful data (more than just headers)
+# Function to check if a CSV file has meaningful data
 has_meaningful_data <- function(csv_file) {
   tryCatch({
     data <- read_csv(csv_file, show_col_types = FALSE)
@@ -44,27 +56,12 @@ has_meaningful_data <- function(csv_file) {
   })
 }
 
-# Filter out adjusters with empty files
-adjusters <- c()
-for (adj in all_adjusters) {
-  csv_path <- file.path("/outputs/metrics", paste0("er_classification_", adj, ".csv"))
-  if (has_meaningful_data(csv_path)) {
-    adjusters <- c(adjusters, adj)
-  } else {
-    cat("Skipping adjuster", adj, "- file is empty or contains only headers\n")
-  }
-}
+# Initialize configuration
+adjusters <- discover_adjusters(CONFIG)
+FIG_DIR <- CONFIG$figures_dir
 
-cat("Adjusters with data:", paste(adjusters, collapse = ", "), "\n")
-
-# Check if we have any adjusters with data
-if (length(adjusters) == 0) {
-  stop("No adjusters found with meaningful data. All CSV files appear to be empty or contain only headers.", call. = FALSE)
-}
-
-FIG_DIR <- "/outputs/figures"
-
-platform_df <- read.csv("/scripts/evaluations/geo_metadata.csv")
+# Load platform metadata
+platform_df <- read.csv(CONFIG$metadata_file)
 platform_df$platform <- trimws(platform_df$platform)
 dataset_to_platform <- setNames(platform_df$platform, platform_df$GSE_ID)
 
@@ -151,6 +148,29 @@ read_and_prepare_data <- function(csv_file) {
   return(input_data)
 }
 
+# Process metric data for both regular and diagonal delta
+process_metric_data <- function(df_adj, df_unadj = NULL, metric_col, is_diagonal_delta = FALSE) {
+  if (is_diagonal_delta) {
+    return(prepare_diagonal_delta_metric_data(df_adj, metric_col))
+  } else if (!is.null(df_unadj)) {
+    return(prepare_delta_metric_data(df_adj, df_unadj, metric_col))
+  } else {
+    return(prepare_metric_data(df_adj, metric_col))
+  }
+}
+
+# Create and draw heatmaps
+create_heatmap_for_metric <- function(df_adj, df_unadj, metric_col, adjuster, train_combined, is_diagonal_delta = FALSE) {
+  metric_data <- process_metric_data(df_adj, df_unadj, metric_col, is_diagonal_delta)
+  metric_matrix <- prepare_metric_matrix(metric_data, metric_col)
+  
+  if (!is.null(metric_matrix)) {
+    is_difference <- !is.null(df_unadj) || is_diagonal_delta
+    return(draw_heatmap(metric_matrix, metric_col, adjuster, train_combined, is_difference))
+  }
+  return(NULL)
+}
+
 # Function to filter data (common filtering logic)
 filter_datasets <- function(input_data, train_combined) {
   if (train_combined) {
@@ -191,6 +211,23 @@ prepare_delta_metric_data <- function(df_adj, df_unadj, metric_col) {
 
   full_join(data_adj, data_unadj, by = c("Train", "Test")) %>%
     mutate(Mean_Metric = Adj - Unadj)
+}
+
+prepare_diagonal_delta_metric_data <- function(df_adj, metric_col) {
+  data_adj <- df_adj %>%
+    group_by(Train, Test) %>%
+    summarise(Adj = mean(.data[[metric_col]], na.rm = TRUE), .groups = "drop")
+
+  # Extract diagonal values (where Train == Test)
+  diagonal <- data_adj %>%
+    filter(Train == Test) %>%
+    select(Test, Diagonal = Adj)
+  
+  # Join diagonal values and calculate difference
+  data_adj %>%
+    left_join(diagonal, by = "Test") %>%
+    mutate(Mean_Metric = Adj - Diagonal) %>%
+    select(Train, Test, Mean_Metric)
 }
 
 get_platform_annotations <- function(datasets) {
@@ -327,43 +364,57 @@ draw_heatmap <- function(data_matrix, metric_col, adjuster, train_combined, is_d
   return(ht)
 }
 
-# # --- Main Execution ---
-generate_jitter_plot <- function(all_diff_data, fig_dir, cross) {
+# Unified jitter plot function
+generate_jitter_plot <- function(all_diff_data, fig_dir, cross, plot_type = "regular") {
   # Filter out rows with missing values
   all_diff_data <- all_diff_data %>%
     filter(!is.na(Mean_Metric), is.finite(Mean_Metric))
   
   if (nrow(all_diff_data) == 0) {
-    cat("No valid data for jitter plot\n")
+    cat("No valid data for", plot_type, "jitter plot\n")
     return()
   }
   
+  # Configure plot based on type
+  if (plot_type == "diagonal") {
+    title <- "Distribution of Diagonal Delta Metrics for Adjusters"
+    subtitle <- "Difference from diagonal (Train == Test) performance"
+    y_label <- "Difference from Diagonal Performance"
+    filename_prefix <- "diagonal_delta_jitter_plot"
+  } else {
+    title <- "Distribution of Metric Differences for Adjusters"
+    subtitle <- NULL
+    y_label <- "Difference in Metric (Adjusted - Unadjusted)"
+    filename_prefix <- "jitter_plot"
+  }
+  
   p <- ggplot(all_diff_data, aes(x = Adjuster, y = Mean_Metric, color = Metric)) +
-  geom_jitter(width = 0.25, height = 0, size = 2, alpha = 0.7) +
-  scale_color_manual(values = c("MCC" = "skyblue", "AUC" = "orange")) +
-  stat_summary(fun = mean, geom = "crossbar", width = 0.5, color = "black", linewidth = 1) +
-  theme_minimal() +
-  labs(
-    title = "Distribution of Metric Differences for Adjusters",
-    x = "Adjuster",
-    y = "Difference in Metric (Adjusted - Unadjusted)",
-    color = "Metric"
-  ) +
-  theme(
-    axis.text.x = element_text(angle = 45, hjust = 1),
-    text = element_text(size = 12)
-  ) +
-  facet_wrap(~ Metric, scales = "free_y")
+    geom_jitter(width = 0.25, height = 0, size = 2, alpha = 0.7) +
+    scale_color_manual(values = c("MCC" = "skyblue", "AUC" = "orange")) +
+    stat_summary(fun = mean, geom = "crossbar", width = 0.5, color = "black", linewidth = 1) +
+    theme_minimal() +
+    labs(
+      title = title,
+      subtitle = subtitle,
+      x = "Adjuster",
+      y = y_label,
+      color = "Metric"
+    ) +
+    theme(
+      axis.text.x = element_text(angle = 45, hjust = 1),
+      text = element_text(size = 12)
+    ) +
+    facet_wrap(~ Metric, scales = "free_y")
 
   cross_suffix = ifelse(cross, "_cross", "")
-  file_path <- file.path(fig_dir, paste0("jitter_plot", cross_suffix, ".png"))
+  file_path <- file.path(fig_dir, paste0(filename_prefix, cross_suffix, ".png"))
   ggsave(file_path, plot = p, width = 10, height = 6)
-  cat("Jitter plot saved to:", file.path(fig_dir, "jitter_plot_adjusters.png"), "\n")
+  cat(paste(plot_type, "jitter plot saved to:"), file_path, "\n")
 }
 
 generate_all_heatmaps_to_pdf <- function(adjuster, train_combined, fig_dir = "/outputs/figures") {
-  file_adjusted <- paste0("/outputs/metrics/er_classification_", adjuster, ".csv")
-  file_unadjusted <- "/outputs/metrics/er_classification_unadjusted.csv"
+  file_adjusted <- get_adjuster_file_path(adjuster, CONFIG)
+  file_unadjusted <- file.path(CONFIG$metrics_dir, CONFIG$unadjusted_file)
 
   df_adj <- read_and_prepare_data(file_adjusted) %>% filter_datasets(train_combined)
   df_unadj <- read_and_prepare_data(file_unadjusted) %>% filter_datasets(train_combined)
@@ -374,35 +425,23 @@ generate_all_heatmaps_to_pdf <- function(adjuster, train_combined, fig_dir = "/o
     return()
   }
 
-  # Prepare data for each metric
+  # Define heatmap configurations
+  heatmap_configs <- list(
+    list(name = "delta_mcc", metric = "MCC", use_unadj = TRUE, diagonal = FALSE),
+    list(name = "delta_auc", metric = "ROC AUC", use_unadj = TRUE, diagonal = FALSE),
+    list(name = "diag_delta_mcc", metric = "MCC", use_unadj = FALSE, diagonal = TRUE),
+    list(name = "diag_delta_auc", metric = "ROC AUC", use_unadj = FALSE, diagonal = TRUE),
+    list(name = "mcc", metric = "MCC", use_unadj = FALSE, diagonal = FALSE),
+    list(name = "auc", metric = "ROC AUC", use_unadj = FALSE, diagonal = FALSE)
+  )
+
+  # Generate heatmaps using unified function
   heatmap_list <- list()
-
-  # Δ MCC
-  delta_mcc_data <- prepare_delta_metric_data(df_adj, df_unadj, "MCC")
-  delta_mcc_matrix <- prepare_metric_matrix(delta_mcc_data, "MCC")
-  if (!is.null(delta_mcc_matrix)) {
-    heatmap_list[["delta_mcc"]] <- draw_heatmap(delta_mcc_matrix, "MCC", adjuster, train_combined, is_difference = TRUE)
-  }
-
-  # Δ AUC
-  delta_auc_data <- prepare_delta_metric_data(df_adj, df_unadj, "ROC AUC")
-  delta_auc_matrix <- prepare_metric_matrix(delta_auc_data, "ROC AUC")
-  if (!is.null(delta_auc_matrix)) {
-    heatmap_list[["delta_auc"]] <- draw_heatmap(delta_auc_matrix, "ROC AUC", adjuster, train_combined, is_difference = TRUE)
-  }
-
-  # MCC
-  mcc_data <- prepare_metric_data(df_adj, "MCC")
-  mcc_matrix <- prepare_metric_matrix(mcc_data, "MCC")
-  if (!is.null(mcc_matrix)) {
-    heatmap_list[["mcc"]] <- draw_heatmap(mcc_matrix, "MCC", adjuster, train_combined)
-  }
-
-  # AUC
-  auc_data <- prepare_metric_data(df_adj, "ROC AUC")
-  auc_matrix <- prepare_metric_matrix(auc_data, "ROC AUC")
-  if (!is.null(auc_matrix)) {
-    heatmap_list[["auc"]] <- draw_heatmap(auc_matrix, "ROC AUC", adjuster, train_combined)
+  for (config in heatmap_configs) {
+    df_unadj_param <- if (config$use_unadj) df_unadj else NULL
+    heatmap_list[[config$name]] <- create_heatmap_for_metric(
+      df_adj, df_unadj_param, config$metric, adjuster, train_combined, config$diagonal
+    )
   }
 
   # Filter out NULL heatmaps
@@ -436,74 +475,95 @@ generate_all_heatmaps_to_pdf <- function(adjuster, train_combined, fig_dir = "/o
 
 all_adjuster_diffs <- data.frame()
 all_adjuster_diffs_cross <- data.frame()
+all_diag_diffs <- data.frame()
+all_diag_diffs_cross <- data.frame()
 
-for (adjuster in adjusters) {
-  cat("\n=== Processing adjuster:", adjuster, "===\n")
-  CSV_FILE <- paste0("/outputs/metrics/er_classification_", adjuster, ".csv")
-  file_adjusted <- paste0("/outputs/metrics/er_classification_", adjuster, ".csv")
-  file_unadjusted <- "/outputs/metrics/er_classification_unadjusted.csv"
+# Function to process data for a single adjuster and train_combined setting
+process_adjuster_data <- function(adjuster, train_combined, file_unadjusted) {
+  file_adjusted <- get_adjuster_file_path(adjuster, CONFIG)
+  
+  df_adj <- read_and_prepare_data(file_adjusted) %>% filter_datasets(train_combined)
+  df_unadj <- read_and_prepare_data(file_unadjusted) %>% filter_datasets(train_combined)
 
-  for(train_combined in c(TRUE, FALSE)) {
-    cat("Processing train_combined =", train_combined, "\n")
-    
-    df_adj <- read_and_prepare_data(file_adjusted) %>% filter_datasets(train_combined)
-    df_unadj <- read_and_prepare_data(file_unadjusted) %>% filter_datasets(train_combined)
+  cat("After filtering - df_adj rows:", nrow(df_adj), ", df_unadj rows:", nrow(df_unadj), "\n")
 
-    cat("After filtering - df_adj rows:", nrow(df_adj), ", df_unadj rows:", nrow(df_unadj), "\n")
-
-    if (nrow(df_adj) == 0 || nrow(df_unadj) == 0) {
-      cat("Skipping due to empty data after filtering\n")
-      next
-    }
-
-    # Prepare the differences
-    delta_mcc_data <- prepare_delta_metric_data(df_adj, df_unadj, "MCC")
-    delta_auc_data <- prepare_delta_metric_data(df_adj, df_unadj, "ROC AUC")
-
-    # Add Adjuster column to each
-    delta_mcc_data$Adjuster <- adjuster
-    delta_auc_data$Adjuster <- adjuster
-
-    # Combine the data
-    if (train_combined) {
-      all_adjuster_diffs <- bind_rows(
-        all_adjuster_diffs,
-        delta_mcc_data %>% mutate(Metric = "MCC"),
-        delta_auc_data %>% mutate(Metric = "AUC")
-      )
-    }
-    else {
-      all_adjuster_diffs_cross <- bind_rows(
-        all_adjuster_diffs_cross,
-        delta_mcc_data %>% mutate(Metric = "MCC"),
-        delta_auc_data %>% mutate(Metric = "AUC")
-      )
-    }
-
-    # Generate Heatmaps for the current adjuster
-    tryCatch({
-      generate_all_heatmaps_to_pdf(adjuster, train_combined, FIG_DIR)
-    }, error = function(e) {
-      cat("Error generating heatmaps for", adjuster, "with train_combined =", train_combined, ":", e$message, "\n")
-    })
+  if (nrow(df_adj) == 0 || nrow(df_unadj) == 0) {
+    cat("Skipping due to empty data after filtering\n")
+    return(list(regular_diffs = NULL, diag_diffs = NULL))
   }
+
+  # Prepare metric data for both MCC and AUC
+  metrics <- c("MCC", "ROC AUC")
+  metric_labels <- c("MCC", "AUC")
+  
+  regular_diffs <- map2_dfr(metrics, metric_labels, function(metric, label) {
+    prepare_delta_metric_data(df_adj, df_unadj, metric) %>%
+      mutate(Adjuster = adjuster, Metric = label)
+  })
+  
+  diag_diffs <- map2_dfr(metrics, metric_labels, function(metric, label) {
+    prepare_diagonal_delta_metric_data(df_adj, metric) %>%
+      mutate(Adjuster = adjuster, Metric = label)
+  })
+
+  return(list(regular_diffs = regular_diffs, diag_diffs = diag_diffs))
 }
+
+# Main processing function
+process_all_adjusters <- function(adjusters, config) {
+  file_unadjusted <- file.path(config$metrics_dir, config$unadjusted_file)
+  
+  # Initialize result containers
+  results <- list(
+    combined = list(regular = data.frame(), diagonal = data.frame()),
+    cross = list(regular = data.frame(), diagonal = data.frame())
+  )
+  
+  for (adjuster in adjusters) {
+    cat("\n=== Processing adjuster:", adjuster, "===\n")
+    
+    for (train_combined in c(TRUE, FALSE)) {
+      cat("Processing train_combined =", train_combined, "\n")
+      
+      # Process data
+      result <- process_adjuster_data(adjuster, train_combined, file_unadjusted)
+      
+      # Accumulate results
+      if (!is.null(result$regular_diffs)) {
+        key <- if (train_combined) "combined" else "cross"
+        results[[key]]$regular <- bind_rows(results[[key]]$regular, result$regular_diffs)
+        results[[key]]$diagonal <- bind_rows(results[[key]]$diagonal, result$diag_diffs)
+      }
+      
+      # Generate heatmaps
+      tryCatch({
+        generate_all_heatmaps_to_pdf(adjuster, train_combined, config$figures_dir)
+      }, error = function(e) {
+        cat("Error generating heatmaps for", adjuster, ":", e$message, "\n")
+      })
+    }
+  }
+  
+  return(results)
+}
+
+# Execute main processing
+results <- process_all_adjusters(adjusters, CONFIG)
+all_adjuster_diffs <- results$combined$regular
+all_diag_diffs <- results$combined$diagonal
+all_adjuster_diffs_cross <- results$cross$regular
+all_diag_diffs_cross <- results$cross$diagonal
  
-# Generate jitter Plot
-generate_jitter_plot(all_adjuster_diffs, FIG_DIR, F)
-generate_jitter_plot(all_adjuster_diffs_cross, FIG_DIR, T)
+# Generate all jitter plots
+jitter_configs <- list(
+  list(data = all_adjuster_diffs, cross = FALSE, type = "regular"),
+  list(data = all_adjuster_diffs_cross, cross = TRUE, type = "regular"),
+  list(data = all_diag_diffs, cross = FALSE, type = "diagonal"),
+  list(data = all_diag_diffs_cross, cross = TRUE, type = "diagonal")
+)
 
-cat("All heatmaps and scatter plot generated successfully for adjuster:", adjuster, "\n")
+for (config in jitter_configs) {
+  generate_jitter_plot(config$data, FIG_DIR, config$cross, config$type)
+}
 
-# Display unique train/test combinations (after filtering)
-combined_data <- bind_rows(df_adj, df_unadj)
-
-filtered_data <- filter_datasets(combined_data, FALSE)
-unique_trains <- unique(filtered_data$Train)
-unique_tests <- unique(filtered_data$Test)
-cat("Unique Train datasets:", paste(unique_trains, collapse = ", "), "\n")
-cat("Unique Test datasets:", paste(unique_tests, collapse = ", "), "\n\n")
-
-
-
-cat("All heatmaps generated successfully.")
+cat("All heatmaps and jitter plots generated successfully.\n")
