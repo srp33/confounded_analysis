@@ -193,6 +193,23 @@ prepare_delta_metric_data <- function(df_adj, df_unadj, metric_col) {
     mutate(Mean_Metric = Adj - Unadj)
 }
 
+prepare_diagonal_delta_metric_data <- function(df_adj, metric_col) {
+  data_adj <- df_adj %>%
+    group_by(Train, Test) %>%
+    summarise(Adj = mean(.data[[metric_col]], na.rm = TRUE), .groups = "drop")
+
+  # Extract diagonal values (where Train == Test)
+  diagonal <- data_adj %>%
+    filter(Train == Test) %>%
+    select(Test, Diagonal = Adj)
+  
+  # Join diagonal values and calculate difference
+  data_adj %>%
+    left_join(diagonal, by = "Test") %>%
+    mutate(Mean_Metric = Adj - Diagonal) %>%
+    select(Train, Test, Mean_Metric)
+}
+
 get_platform_annotations <- function(datasets) {
   platforms <- dataset_to_platform[datasets]
   platforms[is.na(platforms)] <- "Unknown"
@@ -391,6 +408,20 @@ generate_all_heatmaps_to_pdf <- function(adjuster, train_combined, fig_dir = "/o
     heatmap_list[["delta_auc"]] <- draw_heatmap(delta_auc_matrix, "ROC AUC", adjuster, train_combined, is_difference = TRUE)
   }
 
+  # Δ Diagonal MCC
+  diag_delta_mcc <- prepare_diagonal_delta_metric_data(df_adj, "MCC")
+  diag_delta_mcc_matrix <- prepare_metric_matrix(diag_delta_mcc, "MCC")
+  if (!is.null(diag_delta_mcc_matrix)) {
+    heatmap_list[["diag_delta_mcc"]] <- draw_heatmap(diag_delta_mcc_matrix, "MCC", adjuster, train_combined, is_difference = TRUE)
+  }
+
+  # Δ Diagonal AUC
+  diag_delta_auc <- prepare_diagonal_delta_metric_data(df_adj, "ROC AUC")
+  diag_delta_auc_matrix <- prepare_metric_matrix(diag_delta_auc, "ROC AUC")
+  if (!is.null(diag_delta_auc_matrix)) {
+    heatmap_list[["diag_delta_auc"]] <- draw_heatmap(diag_delta_auc_matrix, "ROC AUC", adjuster, train_combined, is_difference = TRUE)
+  }
+
   # MCC
   mcc_data <- prepare_metric_data(df_adj, "MCC")
   mcc_matrix <- prepare_metric_matrix(mcc_data, "MCC")
@@ -436,6 +467,8 @@ generate_all_heatmaps_to_pdf <- function(adjuster, train_combined, fig_dir = "/o
 
 all_adjuster_diffs <- data.frame()
 all_adjuster_diffs_cross <- data.frame()
+all_diag_diffs <- data.frame()
+all_diag_diffs_cross <- data.frame()
 
 for (adjuster in adjusters) {
   cat("\n=== Processing adjuster:", adjuster, "===\n")
@@ -460,9 +493,14 @@ for (adjuster in adjusters) {
     delta_mcc_data <- prepare_delta_metric_data(df_adj, df_unadj, "MCC")
     delta_auc_data <- prepare_delta_metric_data(df_adj, df_unadj, "ROC AUC")
 
+    delta_diag_mcc_data = prepare_diagonal_delta_metric_data(df_adj, "MCC")
+    delta_diag_auc_data = prepare_diagonal_delta_metric_data(df_adj, "ROC AUC")
+
     # Add Adjuster column to each
     delta_mcc_data$Adjuster <- adjuster
     delta_auc_data$Adjuster <- adjuster
+    delta_diag_mcc_data$Adjuster <- adjuster
+    delta_diag_auc_data$Adjuster <- adjuster
 
     # Combine the data
     if (train_combined) {
@@ -471,12 +509,22 @@ for (adjuster in adjusters) {
         delta_mcc_data %>% mutate(Metric = "MCC"),
         delta_auc_data %>% mutate(Metric = "AUC")
       )
+      all_diag_diffs <- bind_rows(
+        all_diag_diffs,
+        delta_diag_mcc_data %>% mutate(Metric = "MCC"),
+        delta_diag_auc_data %>% mutate(Metric = "AUC")
+      )
     }
     else {
       all_adjuster_diffs_cross <- bind_rows(
         all_adjuster_diffs_cross,
         delta_mcc_data %>% mutate(Metric = "MCC"),
         delta_auc_data %>% mutate(Metric = "AUC")
+      )
+      all_diag_diffs_cross <- bind_rows(
+        all_diag_diffs_cross,
+        delta_diag_mcc_data %>% mutate(Metric = "MCC"),
+        delta_diag_auc_data %>% mutate(Metric = "AUC")
       )
     }
 
@@ -492,6 +540,44 @@ for (adjuster in adjusters) {
 # Generate jitter Plot
 generate_jitter_plot(all_adjuster_diffs, FIG_DIR, F)
 generate_jitter_plot(all_adjuster_diffs_cross, FIG_DIR, T)
+
+# Generate diagonal delta jitter plots
+generate_diagonal_jitter_plot <- function(all_diag_data, fig_dir, cross) {
+  # Filter out rows with missing values
+  all_diag_data <- all_diag_data %>%
+    filter(!is.na(Mean_Metric), is.finite(Mean_Metric))
+  
+  if (nrow(all_diag_data) == 0) {
+    cat("No valid data for diagonal delta jitter plot\n")
+    return()
+  }
+  
+  p <- ggplot(all_diag_data, aes(x = Adjuster, y = Mean_Metric, color = Metric)) +
+    geom_jitter(width = 0.25, height = 0, size = 2, alpha = 0.7) +
+    scale_color_manual(values = c("MCC" = "skyblue", "AUC" = "orange")) +
+    stat_summary(fun = mean, geom = "crossbar", width = 0.5, color = "black", linewidth = 1) +
+    theme_minimal() +
+    labs(
+      title = "Distribution of Diagonal Delta Metrics for Adjusters",
+      subtitle = "Difference from diagonal (Train == Test) performance",
+      x = "Adjuster",
+      y = "Difference from Diagonal Performance",
+      color = "Metric"
+    ) +
+    theme(
+      axis.text.x = element_text(angle = 45, hjust = 1),
+      text = element_text(size = 12)
+    ) +
+    facet_wrap(~ Metric, scales = "free_y")
+
+  cross_suffix = ifelse(cross, "_cross", "")
+  file_path <- file.path(fig_dir, paste0("diagonal_delta_jitter_plot", cross_suffix, ".png"))
+  ggsave(file_path, plot = p, width = 10, height = 6)
+  cat("Diagonal delta jitter plot saved to:", file_path, "\n")
+}
+
+generate_diagonal_jitter_plot(all_diag_diffs, FIG_DIR, F)
+generate_diagonal_jitter_plot(all_diag_diffs_cross, FIG_DIR, T)
 
 cat("All heatmaps and scatter plot generated successfully for adjuster:", adjuster, "\n")
 
