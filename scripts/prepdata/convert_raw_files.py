@@ -277,7 +277,7 @@ def process_dataset(raw_folder_path: Path, dataset_id: str, output_base_dir: Pat
             print_now(meta_df['meta_er_status'].value_counts())
 
         # Standardize pr status column name
-        other_pr_columns = ['meta_pr', 'meta_pr_status', 'meta_pr_status_ihc', 'meta_pr_ihc', 'meta_prihc', 'meta_per_status_by_ihc']
+        other_pr_columns = ['meta_pr', 'meta_pr_status', 'meta_pgr_status', 'meta_pr_status_ihc', 'meta_pr_ihc', 'meta_prihc', 'meta_per_status_by_ihc']
         for pr_column in other_pr_columns:
             if pr_column in lower_to_full_case_columns:
                 pr_column = lower_to_full_case_columns[pr_column]
