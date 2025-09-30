@@ -154,22 +154,27 @@ read_and_prepare_data <- function(csv_file) {
 # Function to filter data (common filtering logic)
 filter_datasets <- function(input_data, train_combined) {
   if (train_combined) {
-    # Use train on both datasets
     result <- input_data %>%
-      filter(str_detect(Train, ";")) %>%
+      # Use metrics for models trained on both datasets, plus the diagonal
+      filter(str_detect(Train, ";") | (Train == Test)) %>%
       filter(!str_detect(Test, ";")) %>%
       mutate(
         Train = map2_chr(Train, Test, function(train_val, test_val) {
-          train_parts <- str_split(train_val, ";")[[1]]
-          # Return the part that's NOT the test value
-          train_parts[train_parts != test_val][1]
+          if (str_detect(train_val, ";")) {
+            train_parts <- str_split(train_val, ";")[[1]]
+            # Return the part that's NOT the test value
+            train_parts[train_parts != test_val][1]
+          } else {
+            train_val
+          }
         })
       )
     return(result)
   } else {
     # Use cross-training data
     return(input_data %>%
-      filter(!str_detect(Train, ";"), !str_detect(Test, ";")))
+      filter(!str_detect(Train, ";")) %>%
+      filter(!str_detect(Test, ";")))
   }
 }
 
@@ -323,17 +328,26 @@ draw_heatmap <- function(data_matrix, metric_col, adjuster, train_combined, is_d
 }
 
 # # --- Main Execution ---
-generate_jitter_plot <- function(all_diff_data, fig_dir) {
+generate_jitter_plot <- function(all_diff_data, fig_dir, cross) {
+  # Filter out rows with missing values
+  all_diff_data <- all_diff_data %>%
+    filter(!is.na(Mean_Metric), is.finite(Mean_Metric))
+  
+  if (nrow(all_diff_data) == 0) {
+    cat("No valid data for jitter plot\n")
+    return()
+  }
+  
   p <- ggplot(all_diff_data, aes(x = Adjuster, y = Mean_Metric, color = Metric)) +
   geom_jitter(width = 0.25, height = 0, size = 2, alpha = 0.7) +
-  scale_fill_manual(values = c("MCC" = "skyblue", "AUC" = "orange")) +
-  stat_summary(fun = mean, geom = "crossbar", width = 0.5, color = "black", linewidth = 1, fatten = 1) +
+  scale_color_manual(values = c("MCC" = "skyblue", "AUC" = "orange")) +
+  stat_summary(fun = mean, geom = "crossbar", width = 0.5, color = "black", linewidth = 1) +
   theme_minimal() +
   labs(
     title = "Distribution of Metric Differences for Adjusters",
     x = "Adjuster",
     y = "Difference in Metric (Adjusted - Unadjusted)",
-    fill = "Metric"
+    color = "Metric"
   ) +
   theme(
     axis.text.x = element_text(angle = 45, hjust = 1),
@@ -341,7 +355,9 @@ generate_jitter_plot <- function(all_diff_data, fig_dir) {
   ) +
   facet_wrap(~ Metric, scales = "free_y")
 
-  ggsave(file.path(fig_dir, "jitter_plot_adjusters.png"), plot = p, width = 10, height = 6)
+  cross_suffix = ifelse(cross, "_cross", "")
+  file_path <- file.path(fig_dir, paste0("jitter_plot", cross_suffix, ".png"))
+  ggsave(file_path, plot = p, width = 10, height = 6)
   cat("Jitter plot saved to:", file.path(fig_dir, "jitter_plot_adjusters.png"), "\n")
 }
 
@@ -419,6 +435,8 @@ generate_all_heatmaps_to_pdf <- function(adjuster, train_combined, fig_dir = "/o
 }
 
 all_adjuster_diffs <- data.frame()
+all_adjuster_diffs_cross <- data.frame()
+
 for (adjuster in adjusters) {
   cat("\n=== Processing adjuster:", adjuster, "===\n")
   CSV_FILE <- paste0("/outputs/metrics/er_classification_", adjuster, ".csv")
@@ -454,6 +472,13 @@ for (adjuster in adjusters) {
         delta_auc_data %>% mutate(Metric = "AUC")
       )
     }
+    else {
+      all_adjuster_diffs_cross <- bind_rows(
+        all_adjuster_diffs_cross,
+        delta_mcc_data %>% mutate(Metric = "MCC"),
+        delta_auc_data %>% mutate(Metric = "AUC")
+      )
+    }
 
     # Generate Heatmaps for the current adjuster
     tryCatch({
@@ -465,7 +490,8 @@ for (adjuster in adjusters) {
 }
  
 # Generate jitter Plot
-generate_jitter_plot(all_adjuster_diffs, FIG_DIR)
+generate_jitter_plot(all_adjuster_diffs, FIG_DIR, F)
+generate_jitter_plot(all_adjuster_diffs_cross, FIG_DIR, T)
 
 cat("All heatmaps and scatter plot generated successfully for adjuster:", adjuster, "\n")
 
