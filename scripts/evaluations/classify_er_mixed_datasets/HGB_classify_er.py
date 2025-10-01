@@ -190,11 +190,9 @@ def run_paired_datasetsset(filepath, output_file, pred_col, source_col, adjustme
         # Get features and targets
         X_train = feature_df.loc[train_df.index]
         y_train = train_df[pred_col]
-        print_now(f"DEBUG paired_datasets: y_train dtype={y_train.dtype} unique={y_train.unique()}")
 
         X_test = feature_df.loc[test_df.index]
         y_test = test_df[pred_col]
-        print_now(f"DEBUG paired_datasets: y_test dtype={y_test.dtype} unique={y_test.unique()}")
     
         # Create empty dataframe for y predictions
         predictions = pd.DataFrame(index=df.index, columns=['y_predicted', 'y_probability'])
@@ -232,7 +230,6 @@ def run_paired_datasetsset(filepath, output_file, pred_col, source_col, adjustme
             # Fit the model and create predictions without cross-validation
             model.fit(X_train, y_train)
             y_pred = model.predict(X_test)
-            print_now(f"DEBUG paired_datasets no-CV: y_pred dtype={type(y_pred)} shape={y_pred.shape} unique={np.unique(y_pred)}")
             y_proba = model.predict_proba(X_test)[:,1]
 
             predictions.loc[y_test.index, 'y_predicted'] = y_pred
@@ -302,25 +299,44 @@ def run_paired_datasetsset(filepath, output_file, pred_col, source_col, adjustme
 
 def load_dataframe(filename, pred_col):
     """Read the file into a pandas dataframe and check it has the required columns."""
-    print_now(f"Loading data from {filename}")
-    df = pd.read_csv(filename, low_memory=False)
-
-    if pred_col not in df.columns :
-        meta_cols = [col for col in df.columns if col.startswith('meta_')]
-        raise ValueError(f"{pred_col} not found in dataframe. Meta columns: {meta_cols}")
-
-    # DEBUG: Check original data
-    print_now(f"DEBUG load_dataframe: Original {pred_col} dtype={df[pred_col].dtype}, unique values={df[pred_col].unique()}")
-
-    # Remove all non [0,1] values (This should be done in the preprocessing script)
-    original_size = len(df)
-    df = df[(df[pred_col] == 0) | (df[pred_col] == 1)]
-    if len(df) < original_size:
-        print_now(f"WARNING: Removed {original_size - len(df)} rows with non-binary values in {pred_col}")
-        print_now(f"DEBUG load_dataframe: After filtering, shape={df.shape} (removed {original_size - len(df)} rows)")
-        print_now(f"DEBUG load_dataframe: After filtering {pred_col} dtype={df[pred_col].dtype}, unique values={df[pred_col].unique()}")
+    output_parts = [f"Loading {filename}"]
     
-    return df
+    try:
+        # Check file size first
+        file_size = os.path.getsize(filename)
+        output_parts.append(f"File size: {file_size} bytes")
+        
+        if file_size == 0:
+            output_parts.append("ERROR: File is empty (0 bytes)")
+            print_now(" | ".join(output_parts))
+            raise ValueError(f"File {filename} is empty")
+        
+        df = pd.read_csv(filename, low_memory=False)
+
+        if pred_col not in df.columns :
+            meta_cols = [col for col in df.columns if col.startswith('meta_')]
+            raise ValueError(f"{pred_col} not found in dataframe. Meta columns: {meta_cols}")
+
+        # DEBUG: Check original data
+        output_parts.append(f"Original {pred_col} dtype={df[pred_col].dtype}, unique values={df[pred_col].unique()}")
+
+        # Remove all non [0,1] values (This should be done in the preprocessing script)
+        original_size = len(df)
+        df = df[(df[pred_col] == 0) | (df[pred_col] == 1)]
+        if len(df) < original_size:
+            output_parts.append(f"WARNING: Removed {original_size - len(df)} rows with non-binary values in {pred_col}. After filtering, shape={df.shape}, {pred_col} dtype={df[pred_col].dtype}, unique values={df[pred_col].unique()}")
+        
+        print_now(" | ".join(output_parts))
+        return df
+        
+    except Exception as e:
+        output_parts.append(f"ERROR: {str(e)}")
+        # Force flush the error message before re-raising
+        error_msg = " | ".join(output_parts)
+        print_now(error_msg)
+        sys.stdout.flush()
+        sys.stderr.flush()
+        raise
 
 def generate_runs(single_list, single_names, combined_list, n_repeats):
     """Return a list of dictionaries of run parameters for each combination of datasets."""
