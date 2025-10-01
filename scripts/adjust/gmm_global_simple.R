@@ -7,9 +7,100 @@
 # 3. Find the midpoint between the two modes
 # 4. Apply transformation strategy using global GMM parameters
 
-suppressPackageStartupMessages({
-  library(mclust)
-})
+# No external GMM dependencies - using custom robust implementation
+
+# Robust GMM implementation (no external dependencies)
+fit_robust_gmm <- function(data, debug = FALSE) {
+  # Simple 2-component GMM with robust initialization
+  data <- as.vector(data)
+  data <- data[!is.na(data)]  # Remove NAs
+  n <- length(data)
+  
+  if (n < 10) {
+    if (debug) message("Insufficient data points for GMM fitting")
+    return(NULL)
+  }
+  
+  # Check for sufficient variation
+  if (var(data) < 1e-10) {
+    if (debug) message("Insufficient variation in data for GMM fitting")
+    return(NULL)
+  }
+  
+  # Initialize using percentiles (more robust than random)
+  means <- as.numeric(quantile(data, c(0.25, 0.75), na.rm = TRUE))
+  
+  # Ensure means are different
+  if (abs(means[2] - means[1]) < 1e-6) {
+    # Spread them out artificially
+    data_range <- max(data) - min(data)
+    center <- mean(data)
+    means[1] <- center - data_range * 0.25
+    means[2] <- center + data_range * 0.25
+  }
+  
+  variances <- rep(var(data, na.rm = TRUE) * 0.5, 2)  # Start with smaller variances
+  weights <- c(0.5, 0.5)
+  
+  prev_loglik <- -Inf
+  
+  # EM algorithm with convergence checking
+  for (iter in 1:50) {
+    # E-step: Calculate responsibilities
+    pdf1 <- weights[1] * dnorm(data, means[1], sqrt(variances[1]))
+    pdf2 <- weights[2] * dnorm(data, means[2], sqrt(variances[2]))
+    
+    total_pdf <- pdf1 + pdf2 + 1e-12
+    resp1 <- pdf1 / total_pdf
+    resp2 <- pdf2 / total_pdf
+    
+    # M-step: Update parameters
+    n1 <- sum(resp1) + 1e-12  # Add small constant to prevent division by zero
+    n2 <- sum(resp2) + 1e-12
+    
+    # Update weights
+    weights <- c(n1/n, n2/n)
+    
+    # Update means
+    means[1] <- sum(resp1 * data) / n1
+    means[2] <- sum(resp2 * data) / n2
+    
+    # Update variances
+    variances[1] <- sum(resp1 * (data - means[1])^2) / n1
+    variances[2] <- sum(resp2 * (data - means[2])^2) / n2
+    
+    # Prevent degenerate variances
+    variances <- pmax(variances, var(data) * 0.01)  # At least 1% of data variance
+    
+    # Check convergence
+    loglik <- sum(log(total_pdf))
+    if (abs(loglik - prev_loglik) < 1e-6) {
+      if (debug) message("GMM converged after ", iter, " iterations")
+      break
+    }
+    prev_loglik <- loglik
+  }
+  
+  # Final validation
+  if (any(is.na(means)) || any(is.na(variances)) || any(is.na(weights))) {
+    if (debug) message("GMM produced invalid parameters")
+    return(NULL)
+  }
+  
+  if (abs(means[2] - means[1]) < 1e-6) {
+    if (debug) message("GMM components collapsed to same mean")
+    return(NULL)
+  }
+  
+  # Return in consistent format
+  return(list(
+    parameters = list(
+      mean = means,
+      variance = list(sigmasq = variances),
+      pro = weights
+    )
+  ))
+}
 
 # Source functions from gmm_transforms.R for NPN functionality
 source("/scripts/adjust/gmm_transforms.R")
@@ -36,6 +127,22 @@ gmm_global_core <- function(data, strategy = "simple", debug = FALSE) {
   # Step 1: Transform all data to log space
   min_val <- min(data, na.rm = TRUE)
   data_log <- log(data - min_val + 1)
+  
+  # Check for invalid values in log-transformed data
+  if (any(!is.finite(data_log))) {
+    if (debug) {
+      message("Warning: Found non-finite values in log-transformed data")
+    }
+    # Replace non-finite values with median of finite values
+    finite_mask <- is.finite(data_log)
+    if (sum(finite_mask) > 0) {
+      median_val <- median(data_log[finite_mask], na.rm = TRUE)
+      data_log[!finite_mask] <- median_val
+    } else {
+      # If no finite values, set all to 0
+      data_log[] <- 0
+    }
+  }
   
   # Step 2: Flatten all expression values to create a global distribution (in log space)
   global_distribution_log <- as.vector(data_log)
@@ -75,16 +182,35 @@ gmm_global_core <- function(data, strategy = "simple", debug = FALSE) {
       gmm_data <- global_distribution_log
     }
     
-    # Fit GMM with exactly 2 components
-    gmm_fit <- Mclust(gmm_data, G = 2, modelNames = "V", verbose = FALSE)
+    # Check if we have enough unique values for GMM fitting
+    unique_values <- length(unique(gmm_data))
+    if (unique_values < 10) {
+      return(set_fallback_values(paste("Insufficient unique values for GMM fitting:", unique_values)))
+    }
+    
+    # Use robust GMM fitting approach
+    gmm_fit <- tryCatch({
+      fit_robust_gmm(gmm_data, debug = debug)
+    }, error = function(e) {
+      if (debug) {
+        message("Robust GMM failed: ", e$message)
+      }
+      NULL
+    })
     
     if (is.null(gmm_fit)) {
-      return(set_fallback_values("GMM fitting returned NULL"))
+      return(set_fallback_values("GMM fitting failed"))
+    }
+    
+    # Additional validation of GMM fit
+    if (is.null(gmm_fit$parameters) || is.null(gmm_fit$parameters$mean) || length(gmm_fit$parameters$mean) != 2) {
+      return(set_fallback_values("GMM fit is invalid or doesn't have 2 components"))
     }
     
     # Step 4: Find the midpoint between the two modes and calculate scaling
     means <- gmm_fit$parameters$mean
     weights <- gmm_fit$parameters$pro
+    variances <- gmm_fit$parameters$variance$sigmasq
     
     # Sort by mean to get consistent ordering
     sort_idx <- order(means)
@@ -220,6 +346,13 @@ gmm_global_core <- function(data, strategy = "simple", debug = FALSE) {
     
   } else {
     stop("Unknown strategy: ", strategy, ". Supported strategies are 'simple' and 'npn'.")
+  }
+  
+  if (!is.matrix(adjusted_data)) {
+    if (debug) {
+      message("Converting adjusted_data to matrix")
+    }
+    adjusted_data <- as.matrix(adjusted_data)
   }
   
   if (debug) {
