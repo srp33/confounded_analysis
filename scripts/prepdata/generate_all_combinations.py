@@ -20,9 +20,6 @@ Usage:
     # With performance optimizations
     python scripts/prepdata/generate_all_combinations.py --parallel 4 --debug
     
-    # Force regeneration (bypass cache)
-    python scripts/prepdata/generate_all_combinations.py --force
-    
     # Process specific file types only
     python scripts/prepdata/generate_all_combinations.py --csv-files unadjusted.csv combat.csv
     
@@ -32,7 +29,6 @@ Usage:
 Arguments:
     --debug                Enable detailed debug output
     --dry-run              Show what would be done without actually doing it
-    --force                Force regeneration of all combinations (bypass cache)
     --parallel N           Number of parallel processes (default: 1)
     --output-dir PATH      Output directory for combined datasets (default: /data/paired_datasets)
     --data-dir PATH        Input directory containing processed datasets (default: /data/gold)
@@ -64,10 +60,7 @@ import psutil
 # Add the parent directory (scripts) to Python path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-try:
-    from scripts.utils import HashCache
-except ImportError:
-    from utils import HashCache
+# Removed HashCache import - caching disabled for simplicity
 
 @dataclass
 class DatasetInfo:
@@ -88,18 +81,10 @@ class CombinationResult:
     success: bool
     output_path: Path
     file_size: int = 0
-    cache_hit: bool = False
+# Removed cache_hit field
     error_message: Optional[str] = None
 
-@dataclass
-class CacheStats:
-    """Cache statistics for reporting."""
-    total_combinations: int = 0
-    cache_hits: int = 0
-    cache_misses: int = 0
-    regenerated: int = 0
-    time_saved: float = 0.0
-    space_saved: int = 0
+# Removed CacheStats - caching disabled
 
 @dataclass
 class PerformanceStats:
@@ -216,49 +201,6 @@ def find_compatible_datasets(data_dir="/data/gold", debug=False) -> Dict[str, Da
     return compatible_datasets
 
 
-class CacheManager:
-    """Manages caching for combination generation."""
-    
-    def __init__(self, cache_dir: Path, debug: bool = False, force: bool = False):
-        self.cache_dir = Path(cache_dir)
-        self.cache_dir.mkdir(parents=True, exist_ok=True)
-        self.debug = debug
-        self.force = force
-        
-        # Initialize HashCache
-        self.hash_cache = HashCache(
-            hash_dir=str(self.cache_dir),
-            cache_filename="combination_cache.json",
-            write_over=force,
-            debug=debug
-        )
-        
-        self.stats = CacheStats()
-    
-    def should_regenerate_combination(self, combo_name: str, input_files: List[Path], output_file: Path) -> bool:
-        """Determine if a combination needs to be regenerated based on cache."""
-        if self.force:
-            return True
-            
-        # Check if output file exists
-        if not output_file.exists():
-            return True
-            
-        # Use HashCache to check if input files have changed
-        cache_key = f"{combo_name}_{output_file.name}"
-        
-        with self.hash_cache.check(cache_key, input_files) as should_skip:
-            return not should_skip
-    
-    def mark_combination_complete(self, combo_name: str, input_files: List[Path], output_file: Path):
-        """Mark a combination as complete in the cache."""
-        cache_key = f"{combo_name}_{output_file.name}"
-        # The hash is automatically updated by the HashCache context manager
-        pass
-    
-    def get_cache_statistics(self) -> CacheStats:
-        """Get current cache statistics."""
-        return self.stats
 
 def validate_file_compatibility(dataset1_info: DatasetInfo, dataset2_info: DatasetInfo, csv_file: str) -> bool:
     """
@@ -267,7 +209,7 @@ def validate_file_compatibility(dataset1_info: DatasetInfo, dataset2_info: Datas
     return csv_file in dataset1_info.available_files and csv_file in dataset2_info.available_files
 
 def run_combination(dataset1: str, dataset2: str, csv_file: str, output_dir: str, 
-                   cache_manager: CacheManager, debug: bool = False, dry_run: bool = False) -> CombinationResult:
+                   debug: bool = False, dry_run: bool = False) -> CombinationResult:
     """Run the combine_datasets.py script for a specific CSV file type."""
     
     # Define paths
@@ -295,19 +237,6 @@ def run_combination(dataset1: str, dataset2: str, csv_file: str, output_dir: str
         result.success = True
         return result
     
-    # Check cache to see if we need to regenerate
-    input_files = [Path(input1), Path(input2)]
-    if not cache_manager.should_regenerate_combination(combo_name, input_files, output_file):
-        print_now(f"      💾 Cache hit: {combo_name}/{csv_file} (skipping)")
-        result.success = True
-        result.cache_hit = True
-        if output_file.exists():
-            result.file_size = output_file.stat().st_size
-        cache_manager.stats.cache_hits += 1
-        return result
-    
-    cache_manager.stats.cache_misses += 1
-    
     # Ensure output directory exists
     output_file.parent.mkdir(parents=True, exist_ok=True)
     
@@ -334,9 +263,6 @@ def run_combination(dataset1: str, dataset2: str, csv_file: str, output_dir: str
                 result.file_size = output_file.stat().st_size
                 file_size_mb = result.file_size / (1024*1024)
                 print_now(f"      ✅ Success: {combo_name}/{csv_file} ({file_size_mb:.1f}MB)")
-                
-                # Mark as complete in cache
-                cache_manager.mark_combination_complete(combo_name, input_files, output_file)
                 result.success = True
             else:
                 result.error_message = "Output file missing or too small"
@@ -355,31 +281,26 @@ def run_combination(dataset1: str, dataset2: str, csv_file: str, output_dir: str
         result.error_message = f"Error: {e}"
         print_now(f"      ❌ {result.error_message}")
     
-    # Track time for cache statistics
+    # Track processing time
     elapsed_time = time.time() - start_time
-    if result.success:
-        cache_manager.stats.time_saved += elapsed_time
     
     return result
 
-def process_combination_batch(batch_args):
-    """Process a batch of combinations in parallel."""
-    combinations_batch, output_dir, cache_manager, debug = batch_args
-    results = []
+def process_single_combination(combination_args):
+    """Process a single combination - designed for parallel execution."""
+    dataset1, dataset2, csv_file, output_dir, debug  = combination_args
     
-    for dataset1, dataset2, csv_file in combinations_batch:
-        result = run_combination(
-            dataset1, dataset2, csv_file, output_dir,
-            cache_manager, debug=debug, dry_run=False
-        )
-        results.append(result)
-        
-        # Memory monitoring
-        current_memory = get_memory_usage_mb()
-        if current_memory > 4096:  # 4GB threshold
-            print_now(f"⚠️  High memory usage detected: {current_memory:.1f}MB")
+    result = run_combination(
+        dataset1, dataset2, csv_file, output_dir,
+        debug=debug, dry_run=False
+    )
     
-    return results
+    # Memory monitoring
+    current_memory = get_memory_usage_mb()
+    if current_memory > 4096:  # 4GB threshold
+        print_now(f"⚠️  High memory usage detected: {current_memory:.1f}MB")
+    
+    return result
 
 def main():
     parser = argparse.ArgumentParser(
@@ -388,10 +309,8 @@ def main():
     )
     parser.add_argument('--debug', action='store_true', help='Enable detailed debug output')
     parser.add_argument('--dry-run', action='store_true', help='Show what would be done without actually doing it')
-    parser.add_argument('--force', action='store_true', help='Force regeneration of all combinations (bypass cache)')
     parser.add_argument('--output-dir', default='/data/paired_datasets', help='Output directory for combined datasets')
     parser.add_argument('--data-dir', default='/data/gold', help='Input directory containing processed datasets')
-    parser.add_argument('--cache-dir', default='/tmp/combination_cache', help='Directory for cache files')
     parser.add_argument('--max-combinations', type=int, help='Maximum number of combinations to process (for testing)')
     parser.add_argument('--csv-files', nargs='*', help='Specific CSV files to process (default: all available)')
     parser.add_argument('--parallel', type=int, default=1, help='Number of parallel processes (default: 1)')
@@ -421,13 +340,7 @@ def main():
         if recommended_parallel != args.parallel:
             print_now(f"🔧 Adjusting parallel processes from {args.parallel} to {recommended_parallel}")
             args.parallel = recommended_parallel
-    
-    # Initialize cache manager
-    cache_manager = CacheManager(
-        cache_dir=Path(args.cache_dir),
-        debug=args.debug,
-        force=args.force
-    )
+
     
     # Find all datasets that are compatible for combination
     datasets = find_compatible_datasets(args.data_dir, debug=args.debug)
@@ -496,7 +409,6 @@ def main():
     output_path = Path(args.output_dir)
     output_path.mkdir(parents=True, exist_ok=True)
     print_now(f"📁 Output directory: {args.output_dir}")
-    print_now(f"💾 Cache directory: {args.cache_dir}")
     
     # Process combinations
     print_now(f"\n🚀 Processing {total_combinations} combinations...")
@@ -507,41 +419,61 @@ def main():
     failed_results = []
     
     if args.parallel > 1 and CONCURRENT_FUTURES_AVAILABLE:
-        # Parallel processing
-        batch_size = max(1, len(valid_combinations) // args.parallel)
-        batches = [valid_combinations[i:i + batch_size] for i in range(0, len(valid_combinations), batch_size)]
+        # True parallel processing - each combination runs in its own process
+        print_now(f"⚡ Processing {args.parallel} combinations simultaneously")
         
-        print_now(f"📦 Split into {len(batches)} batches of ~{batch_size} combinations each")
+        from concurrent.futures import ProcessPoolExecutor
         
-        with ThreadPoolExecutor(max_workers=args.parallel) as executor:
-            # Submit batches
-            future_to_batch = {}
-            for i, batch in enumerate(batches):
-                batch_args = (batch, args.output_dir, cache_manager, args.debug)
-                future = executor.submit(process_combination_batch, batch_args)
-                future_to_batch[future] = i
+        with ProcessPoolExecutor(max_workers=args.parallel) as executor:
+            # Submit all combinations as individual tasks
+            future_to_combo = {}
+            for i, (dataset1, dataset2, csv_file) in enumerate(valid_combinations):
+                combo_args = (dataset1, dataset2, csv_file, args.output_dir, args.debug)
+                future = executor.submit(process_single_combination, combo_args)
+                future_to_combo[future] = (i + 1, dataset1, dataset2, csv_file)
             
-            # Collect results
-            completed_batches = 0
-            for future in as_completed(future_to_batch):
-                batch_idx = future_to_batch[future]
+            # Collect results as they complete
+            completed = 0
+            for future in as_completed(future_to_combo):
+                combo_idx, dataset1, dataset2, csv_file = future_to_combo[future]
                 try:
-                    batch_results = future.result()
-                    for result in batch_results:
-                        if result.success:
-                            successful_results.append(result)
-                        else:
-                            failed_results.append(result)
+                    result = future.result()
+                    completed += 1
                     
-                    completed_batches += 1
-                    print_now(f"✅ Completed batch {batch_idx + 1}/{len(batches)} ({len(batch_results)} combinations)")
+                    if result.success:
+                        successful_results.append(result)
+                        status = "✅"
+                    else:
+                        failed_results.append(result)
+                        status = f"❌ {result.error_message}"
+                    
+                    print_now(f"[{completed:3d}/{total_combinations}] {status} {result.combo_name}/{csv_file}")
                     
                     # Update performance stats
                     current_memory = get_memory_usage_mb()
                     perf_stats.peak_memory_mb = max(perf_stats.peak_memory_mb, current_memory)
                     
+                    if result.success:
+                        perf_stats.total_size_mb += result.file_size / (1024 * 1024)
+                    
                 except Exception as e:
-                    print_now(f"❌ Batch {batch_idx + 1} failed: {e}")
+                    completed += 1
+                    print_now(f"[{completed:3d}/{total_combinations}] ❌ Exception: {dataset1}+{dataset2}/{csv_file} - {e}")
+                    
+                    # Create a failed result for tracking
+                    failed_result = CombinationResult(
+                        combo_name=f"{min(dataset1, dataset2)}_{max(dataset1, dataset2)}",
+                        dataset1=dataset1,
+                        dataset2=dataset2,
+                        file_type=csv_file,
+                        success=False,
+                        output_path=Path(f"{args.output_dir}/{min(dataset1, dataset2)}_{max(dataset1, dataset2)}/{csv_file}"),
+                        error_message=str(e)
+                    )
+                    failed_results.append(failed_result)
+                
+                perf_stats.total_files_processed += 1
+                
     elif args.parallel > 1:
         print_now("⚠️  Parallel processing requested but concurrent.futures not available, falling back to sequential")
         args.parallel = 1
@@ -553,7 +485,7 @@ def main():
             
             result = run_combination(
                 dataset1, dataset2, csv_file, args.output_dir, 
-                cache_manager, debug=args.debug, dry_run=False
+                debug=args.debug, dry_run=False
             )
             
             if result.success:
@@ -581,9 +513,7 @@ def main():
     if not perf_stats.total_size_mb:  # In case parallel processing didn't update this
         perf_stats.total_size_mb = sum(r.file_size for r in successful_results) / (1024 * 1024)
     
-    # Get cache statistics
-    cache_stats = cache_manager.get_cache_statistics()
-    cache_stats.total_combinations = total_combinations
+    # No cache statistics - caching removed
     
     # Summary
     print_now("\n" + "="*80)
@@ -601,15 +531,7 @@ def main():
     if perf_stats.elapsed_time > 0:
         print_now(f"   Throughput: {perf_stats.throughput_mb_per_sec:.1f}MB/s")
     
-    # Cache statistics
-    print_now(f"\n💾 Cache Statistics:")
-    print_now(f"   Cache hits: {cache_stats.cache_hits}")
-    print_now(f"   Cache misses: {cache_stats.cache_misses}")
-    if cache_stats.cache_hits > 0:
-        cache_hit_rate = cache_stats.cache_hits / (cache_stats.cache_hits + cache_stats.cache_misses) * 100
-        print_now(f"   Cache hit rate: {cache_hit_rate:.1f}%")
-        time_saved_min = cache_stats.time_saved / 60
-        print_now(f"   Estimated time saved: {time_saved_min:.1f} minutes")
+    # No cache statistics - caching removed for simplicity
     
     if successful_results:
         print_now(f"\n📁 Combined datasets saved to: {args.output_dir}")
@@ -626,8 +548,7 @@ def main():
             results = combo_groups[combo_name]
             total_size = sum(r.file_size for r in results) / (1024*1024)  # MB
             csv_files = [r.file_type for r in results]
-            cache_hits = sum(1 for r in results if r.cache_hit)
-            print_now(f"  - {combo_name}/ ({len(csv_files)} files, {total_size:.1f}MB, {cache_hits} cached)")
+            print_now(f"  - {combo_name}/ ({len(csv_files)} files, {total_size:.1f}MB)")
         
         if len(combo_groups) > 10:
             print_now(f"  ... and {len(combo_groups) - 10} more combination directories")
