@@ -151,7 +151,7 @@ read_and_prepare_data <- function(csv_file) {
 # Process metric data for both regular and diagonal delta
 process_metric_data <- function(df_adj, df_unadj = NULL, metric_col, is_diagonal_delta = FALSE) {
   if (is_diagonal_delta) {
-    return(prepare_diagonal_delta_metric_data(df_adj, metric_col))
+    return(prepare_diagonal_delta_metric_data(df_adj, df_unadj, metric_col))
   } else if (!is.null(df_unadj)) {
     return(prepare_delta_metric_data(df_adj, df_unadj, metric_col))
   } else {
@@ -213,15 +213,17 @@ prepare_delta_metric_data <- function(df_adj, df_unadj, metric_col) {
     mutate(Mean_Metric = Adj - Unadj)
 }
 
-prepare_diagonal_delta_metric_data <- function(df_adj, metric_col) {
+prepare_diagonal_delta_metric_data <- function(df_adj, df_unadj, metric_col) {
   data_adj <- df_adj %>%
     group_by(Train, Test) %>%
     summarise(Adj = mean(.data[[metric_col]], na.rm = TRUE), .groups = "drop")
 
-  # Extract diagonal values (where Train == Test)
-  diagonal <- data_adj %>%
+  # Extract diagonal values from unadjusted data (where Train == Test)
+  diagonal <- df_unadj %>%
+    group_by(Train, Test) %>%
+    summarise(Unadj = mean(.data[[metric_col]], na.rm = TRUE), .groups = "drop") %>%
     filter(Train == Test) %>%
-    select(Test, Diagonal = Adj)
+    select(Test, Diagonal = Unadj)
   
   # Join diagonal values and calculate difference
   data_adj %>%
@@ -442,7 +444,8 @@ generate_all_heatmaps_to_pdf <- function(adjuster, train_combined, fig_dir = "/o
   # Generate heatmaps using unified function
   heatmap_list <- list()
   for (config in heatmap_configs) {
-    df_unadj_param <- if (config$use_unadj) df_unadj else NULL
+    # Diagonal delta calculations always need unadjusted data
+    df_unadj_param <- if (config$use_unadj || config$diagonal) df_unadj else NULL
     heatmap_list[[config$name]] <- create_heatmap_for_metric(
       df_adj, df_unadj_param, config$metric, adjuster, train_combined, config$diagonal
     )
@@ -506,7 +509,7 @@ process_adjuster_data <- function(adjuster, train_combined, file_unadjusted) {
   })
   
   diag_diffs <- map2_dfr(metrics, metric_labels, function(metric, label) {
-    prepare_diagonal_delta_metric_data(df_adj, metric) %>%
+    prepare_diagonal_delta_metric_data(df_adj, df_unadj, metric) %>%
       mutate(Adjuster = adjuster, Metric = label)
   })
 
