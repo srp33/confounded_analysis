@@ -261,7 +261,7 @@ def process_dataset(raw_folder_path: Path, dataset_id: str, output_base_dir: Pat
         lower_to_full_case_columns = {col.lower():col for col in meta_df.columns}
 
         # Standardize er status column name
-        other_er_columns = ['meta_er_status', 'meta_er_ihc', 'meta_er', 'meta_er_status_by_ihc', 'meta_er_status_ihc', 'meta_er_consensus', 'meta_esr1_status']
+        other_er_columns = ['meta_er_status', 'meta_er_ihc', 'meta_er', 'meta_er_status_diagnosis', 'meta_estrogen_receptor_status', 'meta_er_status_by_ihc', 'meta_er_status_ihc', 'meta_er_consensus', 'meta_esr1_status']
         for er_column in other_er_columns:
             if er_column in lower_to_full_case_columns:
                 er_column = lower_to_full_case_columns[er_column]
@@ -277,7 +277,7 @@ def process_dataset(raw_folder_path: Path, dataset_id: str, output_base_dir: Pat
             print_now(meta_df['meta_er_status'].value_counts())
 
         # Standardize pr status column name
-        other_pr_columns = ['meta_pr', 'meta_pr_status', 'meta_pgr_status', 'meta_pr_status_ihc', 'meta_pr_ihc', 'meta_prihc', 'meta_per_status_by_ihc']
+        other_pr_columns = ['meta_pr', 'meta_pr_status', 'meta_pgr_status', 'meta_pr_status_diagnosis', 'meta_progresterone_receptor_status', 'meta_pr_status_ihc', 'meta_pr_ihc', 'meta_pgr_consensus', 'meta_prihc', 'meta_pr_status_by_ihc']
         for pr_column in other_pr_columns:
             if pr_column in lower_to_full_case_columns:
                 pr_column = lower_to_full_case_columns[pr_column]
@@ -293,7 +293,7 @@ def process_dataset(raw_folder_path: Path, dataset_id: str, output_base_dir: Pat
             print_now(meta_df['meta_pr_status'].value_counts())
 
         # Standardize her2 status column name
-        other_her2_columns = ['meta_her2', 'meta_her_2', 'meta_her2_status', 'meta_her_2_status', 'meta_her2_status_by_ihc', 'meta_her2_consensus']
+        other_her2_columns = ['meta_her2', 'meta_her_2', 'meta_her2_status', 'meta_her_2_status', 'meta_her2_status_diagnosis', 'meta_her2_receptor_status', 'meta_her2_status_by_ihc', 'meta_her2_consensus', 'meta_HER2_SNP6']
         for her2_column in other_her2_columns:
             if her2_column in lower_to_full_case_columns:
                 her2_column = lower_to_full_case_columns[her2_column]
