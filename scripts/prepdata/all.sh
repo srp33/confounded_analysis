@@ -29,10 +29,10 @@ rm /outputs/prepdata.log
 #     --datasets "$gdrive_datasets"
 
 
-echo "Organizing..."
-python /scripts/prepdata/organize_downloaded_files.py \
-    --raw-dir /data/raw_download \
-    --target-dir /data/raw_data \
+# echo "Organizing..."
+# python /scripts/prepdata/organize_downloaded_files.py \
+#     --raw-dir /data/raw_download \
+#     --target-dir /data/raw_data \
 
 
 echo "🔧 Converting files, and fixing if needed..."
