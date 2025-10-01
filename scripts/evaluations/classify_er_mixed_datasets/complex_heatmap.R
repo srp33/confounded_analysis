@@ -166,7 +166,7 @@ create_heatmap_for_metric <- function(df_adj, df_unadj, metric_col, adjuster, tr
   
   if (!is.null(metric_matrix)) {
     is_difference <- !is.null(df_unadj) || is_diagonal_delta
-    return(draw_heatmap(metric_matrix, metric_col, adjuster, train_combined, is_difference))
+    return(draw_heatmap(metric_matrix, metric_col, adjuster, train_combined, is_difference, is_diagonal_delta))
   }
   return(NULL)
 }
@@ -276,7 +276,7 @@ get_platform_annotations <- function(datasets) {
   return(annotation)
 }
 
-draw_heatmap <- function(data_matrix, metric_col, adjuster, train_combined, is_difference = FALSE) {
+draw_heatmap <- function(data_matrix, metric_col, adjuster, train_combined, is_difference = FALSE, is_diagonal_delta = FALSE) {
   # Check if matrix is NULL or empty
   if (is.null(data_matrix) || nrow(data_matrix) == 0 || ncol(data_matrix) == 0) {
     cat("Skipping heatmap for", metric_col, "- no valid data matrix\n")
@@ -314,7 +314,11 @@ draw_heatmap <- function(data_matrix, metric_col, adjuster, train_combined, is_d
   }
 
   title_text <- if (is_difference) {
-    paste0("Diff ", metric_col, ": ", adjuster, " - unadjusted", train_text)
+    if (is_diagonal_delta) {
+      paste0("Diff ", metric_col, ": ", adjuster, " - diagonal", train_text)
+    } else {
+      paste0("Diff ", metric_col, ": ", adjuster, " - unadjusted", train_text)
+    }
   } else {
     paste0(metric_col, ": Dataset Combinations (", adjuster, ")", train_text)
   }
