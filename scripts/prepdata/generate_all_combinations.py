@@ -227,8 +227,9 @@ def run_combination(dataset1: str, dataset2: str, csv_file: str, output_dir: str
         dataset2=dataset2,
         file_type=csv_file,
         success=False,
-        output_path=output_file
+        output_path=output_file,
     )
+    result.error_message = ""
     
     print_now(f"    🔄 Combining {dataset1} + {dataset2} → {combo_name}/{csv_file}")
     
@@ -260,25 +261,30 @@ def run_combination(dataset1: str, dataset2: str, csv_file: str, output_dir: str
         if process_result.returncode == 0:
             # Check if output file was created and has a reasonable size
             if output_file.exists() and output_file.stat().st_size > 1000:  # At least 1KB
-                result.file_size = output_file.stat().st_size
                 file_size_mb = result.file_size / (1024*1024)
                 print_now(f"      ✅ Success: {combo_name}/{csv_file} ({file_size_mb:.1f}MB)")
                 result.success = True
+            elif output_file.exists():
+                result.file_size = output_file.stat().st_size
+                result.error_message = f"Output file {combo_name}/{csv_file} exists but is too small: {result.file_size} bytes"
+                # Also print output
+                print_now(f"        STDOUT: {process_result.stdout}")
+                print_now(f"        STDERR: {process_result.stderr}")
             else:
-                result.error_message = "Output file missing or too small"
-                print_now(f"      ❌ {result.error_message}")
+                result.error_message = "Output file missing"
+
         else:
             result.error_message = f"Command failed (exit code {process_result.returncode})"
-            print_now(f"      ❌ {result.error_message}")
             if debug:
                 print_now(f"        STDOUT: {process_result.stdout}")
                 print_now(f"        STDERR: {process_result.stderr}")
                 
     except subprocess.TimeoutExpired:
         result.error_message = "Timeout (>5 minutes)"
-        print_now(f"      ❌ {result.error_message}")
     except Exception as e:
         result.error_message = f"Error: {e}"
+
+    if result.error_message:
         print_now(f"      ❌ {result.error_message}")
     
     # Track processing time
