@@ -39,10 +39,10 @@ echo "🔧 Converting files, and fixing if needed..."
 python3 /scripts/prepdata/convert_raw_files.py \
     --raw-dir /data/raw_data \
     --target-dir /data/gold \
-    --debug
+    --debug 2>&1 | tee /outputs/prepdata.log
 
 echo "🔗 Generating all dataset combinations with caching (only the unadjusted files)..."
-python3 /scripts/prepdata/generate_all_combinations.py --csv-files unadjusted.csv --debug --parallel 10 &>> /outputs/prepdata.log
+python3 /scripts/prepdata/generate_all_combinations.py --csv-files unadjusted.csv --debug --parallel 10 2>&1 | tee /outputs/prepdata.log
 
 
 # https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE20194
