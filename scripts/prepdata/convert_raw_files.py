@@ -293,7 +293,7 @@ def process_dataset(raw_folder_path: Path, dataset_id: str, output_base_dir: Pat
             print_now(meta_df['meta_pr_status'].value_counts())
 
         # Standardize her2 status column name
-        other_her2_columns = ['meta_her2', 'meta_her_2', 'meta_her2_status', 'meta_her_2_status', 'meta_her2_status_diagnosis', 'meta_her2_receptor_status', 'meta_her2_ihc', 'meta_her2_status_by_ihc', 'meta_her2_consensus', 'meta_HER2_SNP6']
+        other_her2_columns = ['meta_her2', 'meta_her_2', 'meta_her2_status', 'meta_her_2_status', 'meta_her2_status_diagnosis', 'meta_her2_receptor_status', 'meta_her2_ihc', 'meta_her2_status_by_ihc', 'meta_her2_consensus', 'meta_her2_snp6']
         for her2_column in other_her2_columns:
             if her2_column in lower_to_full_case_columns:
                 her2_column = lower_to_full_case_columns[her2_column]
