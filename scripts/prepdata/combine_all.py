@@ -131,7 +131,7 @@ def main():
 
     args = parser.parse_args()
 
-    expression_files = sorted(args.input_dir.glob("expression_*.tsv"))
+    expression_files = sorted(args.input_dir.rglob("expression_*.tsv"))
     if not expression_files:
         raise FileNotFoundError("No expression files found.")
     
@@ -154,6 +154,10 @@ def main():
     # Keep only common genes and key metadata
     keep_cols = common_genes + ['meta_er_status', 'meta_source']
     combined_df = pd.concat([df[keep_cols] for df in dfs], ignore_index=True)
+
+    # Make sure the output folder exists
+    output_dir = args.output_file.parent
+    output_dir.mkdir(parents=True, exist_ok=True)
 
     print(f"Saving combined dataset with shape {combined_df.shape}")
     combined_df.to_csv(args.output_file, index=False, sep='\t')
