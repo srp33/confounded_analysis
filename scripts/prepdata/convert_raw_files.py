@@ -14,6 +14,9 @@ import shutil
 import csv
 import zipfile
 
+# Import gene ID utilities
+from gene_id_utils import detect_gene_id_type, convert_gene_ids_to_symbols
+
 # Suppress pandas warnings for cleaner output
 warnings.filterwarnings('ignore', category=pd.errors.DtypeWarning)
 
@@ -170,6 +173,8 @@ def _should_transpose(expr_df: pd.DataFrame, meta_df: pd.DataFrame | None) -> tu
         return True, f"fallback: more rows ({rows}) than columns ({cols})"
         
     return False, "fallback: not transposing"
+
+# Gene ID functions imported from gene_id_utils module
 
 def process_dataset(raw_folder_path: Path, dataset_id: str, output_base_dir: Path, debug: bool):
     """Process a single dataset: combine expression and metadata, save to the output directory."""
@@ -379,6 +384,22 @@ def process_dataset(raw_folder_path: Path, dataset_id: str, output_base_dir: Pat
         # Name the index "meta_Sample_ID"
         combined_df.index.name = 'meta_Sample_ID'
 
+        # 4.5. Gene ID detection and conversion
+        gene_cols = [col for col in combined_df.columns if not col.startswith('meta_')]
+        if gene_cols:
+            print_now(f"   🔍 Detecting gene ID type from {len(gene_cols)} gene columns...")
+            detection = detect_gene_id_type(gene_cols, debug=debug)
+            print_now(f"   🎯 Detected: {detection['type']} (confidence: {detection['confidence']:.1%})")
+            
+            if debug:
+                print_now(f"   📝 Examples: {', '.join(detection['examples'])}")
+            
+            # Convert gene IDs to symbols if not already symbols
+            if detection['type'] != 'gene_symbol' and detection['confidence'] > 0.5:
+                combined_df = convert_gene_ids_to_symbols(combined_df, detection['type'], 
+                                                        annotation_dir="grp_batch_effects/data/annotations", 
+                                                        debug=debug)
+
         # 5. Save result
         output_dir = output_base_dir / dataset_id.lower()
         output_dir.mkdir(parents=True, exist_ok=True)
@@ -395,29 +416,15 @@ def process_dataset(raw_folder_path: Path, dataset_id: str, output_base_dir: Pat
             traceback.print_exc()
         return False
 
-def scan_for_datasets(raw_data_dir: Path) -> list[dict]:
-    """Scan the raw data directory for valid dataset folders."""
-    datasets = []
-    if not raw_data_dir.exists():
-        print_now(f"Warning: Raw data directory not found at {raw_data_dir}")
-        return datasets
-    for item_path in raw_data_dir.iterdir():
-        if item_path.is_dir():
-            expression_file, meta_file = find_dataset_files(item_path, item_path.name)
-            if expression_file and meta_file:
-                datasets.append({'folder': item_path, 'dataset_id': item_path.name})
-    return datasets
-
-
-def verify_datasets(datasets_info):
+def verify_datasets(datasets_info, target_dir):
     """Verify processed datasets by reporting null value statistics."""
     print_now("\n" + "="*80)
     print_now("DATASET VERIFICATION - NULL VALUE ANALYSIS")
     print_now("="*80)
     
     for info in datasets_info:
-        dataset_id = info['dataset_id']
-        output_file = Path(args.target_dir) / dataset_id.lower() / "unadjusted.csv"
+        dataset_id = info['id']
+        output_file = Path(target_dir) / dataset_id.lower() / "unadjusted.csv"
         
         if not output_file.exists():
             print_now(f"❌ {dataset_id}: Output file not found - {output_file}")
@@ -431,58 +438,115 @@ def verify_datasets(datasets_info):
             total_rows, total_cols = df.shape
             rows_with_nulls = df.isnull().any(axis=1).sum()
             cols_with_nulls = df.isnull().any(axis=0).sum()
+            total_nulls = df.isnull().sum().sum()
             
-            print_now(f"\n📊 {dataset_id}:")
-            print_now(f"   Shape: {total_rows} rows × {total_cols} columns")
-            print_now(f"   Rows with null values: {rows_with_nulls}/{total_rows} ({rows_with_nulls/total_rows*100:.1f}%)")
-            print_now(f"   Columns with null values: {cols_with_nulls}/{total_cols} ({cols_with_nulls/total_cols*100:.1f}%)")
-
-            # Calculate expression null statistics
-            metadata_cols =  [col for col in df.columns if col.startswith('meta_')]
-            expression_df = df.drop(columns=metadata_cols)
-            exp_rows_with_nulls = expression_df.isnull().any(axis=1).sum()
-            exp_cols_with_nulls = expression_df.isnull().any(axis=0).sum()
-
-            print_now(f"   Expression data:")
-            print_now(f"     Rows with null values: {exp_rows_with_nulls}/{total_rows} ({exp_rows_with_nulls/total_rows*100:.1f}%)")
-            print_now(f"     Columns with null values: {exp_cols_with_nulls}/{total_cols-len(metadata_cols)} ({exp_cols_with_nulls/(total_cols-len(metadata_cols))*100:.1f}%)")
-            print_now(f"   Metadata columns: {len(metadata_cols)}")
+            # Calculate percentages
+            null_row_pct = (rows_with_nulls / total_rows) * 100 if total_rows > 0 else 0
+            null_col_pct = (cols_with_nulls / total_cols) * 100 if total_cols > 0 else 0
+            total_null_pct = (total_nulls / (total_rows * total_cols)) * 100 if (total_rows * total_cols) > 0 else 0
+            
+            # Separate gene and metadata columns for detailed analysis
+            meta_cols = [col for col in df.columns if col.startswith('meta_')]
+            gene_cols = [col for col in df.columns if not col.startswith('meta_')]
+            
+            print_now(f"✅ {dataset_id}:")
+            print_now(f"   📊 Shape: {total_rows} samples × {total_cols} features ({len(gene_cols)} genes + {len(meta_cols)} metadata)")
+            print_now(f"   🔍 Null values: {total_nulls:,} ({total_null_pct:.1f}% of all values)")
+            print_now(f"   📋 Rows with nulls: {rows_with_nulls}/{total_rows} ({null_row_pct:.1f}%)")
+            print_now(f"   📋 Columns with nulls: {cols_with_nulls}/{total_cols} ({null_col_pct:.1f}%)")
+            
+            # Check for critical metadata columns
+            required_meta = ['meta_er_status']
+            missing_critical = [col for col in required_meta if col not in df.columns]
+            if missing_critical:
+                print_now(f"   ⚠️  Missing critical columns: {missing_critical}")
             
         except Exception as e:
             print_now(f"❌ {dataset_id}: Error reading file - {e}")
 
+def scan_for_datasets(raw_data_dir: Path) -> list[dict]:
+    """Scan the raw data directory for valid dataset folders."""
+    datasets = []
+    
+    if not raw_data_dir.exists():
+        print_now(f"❌ Raw data directory {raw_data_dir} does not exist")
+        return datasets
+    
+    for item in raw_data_dir.iterdir():
+        if item.is_dir():
+            dataset_id = item.name
+            expression_file, meta_file = find_dataset_files(item, dataset_id)
+            
+            if expression_file and meta_file:
+                datasets.append({
+                    'id': dataset_id,
+                    'path': item,
+                    'expression_file': expression_file,
+                    'meta_file': meta_file
+                })
+            else:
+                print_now(f"⚠️  Skipping {dataset_id}: missing expression or metadata file")
+    
+    return datasets
 
-# --- MAIN EXECUTION BLOCK ---
-if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Process raw genomics data into combined datasets.")
-    # Add arguments for directories and debug flag
-    parser.add_argument('--raw-dir', type=Path, required=True,
-                        help='Directory containing the raw dataset folders.')
-    parser.add_argument('--target-dir', type=Path, required=True,
-                        help='Directory to save the processed output files.')
-    parser.add_argument('--debug', action='store_true', help='Enable detailed debug output.')
+def main():
+    """Main function to process all datasets in the raw data directory."""
+    parser = argparse.ArgumentParser(description="Convert raw gene expression datasets to standardized format")
+    parser.add_argument('--raw-dir', default='/data/raw_data', help='Directory containing raw datasets')
+    parser.add_argument('--target-dir', default='/data/gold', help='Output directory for processed datasets')
+    parser.add_argument('--debug', action='store_true', help='Enable debug output')
+    
     args = parser.parse_args()
     
+    raw_data_dir = Path(args.raw_dir)
+    target_dir = Path(args.target_dir)
+    
     print_now("="*80)
-    print_now(f"PROCESSING RAW DATASETS -> {args.target_dir}")
+    print_now("DATASET CONVERSION")
     print_now("="*80)
-
-    datasets_info = scan_for_datasets(args.raw_dir)
-    print_now(f"\nFound {len(datasets_info)} datasets to process in {args.raw_dir}:")
-    for info in datasets_info:
-        print_now(f"  - {info['dataset_id']}")
+    print_now(f"Raw data directory: {raw_data_dir}")
+    print_now(f"Target directory: {target_dir}")
+    
+    # Scan for datasets
+    datasets = scan_for_datasets(raw_data_dir)
+    print_now(f"\n📊 Found {len(datasets)} datasets to process")
+    
+    if not datasets:
+        print_now("❌ No valid datasets found")
+        return 1
     
     # Process each dataset
-    successful_count = 0
-    for info in datasets_info:
-        if process_dataset(info['folder'], info['dataset_id'], args.target_dir, args.debug):
-            successful_count += 1
-
+    successful = 0
+    failed = 0
+    
+    for i, dataset in enumerate(datasets, 1):
+        print_now(f"\n[{i}/{len(datasets)}] Processing {dataset['id']}...")
+        
+        success = process_dataset(
+            raw_folder_path=dataset['path'],
+            dataset_id=dataset['id'],
+            output_base_dir=target_dir,
+            debug=args.debug
+        )
+        
+        if success:
+            successful += 1
+        else:
+            failed += 1
+    
+    # Summary
     print_now("\n" + "="*80)
-    print_now("PROCESSING SUMMARY")
+    print_now("CONVERSION SUMMARY")
     print_now("="*80)
-    print_now(f"✅ Successfully processed: {successful_count}/{len(datasets_info)} datasets")
-    print_now(f"❌ Failed to process: {len(datasets_info) - successful_count}/{len(datasets_info)} datasets")
-    print_now(f"📁 Output directory: {args.target_dir}")
+    print_now(f"✅ Successful: {successful}")
+    print_now(f"❌ Failed: {failed}")
+    print_now(f"📊 Success rate: {successful/(successful+failed)*100:.1f}%")
+    
+    # Verify processed datasets
+    if successful > 0:
+        verify_datasets(datasets, target_dir)
+    
+    return 0 if failed == 0 else 1
 
-    verify_datasets(datasets_info)
+if __name__ == "__main__":
+    sys.exit(main())

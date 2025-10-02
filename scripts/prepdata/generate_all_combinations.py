@@ -70,6 +70,7 @@ class DatasetInfo:
     available_files: List[str]
     has_meta_er_status: bool
     sample_count: int = 0
+    gene_count: int = 0
 
 @dataclass
 class CombinationResult:
@@ -174,19 +175,23 @@ def find_compatible_datasets(data_dir="/data/gold", debug=False) -> Dict[str, Da
                 # Discover all available CSV files
                 available_files = discover_csv_files(dataset_path)
                 
-                # Get sample count for reporting
-                sample_count = len(df_header.columns) - len([col for col in df_header.columns if col.startswith('meta_')])
+                # Get shape for reporting
+                gene_count = len(df_header.columns) - len([col for col in df_header.columns if col.startswith('meta_')])
+                # Use the number of lines in the file for speed
+                sample_count = sum(1 for _ in open(unadjusted_file, 'r')) - 1
                 
                 dataset_info = DatasetInfo(
                     name=dataset_name,
                     path=dataset_path,
                     available_files=available_files,
                     has_meta_er_status=True,
-                    sample_count=sample_count
+                    sample_count=sample_count,
+                    gene_count=gene_count
                 )
                 
                 compatible_datasets[dataset_name] = dataset_info
-                print_now(f"  - ✅ Added {dataset_name} ({len(available_files)} CSV files)")
+                print_now(f"  - ✅ Added {dataset_name} ({len(available_files)} CSV files). ")
+                print_now(f"  - Unadjusted has {gene_count} genes and {sample_count} samples. ")
                 
                 if debug:
                     print_now(f"    Available files: {', '.join(available_files)}")
@@ -261,8 +266,9 @@ def run_combination(dataset1: str, dataset2: str, csv_file: str, output_dir: str
         if process_result.returncode == 0:
             # Check if output file was created and has a reasonable size
             if output_file.exists() and output_file.stat().st_size > 1000:  # At least 1KB
-                file_size_mb = result.file_size / (1024*1024)
-                print_now(f"      ✅ Success: {combo_name}/{csv_file} ({file_size_mb:.1f}MB)")
+                result.file_size = output_file.stat().st_size
+                file_size_kb = result.file_size / (1024)
+                print_now(f"      ✅ Success: {combo_name}/{csv_file} ({file_size_kb:.1f}KB)")
                 result.success = True
             elif output_file.exists():
                 result.file_size = output_file.stat().st_size
@@ -272,6 +278,9 @@ def run_combination(dataset1: str, dataset2: str, csv_file: str, output_dir: str
                 print_now(f"        STDERR: {process_result.stderr}")
             else:
                 result.error_message = "Output file missing"
+                # Also print output
+                print_now(f"        STDOUT: {process_result.stdout}")
+                print_now(f"        STDERR: {process_result.stderr}")
 
         else:
             result.error_message = f"Command failed (exit code {process_result.returncode})"
@@ -342,7 +351,7 @@ def main():
     # Optimize parallel processing based on system resources
     if args.parallel > 1:
         cpu_count = os.cpu_count() or 1
-        recommended_parallel = min(args.parallel, cpu_count, 4)  # Cap at 4 for I/O bound tasks
+        recommended_parallel = min(args.parallel, cpu_count, 8)  # Cap at 8
         if recommended_parallel != args.parallel:
             print_now(f"🔧 Adjusting parallel processes from {args.parallel} to {recommended_parallel}")
             args.parallel = recommended_parallel
@@ -536,8 +545,6 @@ def main():
     print_now(f"   Total data processed: {perf_stats.total_size_mb:.1f}MB")
     if perf_stats.elapsed_time > 0:
         print_now(f"   Throughput: {perf_stats.throughput_mb_per_sec:.1f}MB/s")
-    
-    # No cache statistics - caching removed for simplicity
     
     if successful_results:
         print_now(f"\n📁 Combined datasets saved to: {args.output_dir}")
