@@ -97,21 +97,31 @@ def map_entrez_to_genesymbols(df, annotation_file, debug=False):
     print_now(f"Entrez mapping complete. New data shape: {final_df.shape}")
     return final_df
 
-def load_and_prepare_data(file_path, map_from='none', annotation_file=None, debug=False):
-    df = pd.read_csv(file_path, sep='\t')
+def load_and_prepare_data(expression_file, metadata_file, map_from='none', annotation_file=None, debug=False):
+    expr_df = pd.read_csv(expression_file, sep='\t')
+    meta_df = pd.read_csv(metadata_file, sep='\t')
 
+    # Merge on Sample_ID (or modify if your join key is different)
+    if 'Sample_ID' not in expr_df.columns or 'Sample_ID' not in meta_df.columns:
+        raise ValueError(f"'Sample_ID' not found in both files: {expression_file.name} and {metadata_file.name}")
+
+    df = pd.merge(meta_df, expr_df, on='Sample_ID')
+
+    # === Map probes or entrez IDs if needed
     if map_from == 'probe' and annotation_file:
         df = map_probes_to_genes(df, annotation_file, debug)
     elif map_from == 'entrez' and annotation_file:
         df = map_entrez_to_genesymbols(df, annotation_file, debug)
 
+    # === Check for and encode ER status
     if 'meta_er_status' not in df.columns:
-        raise ValueError(f"'meta_er_status' not found in {file_path.name}")
+        raise ValueError(f"'meta_er_status' not found after merging {expression_file.name} and {metadata_file.name}")
     
     df = df.dropna(subset=['meta_er_status'])
     df['meta_er_status'] = LabelEncoder().fit_transform(df['meta_er_status'])
 
     return df
+
 
 
 def get_common_genes_multi(dfs):
@@ -136,17 +146,25 @@ def main():
         raise FileNotFoundError("No expression files found.")
     
     dfs = []
-    for idx, file in enumerate(expression_files):
+    for idx, expr_file in enumerate(expression_files):
         map_type = args.map_types[idx] if idx < len(args.map_types) else 'none'
+        base_name = expr_file.stem.replace("expression_", "")
+        
+        # Find matching metadata file
+        metadata_file = expr_file.parent / f"meta_{base_name}.tsv"
+        if not metadata_file.exists():
+            raise FileNotFoundError(f"Metadata file not found: {metadata_file}")
+        
         annot_file = None
         if map_type != 'none' and args.annot_dir:
-            annot_file = args.annot_dir / f"{file.stem}_annotation.csv"
+            annot_file = args.annot_dir / f"GPL96-annotation.csv"
 
-        print(f"Processing {file.name} (map: {map_type})")
-        df = load_and_prepare_data(file, map_from=map_type, annotation_file=annot_file, debug=args.debug)
+        print(f"Processing {expr_file.name} (map: {map_type})")
+        df = load_and_prepare_data(expr_file, metadata_file, map_from=map_type, annotation_file=annot_file, debug=args.debug)
 
-        df['meta_source'] = file.stem
+        df['meta_source'] = base_name
         dfs.append(df)
+
 
     common_genes = get_common_genes_multi(dfs)
     print(f"Found {len(common_genes)} common genes across all datasets.")
