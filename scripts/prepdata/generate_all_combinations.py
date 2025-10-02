@@ -10,7 +10,7 @@ optimizations.
 Key Features:
 - Multi-file support: Processes all available CSV file types per dataset
 - Caching: Uses HashCache to avoid regenerating unchanged combinations  
-- Performance optimization: Supports parallel processing and memory monitoring
+- Performance optimization: Supports parallel processing
 - Comprehensive reporting: Detailed statistics on cache efficiency and performance
 
 Usage:
@@ -35,7 +35,7 @@ Arguments:
     --cache-dir PATH       Directory for cache files (default: /tmp/combination_cache)
     --max-combinations N   Maximum number of combinations to process (for testing)
     --csv-files FILES      Specific CSV files to process (default: all available)
-    --memory-limit MB      Memory limit in MB for warnings (default: 8192)
+
 """
 
 import os
@@ -91,7 +91,7 @@ class PerformanceStats:
     """Performance statistics for monitoring."""
     start_time: float = 0.0
     end_time: float = 0.0
-    peak_memory_mb: float = 0.0
+
     total_files_processed: int = 0
     total_size_mb: float = 0.0
     
@@ -108,13 +108,7 @@ def print_now(*args, **kwargs):
     """Prints a message to the console with flushing to ensure immediate output."""
     print(*args, flush=True, **kwargs)
 
-def get_memory_usage_mb() -> float:
-    """Get current memory usage in MB."""
-    try:
-        process = psutil.Process()
-        return process.memory_info().rss / (1024 * 1024)
-    except:
-        return 0.0
+
 
 def check_disk_space(path: Path, required_mb: float = 1000) -> bool:
     """Check if there's enough disk space available."""
@@ -236,10 +230,7 @@ def run_combination(dataset1: str, dataset2: str, csv_file: str, output_dir: str
         output_path=output_file,
     )
     
-    print_now(f"    🔄 Combining {dataset1} + {dataset2} → {combo_name}/{csv_file}")
-    
     if dry_run:
-        print_now(f"      [DRY RUN] Would create: {output_file}")
         result.success = True
         return result
     
@@ -254,9 +245,6 @@ def run_combination(dataset1: str, dataset2: str, csv_file: str, output_dir: str
         "--output", str(output_file)
     ]
     
-    if debug:
-        cmd.append("--debug")
-    
     try:
         # Run the combination script
         process_result = subprocess.run(cmd, capture_output=True, text=True, timeout=300)
@@ -266,26 +254,21 @@ def run_combination(dataset1: str, dataset2: str, csv_file: str, output_dir: str
             if output_file.exists() and output_file.stat().st_size > 1000:
                 result.file_size = output_file.stat().st_size
                 result.success = True
-                print_now(f"      ✅ Success: {combo_name}/{csv_file} ({result.file_size/1024:.1f}KB)")
-                # Print the output from combine_datasets.py directly
+                # Store the output from combine_datasets.py for later display
                 if process_result.stdout.strip():
-                    print_now(f"        {process_result.stdout.strip()}")
+                    result.error_message = process_result.stdout.strip()  # Reuse field for success message
             else:
                 result.error_message = "Output file missing or too small"
-                print_now(f"      ❌ {result.error_message}")
         else:
             result.error_message = f"Command failed (exit code {process_result.returncode})"
-            print_now(f"      ❌ {result.error_message}")
-            # Print the error output from combine_datasets.py directly
+            # Include the error output from combine_datasets.py
             if process_result.stdout.strip():
-                print_now(f"        {process_result.stdout.strip()}")
+                result.error_message += f": {process_result.stdout.strip()}"
                 
     except subprocess.TimeoutExpired:
         result.error_message = "Timeout (>5 minutes)"
-        print_now(f"      ❌ {result.error_message}")
     except Exception as e:
         result.error_message = f"Error: {e}"
-        print_now(f"      ❌ {result.error_message}")
     
     return result
 
@@ -298,10 +281,7 @@ def process_single_combination(combination_args):
         debug=debug, dry_run=False
     )
     
-    # Memory monitoring
-    current_memory = get_memory_usage_mb()
-    if current_memory > 4096:  # 4GB threshold
-        print_now(f"⚠️  High memory usage detected: {current_memory:.1f}MB")
+
     
     return result
 
@@ -317,7 +297,7 @@ def main():
     parser.add_argument('--max-combinations', type=int, help='Maximum number of combinations to process (for testing)')
     parser.add_argument('--csv-files', nargs='*', help='Specific CSV files to process (default: all available)')
     parser.add_argument('--parallel', type=int, default=1, help='Number of parallel processes (default: 1)')
-    parser.add_argument('--memory-limit', type=int, default=8192, help='Memory limit in MB (default: 8192)')
+
     
     args = parser.parse_args()
     
@@ -329,9 +309,7 @@ def main():
     perf_stats = PerformanceStats()
     perf_stats.start_time = time.time()
     
-    # Check system resources
-    initial_memory = get_memory_usage_mb()
-    print_now(f"💾 Initial memory usage: {initial_memory:.1f}MB")
+
     
     if not check_disk_space(Path(args.output_dir)):
         print_now("⚠️  Warning: Low disk space detected")
@@ -422,7 +400,7 @@ def main():
     failed_results = []
     
     if args.parallel > 1 and CONCURRENT_FUTURES_AVAILABLE:
-        # True parallel processing - each combination runs in its own process
+        # True parallel processing - collect results in batches to avoid interleaving
         print_now(f"⚡ Processing {args.parallel} combinations simultaneously")
         
         from concurrent.futures import ProcessPoolExecutor
@@ -435,8 +413,9 @@ def main():
                 future = executor.submit(process_single_combination, combo_args)
                 future_to_combo[future] = (i + 1, dataset1, dataset2, csv_file)
             
-            # Collect results as they complete
+            # Process results as they complete
             completed = 0
+            
             for future in as_completed(future_to_combo):
                 combo_idx, dataset1, dataset2, csv_file = future_to_combo[future]
                 try:
@@ -445,19 +424,15 @@ def main():
                     
                     if result.success:
                         successful_results.append(result)
-                        status = "✅"
+                        status = f"✅ {result.combo_name}/{csv_file} ({result.file_size/1024:.1f}KB)"
+                        if result.error_message:  # Success message from combine_datasets.py
+                            status += f" | {result.error_message}"
+                        perf_stats.total_size_mb += result.file_size / (1024 * 1024)
                     else:
                         failed_results.append(result)
-                        status = f"❌ {result.error_message}"
+                        status = f"❌ {result.combo_name}/{csv_file} | {result.error_message}"
                     
-                    print_now(f"[{completed:3d}/{total_combinations}] {status} {result.combo_name}/{csv_file}")
-                    
-                    # Update performance stats
-                    current_memory = get_memory_usage_mb()
-                    perf_stats.peak_memory_mb = max(perf_stats.peak_memory_mb, current_memory)
-                    
-                    if result.success:
-                        perf_stats.total_size_mb += result.file_size / (1024 * 1024)
+                    print_now(f"[{completed:3d}/{total_combinations}] {status}")
                     
                 except Exception as e:
                     completed += 1
@@ -499,14 +474,7 @@ def main():
             
             perf_stats.total_files_processed += 1
             
-            # Monitor memory usage
-            if i % 10 == 0:  # Check every 10 combinations
-                current_memory = get_memory_usage_mb()
-                perf_stats.peak_memory_mb = max(perf_stats.peak_memory_mb, current_memory)
-                
-                if current_memory > args.memory_limit:
-                    print_now(f"\n⚠️  Memory limit exceeded: {current_memory:.1f}MB > {args.memory_limit}MB")
-                    print_now("Consider reducing --max-combinations or increasing --memory-limit")
+
     
     # Finalize performance stats
     perf_stats.end_time = time.time()
@@ -529,7 +497,7 @@ def main():
     # Performance statistics
     print_now(f"\n⚡ Performance Statistics:")
     print_now(f"   Total processing time: {perf_stats.elapsed_time:.1f}s")
-    print_now(f"   Peak memory usage: {perf_stats.peak_memory_mb:.1f}MB")
+
     print_now(f"   Total data processed: {perf_stats.total_size_mb:.1f}MB")
     if perf_stats.elapsed_time > 0:
         print_now(f"   Throughput: {perf_stats.throughput_mb_per_sec:.1f}MB/s")

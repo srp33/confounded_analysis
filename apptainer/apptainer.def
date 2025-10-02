@@ -54,11 +54,14 @@ From: bioconductor/bioconductor:RELEASE_3_21
     /bin/bash /tmp/miniforge.sh -b -p /opt/conda
     rm /tmp/miniforge.sh
     
-    # Python package installation with Conda and Pip
-    /opt/conda/bin/conda install -y -c conda-forge numpy 'scikit-learn>=1.4' pandas pytorch matplotlib
-    /opt/conda/bin/conda install -y aif360 tabulate jaxtyping beartype pytables opentsne umap-learn geoparse seaborn
-    /opt/conda/bin/conda install -y -c conda-forge psutil tqdm rich memory_profiler py-cpuinfo
-    /opt/conda/bin/pip install gdown osfclient
+    /opt/conda/bin/conda update -y -n base -c conda-forge conda
+    # Fix solver issue after conda update
+    /opt/conda/bin/conda config --set solver classic
+    /opt/conda/bin/conda install -y -c conda-forge mamba
+    /opt/conda/bin/mamba install -y -c conda-forge numpy 'scikit-learn>=1.4' pandas pytorch matplotlib
+    /opt/conda/bin/mamba install -y aif360 tabulate jaxtyping beartype pytables opentsne umap-learn geoparse seaborn
+    /opt/conda/bin/mamba install -y -c conda-forge psutil tqdm rich memory_profiler py-cpuinfo
+    /opt/conda/bin/pip install gdown osfclient pybiomart
     /opt/conda/bin/conda clean --all -y
     
     # Stage 3: Build the R environment
