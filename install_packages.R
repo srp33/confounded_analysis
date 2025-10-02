@@ -22,10 +22,10 @@ all_other_packages <- c(
 
     # From install_adjuster_specific_packages.R
     "BatchQC", "batchelor", "ranger", "fairadapt", "rliger", "huge",
-    "MASS", "umap", "mclust", "future", "bigmemory",
+    "umap", "mclust", "future", "bigmemory",
     
     # From install_annotation_packages.R
-    "GEOquery", "pd.hg.u133a", "pd.hg.u133.plus.2", "AnnotationDbi",
+    "GEOquery", "pd.hg.u133a", "pd.hg.u133.plus.2", "AnnotationDbi", "biomaRt",
 
     # Other GitHub packages
     "bmbolstad/preprocessCore",

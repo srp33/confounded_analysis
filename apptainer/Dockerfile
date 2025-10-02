@@ -1,16 +1,15 @@
 # Use a base image with a recent version of Ubuntu or Debian.
 # Apptainer is well-supported on these distributions.
-FROM ubuntu:22.04
+FROM ubuntu:24.04
 
-# Install Apptainer and its dependencies.
-# The `lsb-release` package is needed for the Apptainer installation script.
+# Install Apptainer and its dependencies using the official installation method
 RUN apt-get update && \
     apt-get install -y \
-    software-properties-common \
-    lsb-release && \
-    add-apt-repository -y ppa:apptainer/ppa && \
-    apt-get update && \
-    apt-get install -y apptainer && \
+    wget \
+    ca-certificates && \
+    wget -O apptainer.deb https://github.com/apptainer/apptainer/releases/download/v1.3.4/apptainer_1.3.4_amd64.deb && \
+    apt-get install -y ./apptainer.deb && \
+    rm apptainer.deb && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
 
