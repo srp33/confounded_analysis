@@ -389,7 +389,6 @@ def process_dataset(raw_folder_path: Path, dataset_id: str, output_base_dir: Pat
         if gene_cols:
             print_now(f"   🔍 Detecting gene ID type from {len(gene_cols)} gene columns...")
             detection = detect_gene_id_type(gene_cols, debug=debug)
-            print_now(f"   🎯 Detected: {detection['type']} (confidence: {detection['confidence']:.1%})")
             
             if debug:
                 print_now(f"   📝 Examples: {', '.join(detection['examples'])}")

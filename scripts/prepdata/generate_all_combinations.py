@@ -60,7 +60,7 @@ import psutil
 # Add the parent directory (scripts) to Python path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-# Removed HashCache import - caching disabled for simplicity
+
 
 @dataclass
 class DatasetInfo:
@@ -82,10 +82,9 @@ class CombinationResult:
     success: bool
     output_path: Path
     file_size: int = 0
-# Removed cache_hit field
     error_message: Optional[str] = None
 
-# Removed CacheStats - caching disabled
+
 
 @dataclass
 class PerformanceStats:
@@ -213,6 +212,8 @@ def validate_file_compatibility(dataset1_info: DatasetInfo, dataset2_info: Datas
     """
     return csv_file in dataset1_info.available_files and csv_file in dataset2_info.available_files
 
+
+
 def run_combination(dataset1: str, dataset2: str, csv_file: str, output_dir: str, 
                    debug: bool = False, dry_run: bool = False) -> CombinationResult:
     """Run the combine_datasets.py script for a specific CSV file type."""
@@ -234,7 +235,6 @@ def run_combination(dataset1: str, dataset2: str, csv_file: str, output_dir: str
         success=False,
         output_path=output_file,
     )
-    result.error_message = ""
     
     print_now(f"    🔄 Combining {dataset1} + {dataset2} → {combo_name}/{csv_file}")
     
@@ -257,47 +257,35 @@ def run_combination(dataset1: str, dataset2: str, csv_file: str, output_dir: str
     if debug:
         cmd.append("--debug")
     
-    start_time = time.time()
-    
     try:
         # Run the combination script
-        process_result = subprocess.run(cmd, capture_output=True, text=True, timeout=300)  # 5 minute timeout
+        process_result = subprocess.run(cmd, capture_output=True, text=True, timeout=300)
         
         if process_result.returncode == 0:
-            # Check if output file was created and has a reasonable size
-            if output_file.exists() and output_file.stat().st_size > 1000:  # At least 1KB
+            # Check if output file was created and has reasonable size
+            if output_file.exists() and output_file.stat().st_size > 1000:
                 result.file_size = output_file.stat().st_size
-                file_size_kb = result.file_size / (1024)
-                print_now(f"      ✅ Success: {combo_name}/{csv_file} ({file_size_kb:.1f}KB)")
                 result.success = True
-            elif output_file.exists():
-                result.file_size = output_file.stat().st_size
-                result.error_message = f"Output file {combo_name}/{csv_file} exists but is too small: {result.file_size} bytes"
-                # Also print output
-                print_now(f"        STDOUT: {process_result.stdout}")
-                print_now(f"        STDERR: {process_result.stderr}")
+                print_now(f"      ✅ Success: {combo_name}/{csv_file} ({result.file_size/1024:.1f}KB)")
+                # Print the output from combine_datasets.py directly
+                if process_result.stdout.strip():
+                    print_now(f"        {process_result.stdout.strip()}")
             else:
-                result.error_message = "Output file missing"
-                # Also print output
-                print_now(f"        STDOUT: {process_result.stdout}")
-                print_now(f"        STDERR: {process_result.stderr}")
-
+                result.error_message = "Output file missing or too small"
+                print_now(f"      ❌ {result.error_message}")
         else:
             result.error_message = f"Command failed (exit code {process_result.returncode})"
-            if debug:
-                print_now(f"        STDOUT: {process_result.stdout}")
-                print_now(f"        STDERR: {process_result.stderr}")
+            print_now(f"      ❌ {result.error_message}")
+            # Print the error output from combine_datasets.py directly
+            if process_result.stdout.strip():
+                print_now(f"        {process_result.stdout.strip()}")
                 
     except subprocess.TimeoutExpired:
         result.error_message = "Timeout (>5 minutes)"
+        print_now(f"      ❌ {result.error_message}")
     except Exception as e:
         result.error_message = f"Error: {e}"
-
-    if result.error_message:
         print_now(f"      ❌ {result.error_message}")
-    
-    # Track processing time
-    elapsed_time = time.time() - start_time
     
     return result
 
@@ -528,7 +516,7 @@ def main():
     if not perf_stats.total_size_mb:  # In case parallel processing didn't update this
         perf_stats.total_size_mb = sum(r.file_size for r in successful_results) / (1024 * 1024)
     
-    # No cache statistics - caching removed
+
     
     # Summary
     print_now("\n" + "="*80)

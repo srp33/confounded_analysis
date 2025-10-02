@@ -94,13 +94,11 @@ def detect_gene_id_type(gene_ids, debug=False):
             'confidence': confidence,
             'description': pattern_info['description']
         }
-        
-        if debug:
-            print_now(f"  {id_type}: {matches}/{total_count} matches ({confidence:.1%})")
     
     # Find the best match
     best_type = max(results.keys(), key=lambda k: results[k]['confidence'])
     best_confidence = results[best_type]['confidence']
+    print_now(f"   {best_type}: {results[best_type]['matches']}/{total_count} matches ({best_confidence:.1%})")
     
     # Get examples
     examples = gene_ids_str[:5]
