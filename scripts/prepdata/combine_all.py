@@ -1,184 +1,50 @@
 import pandas as pd
 from pathlib import Path
 import argparse
-from functools import reduce
-from sklearn.preprocessing import LabelEncoder
-
-# Store a single combined dataset in data/all_combined_data/
 
 def print_now(*args, **kwargs):
-    """Prints a message to the console with flushing to ensure immediate output."""
+    """Prints immediately to stdout (e.g., for real-time CLI feedback)."""
     print(*args, flush=True, **kwargs)
 
-def map_probes_to_genes(df, annotation_file, debug=False):
+def combine_gold_unadjusted_files(gold_dir: Path, output_file: Path):
     """
-    Maps Affymetrix probe IDs to gene symbols and aggregates expression by gene.
-
-    Args:
-        df (pd.DataFrame): The input dataframe with probe IDs as columns.
-        annotation_file (str): Path to the CSV annotation file mapping ProbeIDs to GeneSymbols.
-        debug (bool): If True, enables detailed print statements for debugging.
-
-    Returns:
-        pd.DataFrame: A new dataframe with gene symbols as columns.
+    Combines all 'unadjusted.csv' files from GSE subfolders in 'gold_dir'.
+    Each file gets a 'meta_source' column from its parent folder (e.g., GSE1234).
+    Saves combined file to 'output_file'.
     """
-    print_now(f"Mapping probe IDs to gene symbols using {annotation_file}...")
+    unadjusted_files = list(gold_dir.glob("gse*/unadjusted.csv"))
+    if not unadjusted_files:
+        raise FileNotFoundError(f"No unadjusted.csv files found in {gold_dir}/GSE*/")
 
-    # Load annotation, standardizing probe IDs by removing common suffixes.
-    annot = pd.read_csv(annotation_file)
-    annot['ProbeID'] = annot['ProbeID'].str.replace(r'_[a-z]_at$', '_at', regex=True)
-
-    if debug:
-        print_now(f"DEBUG: Annotation file loaded with shape: {annot.shape}")
-
-    # Clean annotation data and create a mapping dictionary.
-    annot = annot.dropna(subset=['ProbeID', 'GeneSymbol'])
-    annot = annot.drop_duplicates(subset=['ProbeID'], keep='first')
-    probe_to_gene_map = annot.set_index('ProbeID')['GeneSymbol'].to_dict()
-
-    # Separate metadata (columns starting with 'meta_') from expression data.
-    meta_cols = [col for col in df.columns if col.startswith('meta_')]
-    meta_df = df[meta_cols]
-    probe_cols = [col for col in df.columns if not col.startswith('meta_')]
-    probe_df = df[probe_cols]
-
-    # Transpose, map probe IDs to gene symbols, and aggregate by taking the mean.
-    probe_df_T = probe_df.T
-    probe_df_T['GeneSymbol'] = probe_df_T.index.map(probe_to_gene_map)
-    probe_df_T = probe_df_T.dropna(subset=['GeneSymbol'])
-    gene_df_T = probe_df_T.groupby('GeneSymbol').mean(numeric_only=True)
-
-    # Transpose back and merge with original metadata.
-    gene_df = gene_df_T.T
-    final_df = pd.concat([meta_df.reset_index(drop=True), gene_df.reset_index(drop=True)], axis=1)
-
-    print_now(f"Probe mapping complete. New data shape: {final_df.shape}")
-    return final_df
-
-def map_entrez_to_genesymbols(df, annotation_file, debug=False):
-    """
-    Maps Entrez Gene IDs to gene symbols and aggregates expression by gene.
-
-    Args:
-        df (pd.DataFrame): The input dataframe with Entrez IDs as columns.
-        annotation_file (str): Path to the CSV annotation file mapping EntrezID to GeneSymbol.
-        debug (bool): If True, enables detailed print statements for debugging.
-
-    Returns:
-        pd.DataFrame: A new dataframe with gene symbols as columns.
-    """
-    print_now(f"Mapping Entrez IDs to gene symbols using {annotation_file}...")
-    annot = pd.read_csv(annotation_file)
-
-    # Clean annotation data and create a mapping dictionary.
-    annot = annot.dropna(subset=['EntrezID', 'GeneSymbol'])
-    entrez_to_gene_map = annot.set_index('EntrezID')['GeneSymbol'].to_dict()
-
-    # Separate metadata from expression data.
-    meta_cols = [col for col in df.columns if col.startswith('meta_')]
-    meta_df = df[meta_cols]
-    entrez_cols = [col for col in df.columns if not col.startswith('meta_')]
-    entrez_df = df[entrez_cols]
-    
-    # Standardize column names by removing suffixes.
-    entrez_df.columns = entrez_df.columns.str.replace('_at$', '', regex=True)
-
-    # Transpose, map Entrez IDs to gene symbols, and aggregate by taking the mean.
-    entrez_df_T = entrez_df.T
-    entrez_df_T.index = entrez_df_T.index.astype(int)
-    entrez_df_T['GeneSymbol'] = entrez_df_T.index.map(entrez_to_gene_map)
-    entrez_df_T = entrez_df_T.dropna(subset=['GeneSymbol'])
-    gene_df_T = entrez_df_T.groupby('GeneSymbol').mean(numeric_only=True)
-    gene_df = gene_df_T.T
-    
-    # Merge with original metadata.
-    final_df = pd.concat([meta_df.reset_index(drop=True), gene_df.reset_index(drop=True)], axis=1)
-
-    print_now(f"Entrez mapping complete. New data shape: {final_df.shape}")
-    return final_df
-
-def load_and_prepare_data(expression_file, metadata_file, map_from='none', annotation_file=None, debug=False):
-    expr_df = pd.read_csv(expression_file, sep='\t')
-    meta_df = pd.read_csv(metadata_file, sep='\t')
-
-    # Merge on Sample_ID (or modify if your join key is different)
-    if 'Sample_ID' not in expr_df.columns or 'Sample_ID' not in meta_df.columns:
-        raise ValueError(f"'Sample_ID' not found in both files: {expression_file.name} and {metadata_file.name}")
-
-    df = pd.merge(meta_df, expr_df, on='Sample_ID')
-
-    # === Map probes or entrez IDs if needed
-    if map_from == 'probe' and annotation_file:
-        df = map_probes_to_genes(df, annotation_file, debug)
-    elif map_from == 'entrez' and annotation_file:
-        df = map_entrez_to_genesymbols(df, annotation_file, debug)
-
-    # === Check for and encode ER status
-    if 'meta_er_status' not in df.columns:
-        raise ValueError(f"'meta_er_status' not found after merging {expression_file.name} and {metadata_file.name}")
-    
-    df = df.dropna(subset=['meta_er_status'])
-    df['meta_er_status'] = LabelEncoder().fit_transform(df['meta_er_status'])
-
-    return df
-
-
-
-def get_common_genes_multi(dfs):
-    gene_sets = [
-        set(c for c in df.columns if not c.startswith('meta_') and c!= "Sample_ID")
-        for df in dfs
-    ]
-    return list(reduce(set.intersection, gene_sets))
-
-def main():
-    parser = argparse.ArgumentParser(description="Combine GEO expression datasets into one matrix.")
-    parser.add_argument('--input-dir', type=Path, required=True, help='Directory containing expression_*.tsv files')
-    parser.add_argument('--output-file', type=Path, required=True, help='Path to save combined expression file')
-    parser.add_argument('--map-types', nargs='*', choices=['probe', 'entrez', 'none'], help='Mapping type per file')
-    parser.add_argument('--annot-dir', type=Path, help='Directory containing annotation files')
-    parser.add_argument('--debug', action='store_true')
-
-    args = parser.parse_args()
-
-    expression_files = sorted(args.input_dir.rglob("expression_*.tsv"))
-    if not expression_files:
-        raise FileNotFoundError("No expression files found.")
-    
     dfs = []
-    for idx, expr_file in enumerate(expression_files):
-        map_type = args.map_types[idx] if idx < len(args.map_types) else 'none'
-        base_name = expr_file.stem.replace("expression_", "")
-        
-        # Find matching metadata file
-        metadata_file = expr_file.parent / f"meta_{base_name}.tsv"
-        if not metadata_file.exists():
-            raise FileNotFoundError(f"Metadata file not found: {metadata_file}")
-        
-        annot_file = None
-        if map_type != 'none' and args.annot_dir:
-            annot_file = args.annot_dir / f"GPL96-annotation.csv"
-
-        print(f"Processing {expr_file.name} (map: {map_type})")
-        df = load_and_prepare_data(expr_file, metadata_file, map_from=map_type, annotation_file=annot_file, debug=args.debug)
-
-        df['meta_source'] = base_name
+    for f in unadjusted_files:
+        df = pd.read_csv(f, low_memory=False)
+        gse_id = f.parent.name
+        df['meta_source'] = gse_id
+        print_now(f"Loaded {f} with shape {df.shape}")
         dfs.append(df)
 
+    # Compute common columns across all files
+    common_cols = set(dfs[0].columns)
+    for df in dfs[1:]:
+        common_cols.intersection_update(df.columns)
+    common_cols = list(common_cols)
 
-    common_genes = get_common_genes_multi(dfs)
-    print(f"Found {len(common_genes)} common genes across all datasets.")
+    print_now(f"Using {len(common_cols)} common columns across datasets.")
 
-    # Keep only common genes and key metadata
-    keep_cols = common_genes + ['meta_er_status', 'meta_source']
-    combined_df = pd.concat([df[keep_cols] for df in dfs], ignore_index=True)
+    combined_df = pd.concat([df[common_cols] for df in dfs], ignore_index=True)
 
-    # Make sure the output folder exists
-    output_dir = args.output_file.parent
-    output_dir.mkdir(parents=True, exist_ok=True)
+    output_file.parent.mkdir(parents=True, exist_ok=True)
+    combined_df.to_csv(output_file, index=False)
+    print_now(f"Saved combined data to {output_file} with shape {combined_df.shape}")
 
-    print(f"Saving combined dataset with shape {combined_df.shape}")
-    combined_df.to_csv(args.output_file, index=False, sep='\t')
+def main():
+    parser = argparse.ArgumentParser(description="Combine all unadjusted.csv files from gold directory.")
+    parser.add_argument('--input-dir', type=Path, required=True, help='Path to gold directory containing GSE subfolders')
+    parser.add_argument('--output-file', type=Path, required=True, help='Path to save the combined CSV output')
+    args = parser.parse_args()
+
+    combine_gold_unadjusted_files(args.input_dir, args.output_file)
 
 if __name__ == "__main__":
     main()
