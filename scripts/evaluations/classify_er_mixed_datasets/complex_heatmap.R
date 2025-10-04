@@ -397,7 +397,8 @@ generate_jitter_plot <- function(all_diff_data, fig_dir, cross, plot_type = "reg
   p <- ggplot(all_diff_data, aes(x = Adjuster, y = Mean_Metric, color = Metric)) +
     geom_jitter(width = 0.25, height = 0, size = 2, alpha = 0.7) +
     scale_color_manual(values = c("MCC" = "skyblue", "AUC" = "orange")) +
-    stat_summary(fun = mean, geom = "crossbar", width = 0.5, color = "black", linewidth = 1) +
+    geom_hline(yintercept = 0, color = "black", linewidth = 0.3, alpha = 0.8) +
+    stat_summary(fun = mean, geom = "crossbar", width = 0.5, color = "black", linewidth = 0.5) +
     theme_minimal() +
     labs(
       title = title,
