@@ -948,23 +948,34 @@ batch_adjust_tidy <- function(df, input_file, adjuster, batch_col, column, full_
   
   # --- 3. Transpose gene data (with caching) ---
   transposed_cache_file <- sub("(\\.[^.]+)$", "_t\\1", input_file)
+  lock_file <- paste0(transposed_cache_file, ".lock")
   
-  if (file.exists(transposed_cache_file)) {
+  # Check cache validity (size > 1KB and no lock file)
+  # This is to prevent race conditions with multiple processes trying to create/read
+  # A cache at the same time
+  cache_valid <- file.exists(transposed_cache_file) && 
+                 !file.exists(lock_file) && 
+                 file.info(transposed_cache_file)$size > 1024
+  
+  if (cache_valid) {
     message("Loading cached transposed data from '", transposed_cache_file, "'")
-    mat_genes <- as.matrix(read.csv(transposed_cache_file, row.names = 1, check.names = FALSE))
-    
-    # Verify cached data matches current gene columns
-    if (ncol(mat_genes) != nrow(genes) || !all(colnames(mat_genes) == rownames(genes))) {
-      message("WARNING: Cached transposed data doesn't match current gene data. Regenerating...")
-      mat_genes <- transpose_essential(genes)
-      message("Updating cached transposed data to '", transposed_cache_file, "'")
-      write.csv(mat_genes, transposed_cache_file, row.names = TRUE, quote = FALSE)
-    }
-  } else {
+    mat_genes <- tryCatch(
+      as.matrix(read.csv(transposed_cache_file, row.names = 1, check.names = FALSE)),
+      error = function(e) NULL
+    )
+    # Validate dimensions
+    if (is.null(mat_genes) || ncol(mat_genes) != nrow(genes)) cache_valid <- FALSE
+  }
+  
+  if (!cache_valid) {
     message("3. Transposing gene data for adjustment (features x samples).")
     mat_genes <- transpose_essential(genes)
-    message("Caching transposed data to '", transposed_cache_file, "'")
-    write.csv(mat_genes, transposed_cache_file, row.names = TRUE, quote = FALSE)
+    # Safe caching with lock
+    if (!file.exists(lock_file)) {
+      file.create(lock_file)
+      write.csv(mat_genes, transposed_cache_file, row.names = TRUE, quote = FALSE)
+      file.remove(lock_file)
+    }
   }
 
   if (!is.null(reduce_cols)) {
