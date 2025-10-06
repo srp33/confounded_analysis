@@ -73,8 +73,13 @@ def run_single_dataset(filepath, source, output_file, pred_col, adjustment, clas
     cols_to_drop = [pred_col]
     X = df.drop(columns=[col for col in cols_to_drop if col in df.columns]).select_dtypes(include=[np.number])
 
+    # Reset index to ensure continuous indexing for CV splits
+    df_reset = df.reset_index(drop=True)
+    y = df_reset[pred_col]
+    X = df_reset.drop(columns=[col for col in cols_to_drop if col in df_reset.columns]).select_dtypes(include=[np.number])
+
     # Create dataframe for y predictions
-    predictions = pd.DataFrame(index=df.index, columns=['y_predicted', 'y_probability'])
+    predictions = pd.DataFrame(index=df_reset.index, columns=['y_predicted', 'y_probability'])
 
     # Clone the model
     model = clone(clf_model)

@@ -240,7 +240,7 @@ get_platform_annotations <- function(datasets) {
     "Affymetrix Human Genome U133 Plus 2.0 Array" = "Microarray",
     "Affymetrix Human Genome U133A Array" = "Microarray",
     "Affymetrix Human Gene 1.0 ST Array [transcript (gene) version]" = "Microarray",
-    "Affymetrix Human Transcriptome Array 2.0 [probe set (exon) version] / Custom Affymetrix Human Transcriptome Array" = "Microarray",
+    "Affymetrix Human Transcriptome Array 2.0 [probe set (exon) version] / Custom" = "Microarray",
     "Illumina HumanHT-12 V3.0 expression beadchip" = "Microarray",
     "Illumina Genome Analyzer (Homo sapiens)" = "RNAseq",
     "Illumina HiSeq 2000 (Homo sapiens)" = "RNAseq",
@@ -264,7 +264,7 @@ get_platform_annotations <- function(datasets) {
     "Illumina HiSeq 2500 (Homo sapiens)" = "#CC79A7FF",
     "Illumina Genome Analyzer (Homo sapiens)" = "#F0E442FF",
     "Affymetrix Human Gene 1.0 ST Array [transcript (gene) version]" = "#0072B2FF",
-    "Affymetrix Human Transcriptome Array 2.0 [probe set (exon) version] / Custom Affymetrix Human Transcriptome Array" = "#4682B4FF",
+    "Affymetrix Human Transcriptome Array 2.0 [probe set (exon) version] / Custom" = "#4682B4FF",
     "Illumina HumanHT-12 V3.0 expression beadchip" = "#6A9FB5FF",
     "Unknown" = "#000000"
   )

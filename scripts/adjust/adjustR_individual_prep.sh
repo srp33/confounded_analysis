@@ -17,10 +17,6 @@ DATA_DIR="/data/gold"
 
 # Define adjusters to run SEQUENTIALLY (one dataset job at a time for each adjuster)
 ADJUSTERS_SEQUENTIAL=(
-    "gmm_npn_unit_std"
-    "gmm_scale_separate"
-    "gmm_npn"
-    "gmm"
 )
 
 # Define adjusters to run in PARALLEL (all dataset jobs for an adjuster run at once)

@@ -32,9 +32,6 @@ ADJUSTERS_PARALLEL=(
 ADJUSTERS_SEQUENTIAL=(
     # "mnn"
     # "liger"
-    # "gmm"
-    # "gmm_scale_separate"
-    # "gmm_npn"
 )
 
 ADJUSTERS_TARGET=(

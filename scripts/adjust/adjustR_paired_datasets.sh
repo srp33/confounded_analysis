@@ -28,10 +28,10 @@ ADJUSTERS_PARALLEL=(
 ADJUSTERS_SEQUENTIAL=(
     "mnn"
     "gmm"
-    "gmm_scale_separate"
-    "gmm_npn"
     "gmm_global_simple"
     "gmm_global_npn"
+    "gmm_nonlinear_unit_var"
+    "gmm_nonlinear_mean_ones"
 )
 
 # --- Helper Function ---
@@ -76,7 +76,7 @@ run_adjust() {
     fi
     
     # Execute the R script, including worker arguments if they exist
-    Rscript "$ADJUST_SCRIPT" "$input_file" "$output_file" -a "$adjuster" -b "$batch_col" $c_args $w_args --debug
+    Rscript "$ADJUST_SCRIPT" "$input_file" "$output_file" -a "$adjuster" -b "$batch_col" $c_args $w_args --debug --skip-if-exists
 }
 
 

@@ -7,7 +7,9 @@
 # 3. Find the midpoint between the two modes
 # 4. Apply transformation strategy using global GMM parameters
 
-# No external GMM dependencies - using custom robust implementation
+
+# Source functions from gmm_adjust.R for NPN functionality
+source("/scripts/adjust/gmm_adjust.R")
 
 # Robust GMM implementation (no external dependencies)
 fit_robust_gmm <- function(data, debug = FALSE) {
@@ -102,8 +104,6 @@ fit_robust_gmm <- function(data, debug = FALSE) {
   ))
 }
 
-# Source functions from gmm_transforms.R for NPN functionality
-source("/scripts/adjust/gmm_transforms.R")
 
 #' Core function for gene-global GMM adjustment with multiple strategies
 #' 
@@ -111,7 +111,7 @@ source("/scripts/adjust/gmm_transforms.R")
 #' 1. Transforms all data to log space
 #' 2. Flattens all expression values to create a global distribution
 #' 3. Fits a two-component GMM to the log-transformed global distribution
-#' 4. Applies the specified transformation strategy using global GMM parameters
+#' 4. Transforms the data
 #' 
 #' @param data Input data matrix/data frame (samples x genes)
 #' @param strategy Adjustment strategy: "simple" (centering/scaling) or "npn" (bimodal NPN)
@@ -308,7 +308,7 @@ gmm_global_core <- function(data, strategy = "simple", debug = FALSE) {
       
       # Transform through inverse CDF of target bimodal distribution
       transformed_values <- tryCatch({
-        inverse_cdf_gmm_R(
+        inverse_cdf_gmm(
           quantiles,
           means = target_means,
           variances = target_variances,
@@ -316,7 +316,7 @@ gmm_global_core <- function(data, strategy = "simple", debug = FALSE) {
         )
       }, error = function(e) {
         if (debug) {
-          message("Error in inverse_cdf_gmm_R: ", e$message)
+          message("Error in inverse_cdf_gmm: ", e$message)
         }
         return(NULL)
       })

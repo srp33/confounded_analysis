@@ -29,10 +29,6 @@ adjustment_map=(
     ["npn"]="NPN"
     ["combat_target"]="Combat Target"
     ["simple"]="Simple"
-    ["gmm"]="GMM"
-    ["gmm_scale_separate"]="GMM Scale Separate"
-    ["gmm_npn"]="GMM NPN"
-    ["gmm_npn_unit_std"]="GMM NPN Unit Std"
 )
 
 # --- Main loop ---

@@ -25,7 +25,6 @@ suppressPackageStartupMessages({
 
 source("/scripts/adjust/gmm_adjust.R")
 source("/scripts/adjust/gmm_global_simple.R")
-source("/scripts/adjust/gmm_adjust_streamlined.R")
 
 get_allocated_cores <- function() {
   # Check SLURM-provided environment variables first
@@ -574,95 +573,37 @@ adjust_mnn <- function(df_, batch, data_are_counts, debug = FALSE) {
 
 adjust_gmm_common <- function(matrix_, batch, adjustment_strategy, strategy_name, debug = FALSE, meta_file = NULL) {
   #' Common implementation for all GMM-based adjustment methods.
-  #' Wrapper for gmm_adjust to fit into the main adjustment pipeline with caching support.
-  #' Handles the transposition of data to match gmm_adjust's input requirements.
-  #' Parameter extraction and caching is now handled internally by bimodal_normalize and gmm_adjust.
+  #' Uses gmm_adjust for all processing.
   #' @param matrix_ The matrix to adjust (features x samples).
   #' @param batch The batch variable vector.
-  #' @param adjustment_strategy The strategy to pass to the underlying GMM functions.
+  #' @param adjustment_strategy The strategy to pass to the underlying GMM functions (currently ignored in this version).
   #' @param strategy_name Human-readable name for the strategy (for logging).
   #' @param debug Logical flag for debug output.
-  #' @param meta_file Path to save the recommended modes for each gene.
+  #' @param meta_file Path to save metadata (currently not supported in this version).
   #' @return The adjusted matrix (features x samples).
   
-  message("Adjusting with GMM-based adjustment (", strategy_name, ", with caching).")
+  message("Adjusting with GMM-based adjustment (", strategy_name, ").")
 
+  # Convert to the format expected by gmm_adjust (samples x genes)
   genes_df <- as.data.frame(t(matrix_))
-  cache_folder <- "/data/.cache/gmm_cache"
-  if (!dir.exists(cache_folder)) {
-    dir.create(cache_folder, recursive = TRUE)
-  }
-
+  
   if (is.null(batch)) {
-    # Single batch processing - bimodal_normalize will handle parameter extraction and caching
-    batch_name <- "single_batch"
-    
-    result <- bimodal_normalize(
-      genes_df, 
-      gmm_parameters = NULL,  # Let bimodal_normalize extract parameters
-      batch_name = batch_name, 
-      cache_folder = cache_folder,
-      debug = debug, 
-      log_file = "/outputs/parallel/bimodal_parallel.log", 
-      adjustment_strategy = adjustment_strategy, 
-      num_workers = get_allocated_cores()
-    )
-    adjusted_genes_df <- result$bimodal_data
-    
-    if (!is.null(meta_file)) {
-      recommended_modes <- result$recommended_modes
-      write.csv(data.frame(single_batch = recommended_modes), file = meta_file, row.names = TRUE)
-    }
-    
-  } else {
-    # Multi-batch processing - gmm_adjust will coordinate per-batch parameter extraction
-    adjusted_genes_df <- gmm_adjust(
-      genes_df, 
-      batch, 
-      gmm_parameters = list(),  # Empty list - let gmm_adjust handle parameter extraction
-      cache_folder = cache_folder,
-      debug = debug, 
-      adjustment_strategy = adjustment_strategy, 
-      log_file = "/outputs/parallel/gmm_adjust_parallel.log", 
-      num_workers = get_allocated_cores()
-    )
-    
-    if (!is.null(meta_file)) {
-      # For meta file, we need to extract recommended modes
-      # This is a bit more complex now since we don't pre-extract parameters
-      # We could either modify gmm_adjust to return this info, or extract it here
-      # For now, let's create a placeholder - this could be improved
-      batch_levels <- unique(batch)
-      recommended_modes_df <- data.frame(
-        matrix(1, nrow = length(batch_levels), ncol = ncol(genes_df)),  # Default to 1 mode
-        row.names = batch_levels
-      )
-      colnames(recommended_modes_df) <- colnames(genes_df)
-      write.csv(recommended_modes_df, file = meta_file, row.names = TRUE)
-      
-      if (debug) {
-        message("DEBUG: Meta file created with default recommended modes. Consider enhancing gmm_adjust to return this information.")
-      }
-    }
+    # Single batch - create dummy batch
+    batch <- rep("batch1", nrow(genes_df))
+  }
+  
+  # Use GMM adjustment (always bimodal with inverse CDF)
+  adjusted_genes_df <- gmm_adjust(genes_df, batch, alpha0 = 10, mean_only = FALSE, debug = debug)
+  
+  # Note: meta_file functionality not currently supported in this version
+  if (!is.null(meta_file) && debug) {
+    message("DEBUG: meta_file functionality not supported in this version")
   }
 
+  # Convert back to matrix format (features x samples)
   return(t(as.matrix(adjusted_genes_df)))
 }
 
-adjust_gmm <- function(matrix_, batch, debug = FALSE, meta_file = NULL) {
-  #' Wrapper for GMM adjustment with simple strategy.
-  return(adjust_gmm_common(matrix_, batch, "simple", "Simple", debug, meta_file))
-}
-
-adjust_gmm_npn <- function(matrix_, batch, debug = FALSE, meta_file = NULL) {
-  #' Wrapper for GMM adjustment with NPN strategy.
-  return(adjust_gmm_common(matrix_, batch, "npn", "NPN", debug, meta_file))
-}
-
-adjust_gmm_npn_unit_std <- function(matrix_, batch, debug = FALSE, meta_file = NULL) {
-  #' Wrapper for GMM adjustment with NPN unit standard deviation strategy.
-  return(adjust_gmm_common(matrix_, batch, "npn_unit_std", "NPN, Unit Std", debug, meta_file))
-}
 
 adjust_gmm_global_simple <- function(matrix_, batch = NULL, debug = FALSE, meta_file = NULL) {
   #' Simple gene-global GMM adjustment strategy with scaling.
@@ -702,23 +643,23 @@ adjust_gmm_global_npn <- function(matrix_, batch = NULL, debug = FALSE, meta_fil
   return(t(adjusted_data))
 }
 
-adjust_gmm_streamlined <- function(matrix_, batch, debug = FALSE, meta_file = NULL, mean_only = FALSE) {
-  #' Streamlined GMM adjustment using the fast implementation.
+adjust_gmm <- function(matrix_, batch, debug = FALSE, meta_file = NULL, mean_only = FALSE) {
+  #' GMM adjustment using the fast implementation.
   #' Applies bimodal GMM transformation to all genes.
   #' @param matrix_ The matrix to adjust (features x samples).
   #' @param batch The batch variable vector.
   #' @param debug Logical flag for debug output.
-  #' @param meta_file Path to save metadata (currently unused in streamlined version).
+  #' @param meta_file Path to save metadata (currently unused in this version).
   #' @param mean_only If TRUE, only adjust means without using inverse CDF transformation.
   #' @return The adjusted matrix (features x samples).
   
   if (mean_only) {
-    message("Adjusting with streamlined GMM (mean-only adjustment, no inverse CDF).")
+    message("Adjusting with GMM (mean-only adjustment, no inverse CDF).")
   } else {
-    message("Adjusting with streamlined GMM (bimodal for all genes with inverse CDF).")
+    message("Adjusting with GMM (bimodal for all genes with inverse CDF).")
   }
   
-  # Convert to the format expected by gmm_adjust_streamlined (samples x genes)
+  # Convert to the format expected by gmm_adjust (samples x genes)
   genes_df <- as.data.frame(t(matrix_))
   
   if (is.null(batch)) {
@@ -726,23 +667,59 @@ adjust_gmm_streamlined <- function(matrix_, batch, debug = FALSE, meta_file = NU
     batch <- rep("batch1", nrow(genes_df))
   }
   
-  # Apply streamlined adjustment with mean_only option
-  adjusted_genes_df <- gmm_adjust_streamlined(genes_df, batch, alpha0 = 10, mean_only = mean_only, debug = debug)
+  # Apply GMM adjustment with mean_only option
+  adjusted_genes_df <- gmm_adjust(genes_df, batch, alpha0 = 10, mean_only = mean_only, debug = debug)
   
   # Convert back to matrix format (features x samples)
   return(t(as.matrix(adjusted_genes_df)))
 }
 
-adjust_gmm_streamlined_mean_only <- function(matrix_, batch, debug = FALSE, meta_file = NULL) {
-  #' Streamlined GMM adjustment with mean-only transformation.
+adjust_gmm_mean_only <- function(matrix_, batch, debug = FALSE, meta_file = NULL) {
+  #' GMM adjustment with mean-only transformation.
   #' Applies bimodal GMM transformation to all genes but only adjusts means without inverse CDF.
   #' @param matrix_ The matrix to adjust (features x samples).
   #' @param batch The batch variable vector.
   #' @param debug Logical flag for debug output.
-  #' @param meta_file Path to save metadata (currently unused in streamlined version).
+  #' @param meta_file Path to save metadata (currently unused in this version).
   #' @return The adjusted matrix (features x samples).
   
-  return(adjust_gmm_streamlined(matrix_, batch, debug = debug, meta_file = meta_file, mean_only = TRUE))
+  return(adjust_gmm(matrix_, batch, debug = debug, meta_file = meta_file, mean_only = TRUE))
+}
+
+adjust_gmm_nonlinear_unit_var <- function(matrix_, batch, debug = FALSE, meta_file = NULL) {
+  #' GMM nonlinear adjustment with unit variance (full inverse CDF transformation).
+  #' Applies bimodal GMM transformation to all genes with full inverse CDF.
+  #' @param matrix_ The matrix to adjust (features x samples).
+  #' @param batch The batch variable vector.
+  #' @param debug Logical flag for debug output.
+  #' @param meta_file Path to save metadata (currently unused in this version).
+  #' @return The adjusted matrix (features x samples).
+  
+  return(adjust_gmm(matrix_, batch, debug = debug, meta_file = meta_file, mean_only = FALSE))
+}
+
+adjust_gmm_mean_ones <- function(matrix_, batch, debug = FALSE, meta_file = NULL) {
+  #' GMM adjustment with mean-only transformation (affine transformation).
+  #' Applies bimodal GMM transformation to all genes but only adjusts means without inverse CDF.
+  #' @param matrix_ The matrix to adjust (features x samples).
+  #' @param batch The batch variable vector.
+  #' @param debug Logical flag for debug output.
+  #' @param meta_file Path to save metadata (currently unused in this version).
+  #' @return The adjusted matrix (features x samples).
+  
+  return(adjust_gmm(matrix_, batch, debug = debug, meta_file = meta_file, mean_only = TRUE))
+}
+
+adjust_gmm_affine <- function(matrix_, batch, debug = FALSE, meta_file = NULL) {
+  #' GMM affine adjustment (mean-only transformation).
+  #' Applies bimodal GMM transformation to all genes but only adjusts means without inverse CDF.
+  #' @param matrix_ The matrix to adjust (features x samples).
+  #' @param batch The batch variable vector.
+  #' @param debug Logical flag for debug output.
+  #' @param meta_file Path to save metadata (currently unused in this version).
+  #' @return The adjusted matrix (features x samples).
+  
+  return(adjust_gmm(matrix_, batch, debug = debug, meta_file = meta_file, mean_only = TRUE))
 }
 
 
@@ -994,11 +971,9 @@ batch_adjust_tidy <- function(df, input_file, adjuster, batch_col, column, full_
   message("4. Applying '", adjuster, "' adjustment method.")
   
   adjusted_matrix <- switch(adjuster,
-    "gmm" = adjust_gmm(mat_genes, batch, debug=debug, meta_file=meta_file),
-    "gmm_npn" = adjust_gmm_npn(mat_genes, batch, debug=debug, meta_file=meta_file),
-    "gmm_npn_unit_std" = adjust_gmm_npn_unit_std(mat_genes, batch, debug=debug, meta_file=meta_file),
-    "gmm_streamlined" = adjust_gmm_streamlined(mat_genes, batch, debug=debug, meta_file=meta_file),
-    "gmm_streamlined_mean_only" = adjust_gmm_streamlined_mean_only(mat_genes, batch, debug=debug, meta_file=meta_file),
+    "gmm_nonlinear_unit_var" = adjust_gmm_nonlinear_unit_var(mat_genes, batch, debug=debug, meta_file=meta_file),
+    "gmm_nonlinear_mean_ones" = adjust_gmm_mean_ones(mat_genes, batch, debug=debug, meta_file=meta_file),
+    "gmm_affine" = adjust_gmm_affine(mat_genes, batch, debug=debug, meta_file=meta_file),
     "gmm_global_simple" = adjust_gmm_global_simple(mat_genes, batch, debug=TRUE, meta_file=meta_file),
     "gmm_global_npn" = adjust_gmm_global_npn(mat_genes, batch, debug=TRUE, meta_file=meta_file),
     "ranked1" = adjust_ranked(mat_genes, debug = debug),
@@ -1089,14 +1064,21 @@ parser$add_argument("-c", "--debug", action = "store_true", help = "Enable verbo
 parser$add_argument("-R", "--reduce-rows", default = NULL, help = "Number of rows to reduce to.")
 parser$add_argument("-r", "--reduce-cols", default = NULL, help = "Number of columns to reduce to.")
 parser$add_argument("-m", "--meta-file", default = NULL, help = "Path to save the recommended modes for each gene.")
-parser$add_argument("--mean-only", action = "store_true", help = "For GMM streamlined methods, only adjust means without using inverse CDF transformation.")
+parser$add_argument("--mean-only", action = "store_true", help = "For GMM methods, only adjust means without using inverse CDF transformation.")
 parser$add_argument("--column", default = NULL, help = "Specific metadata columns to include in the design matrix.")
 parser$add_argument("--full-design-matrix", action = "store_true", help = "Use all metadata columns in the design matrix.")
+parser$add_argument("--skip-if-exists", action = "store_true", help = "Skip processing if the output file already exists.")
 
 
 args <- parser$parse_args()
 
 # Main Execution --------------------------------------------------------------
+
+# Check if output file exists and skip if requested
+if (args$skip_if_exists && file.exists(args$output_file)) {
+  message("Output file '", args$output_file, "' already exists. Skipping processing due to --skip-if-exists flag.")
+  quit(status = 0)
+}
 
 message("Reading input file '", args$input_file, "'")
 suppressMessages(df <- vroom(args$input_file, show_col_types = FALSE))
