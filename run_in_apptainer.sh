@@ -30,10 +30,9 @@ shift
 source ~/confounded_analysis/init_apptainer.sh
 
 case "$MODE" in
-    shell)
+    shell|--shell)
         # Start an interactive Apptainer shell
-        declare -a CMD=( "apptainer" "shell" "$APPTAINER_IMAGE" )
-        sg grp_batch_effects "${CMD[@]}"
+        sg grp_batch_effects -c "apptainer shell \"$APPTAINER_IMAGE\""
         ;;
 
     *)
