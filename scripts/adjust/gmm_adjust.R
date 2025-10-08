@@ -203,9 +203,10 @@ get_gene_gmm_transform <- function(
     alpha0 = 10,
     nonlinear = TRUE,
     mean_mean_zero = TRUE,
+    mean1_zero = FALSE,
     unit_var = TRUE,
-    diff_exp = FALSE,
     means_at_1 = FALSE,
+    diff_exp = FALSE,
     preserve_counts = FALSE
 ) {
   if (all(is.na(gene_exp))) return(gene_exp)
@@ -214,8 +215,12 @@ get_gene_gmm_transform <- function(
     warning("Not preserving counts, expression is not integral")
   }
 
+  if (diff_exp && unit_var) stop("Unit variance not allowed for diff exp")
+  if (diff_exp && means_at_1) stop("Means at 1 not allowed for diff exp")
+
   # --- Log-transform ---
   min_val <- min(gene_exp, na.rm = TRUE)
+
   x_transformed <- log(gene_exp - min_val + 1)
 
   mean_shift_fallback <- scale(x_transformed, scale = FALSE)[, 1]
@@ -274,15 +279,10 @@ get_gene_gmm_transform <- function(
   }
 
   # --- Affine corrections ---
-  if (diff_exp) {
+  if (mean1_zero) {
     # Adjusts the first mean to be 0
-    # Since there is no scaling, differential expression should be preserved
-    if (mean_mean_zero) warning("Cannot have both diff_exp and mean_mean_zero")
-    mean_mean_zero <- FALSE
-    if (unit_var) warning("Cannot have both diff_exp and unit_var")
-    unit_var <- FALSE
-    if (means_at_1) warning("Cannot have both diff_exp and means_at_1")
-    means_at_1 <- FALSE
+    if (mean_mean_zero) stop("Cannot have both mean1_zero and mean_mean_zero")
+    if (means_at_1) stop("Cannot have both mean1_zero and means_at_1")
 
     x_transformed <- x_transformed - means[1]
   }
@@ -323,7 +323,7 @@ get_gene_gmm_transform <- function(
 
 #' Bimodal normalization using GMM with full inverse CDF
 bimodal_normalize <- function(data, alpha0 = 10, nonlinear = TRUE, mean_mean_zero = TRUE, 
-                             unit_var = TRUE, diff_exp = FALSE, means_at_1 = FALSE, 
+                             mean1_zero = FALSE, unit_var = TRUE, diff_exp = FALSE, means_at_1 = FALSE, 
                              preserve_counts = FALSE, debug = FALSE) {
   gene_names <- colnames(data)
   n_genes <- length(gene_names)
@@ -359,6 +359,7 @@ bimodal_normalize <- function(data, alpha0 = 10, nonlinear = TRUE, mean_mean_zer
         alpha0 = alpha0,
         nonlinear = nonlinear,
         mean_mean_zero = mean_mean_zero,
+        mean1_zero = mean1_zero,
         unit_var = unit_var,
         diff_exp = diff_exp,
         means_at_1 = means_at_1,
@@ -426,7 +427,7 @@ bimodal_normalize <- function(data, alpha0 = 10, nonlinear = TRUE, mean_mean_zer
 #' @details The function applies GMM-based bimodal normalization to each batch separately.
 #' Various transformation options allow control over the final distribution properties.
 gmm_adjust <- function(data, batch, alpha0 = 10, nonlinear = TRUE, mean_mean_zero = TRUE,
-                      unit_var = TRUE, diff_exp = FALSE, means_at_1 = FALSE, 
+                      mean1_zero = FALSE, unit_var = TRUE, diff_exp = FALSE, means_at_1 = FALSE, 
                       preserve_counts = FALSE, debug = FALSE) {
   if (debug) {
     cat("Starting GMM adjustment...\n")
@@ -456,6 +457,7 @@ gmm_adjust <- function(data, batch, alpha0 = 10, nonlinear = TRUE, mean_mean_zer
       alpha0 = alpha0,
       nonlinear = nonlinear,
       mean_mean_zero = mean_mean_zero,
+      mean1_zero = mean1_zero,
       unit_var = unit_var,
       diff_exp = diff_exp,
       means_at_1 = means_at_1,

@@ -94,9 +94,10 @@ def get_gene_gmm_transform(
     alpha0=10,
     nonlinear=True,
     mean_mean_zero=True,
+    mean1_zero=False,
     unit_var=True,
-    diff_exp=False,
     means_at_1=False,
+    diff_exp=False,
     preserve_counts=False
 ):
     gene_exp = np.asarray(gene_exp)
@@ -105,6 +106,11 @@ def get_gene_gmm_transform(
 
     if preserve_counts and not np.all(np.floor(gene_exp) == gene_exp):
         print("Warning: Not preserving counts, expression not integral")
+
+    if diff_exp and unit_var:
+        raise ValueError("Unit variance not allowed for diff exp")
+    if diff_exp and means_at_1:
+        raise ValueError("Means at 1 not allowed for diff exp")
 
     # Log transform
     min_val = np.nanmin(gene_exp)
@@ -146,6 +152,14 @@ def get_gene_gmm_transform(
             print("Warning: diff_exp disables centering and scaling")
         x_transformed = x_transformed - means[0]
         mean_mean_zero = unit_var = means_at_1 = False
+
+    if mean1_zero:
+        # Adjusts the first mean to be 0
+        if mean_mean_zero:
+            raise ValueError("Cannot have both mean1_zero and mean_mean_zero")
+        if means_at_1:
+            raise ValueError("Cannot have both mean1_zero and means_at_1")
+        x_transformed = x_transformed - means[0]
 
     if mean_mean_zero:
         mean_center = 0.5 * (means[0] + means[1])

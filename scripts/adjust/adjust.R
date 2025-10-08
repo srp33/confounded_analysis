@@ -638,7 +638,7 @@ adjust_gmm_global_npn <- function(matrix_, batch = NULL, debug = FALSE) {
 }
 
 adjust_gmm <- function(matrix_, batch, debug = FALSE, 
-                      nonlinear = TRUE, mean_mean_zero = TRUE, unit_var = TRUE, 
+                      nonlinear = TRUE, mean_mean_zero = TRUE, mean1_zero = FALSE, unit_var = TRUE, 
                       diff_exp = FALSE, means_at_1 = FALSE, preserve_counts = FALSE) {
   #' GMM adjustment using the fast implementation.
   #' Applies bimodal GMM transformation to all genes.
@@ -674,6 +674,7 @@ adjust_gmm <- function(matrix_, batch, debug = FALSE,
     alpha0 = 10, 
     nonlinear = nonlinear,
     mean_mean_zero = mean_mean_zero,
+    mean1_zero = mean1_zero,
     unit_var = unit_var,
     diff_exp = diff_exp,
     means_at_1 = means_at_1,
@@ -700,19 +701,19 @@ adjust_gmm_mean_ones <- function(matrix_, batch, debug = FALSE) {
 
 adjust_gmm_affine <- function(matrix_, batch, debug = FALSE) {
   #' Applies bimodal GMM transformation to all genes but only adjusts means without inverse CDF.
-  return(adjust_gmm(matrix_, batch, debug = debug, nonlinear = FALSE))
+  return(adjust_gmm(matrix_, batch, debug = debug, nonlinear = FALSE, mean_mean_zero = TRUE, unit_var = TRUE))
 }
 
 adjust_gmm_diff_exp <- function(matrix_, batch, debug = FALSE) {
-  #' Adjusts first mean to zero to preserve differential expression patterns.
+  #' Don't scale to preserve differential expression.
   return(adjust_gmm(matrix_, batch, debug = debug, 
-                   nonlinear = TRUE, mean_mean_zero = FALSE, unit_var = FALSE, diff_exp = TRUE))
+                   nonlinear = TRUE, mean_mean_zero = TRUE, unit_var = FALSE, diff_exp = TRUE))
 }
 
 adjust_gmm_diff_exp_counts <- function(matrix_, batch, debug = FALSE) {
   #' GMM adjustment attempting to preserve count structure and differential expression.
   return(adjust_gmm(matrix_, batch, debug = debug, 
-                   nonlinear = TRUE, preserve_counts = TRUE))
+                   nonlinear = TRUE, preserve_counts = TRUE, mean_mean_zero = TRUE, diff_exp = TRUE))
 }
 
 
