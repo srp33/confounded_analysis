@@ -21,15 +21,25 @@ all_other_packages <- c(
     "vsn", "ggpubr", "itertools", "ComplexHeatmap", "ggtext",
 
     # From install_adjuster_specific_packages.R
-    "BatchQC", "batchelor", "ranger", "fairadapt", "rliger", "huge",
+    "batchelor", "ranger", "fairadapt", "rliger", "huge",
     "umap", "mclust", "future", "bigmemory",
+    
+    # BatchQC and dependancies
+    "BatchQC", "gplots", "RColorBrewer",
+    "corrplot", "DT", "plotly", "heatmaply", "moments", "matrixStats",
     
     # From install_annotation_packages.R
     "GEOquery", "pd.hg.u133a", "pd.hg.u133.plus.2", "AnnotationDbi", "biomaRt",
 
     # Other GitHub packages
     "bmbolstad/preprocessCore",
-    "Seurat"
+    "Seurat",
+    
+    # Additional packages for robustifying evaluation
+    "MCMCpack", "nnls", "glmnet", "e1071", "MLmetrics", "tidyverse", "data.table",
+    "caret", "illuminaHumanv4.db", "hugene11sttranscriptcluster.db", "annotate",
+    "DESeq2", "ROCR", "reshape2", "plyr", "rpart", "genefilter", "nnet",
+    "RcppArmadillo", "foreach", "parallel", "doParallel", "scales", "DelayedMatrixStats"
 )
 
 # Install the bulk of packages first.

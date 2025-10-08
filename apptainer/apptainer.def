@@ -71,7 +71,7 @@ From: bioconductor/bioconductor:RELEASE_3_21
     
     # R package installation
     Rscript /install_packages.R
-
+    
     # Final Stage: Assemble
     # The final environment variables are set in the %environment section.
     # The 'COPY --from' commands are unnecessary because all files are installed

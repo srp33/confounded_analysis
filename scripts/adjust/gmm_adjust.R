@@ -203,13 +203,24 @@ get_gene_gmm_transform <- function(
     alpha0 = 10,
     nonlinear = TRUE,
     mean_mean_zero = TRUE,
+    mean1_zero = FALSE,
     unit_var = TRUE,
-    means_at_1 = FALSE
+    means_at_1 = FALSE,
+    diff_exp = FALSE,
+    preserve_counts = FALSE
 ) {
   if (all(is.na(gene_exp))) return(gene_exp)
+  
+  if (preserve_counts && any(gene_exp %% 1 != 0)) {
+    warning("Not preserving counts, expression is not integral")
+  }
+
+  if (diff_exp && unit_var) stop("Unit variance not allowed for diff exp")
+  if (diff_exp && means_at_1) stop("Means at 1 not allowed for diff exp")
 
   # --- Log-transform ---
   min_val <- min(gene_exp, na.rm = TRUE)
+
   x_transformed <- log(gene_exp - min_val + 1)
 
   mean_shift_fallback <- scale(x_transformed, scale = FALSE)[, 1]
@@ -268,18 +279,29 @@ get_gene_gmm_transform <- function(
   }
 
   # --- Affine corrections ---
+  if (mean1_zero) {
+    # Adjusts the first mean to be 0
+    if (mean_mean_zero) stop("Cannot have both mean1_zero and mean_mean_zero")
+    if (means_at_1) stop("Cannot have both mean1_zero and means_at_1")
+
+    x_transformed <- x_transformed - means[1]
+  }
+
   if (mean_mean_zero) {
+    # Centers the means on zero, one on either side
     mean_center <- 0.5 * (means[1] + means[2])
     x_transformed <- x_transformed - mean_center
   }
 
   if (unit_var) {
+    # Scales the variance to be 1, assuming equal weights
     variance <- 0.5 * (variances[1] + variances[2]) + 0.25 * (means[2] - means[1])^2
     scale_factor <- sqrt(max(variance, 1e-9))
     x_transformed <- x_transformed / scale_factor
   }
 
   if (means_at_1) {
+    # Puts the means at +- 1
     if (unit_var) stop("Cannot have both means_at_1 and unit_var")
     if (!mean_mean_zero) stop("Cannot have means_at_1 without mean_mean_zero")
 
@@ -291,12 +313,18 @@ get_gene_gmm_transform <- function(
     x_transformed <- x_transformed / scale_factor
   }
 
+  if (preserve_counts) {
+    x_transformed = round(exp(x_transformed) * 1000)
+  }
+
   return(x_transformed)
 }
 
 
 #' Bimodal normalization using GMM with full inverse CDF
-bimodal_normalize <- function(data, alpha0 = 10, mean_only = FALSE, debug = FALSE) {
+bimodal_normalize <- function(data, alpha0 = 10, nonlinear = TRUE, mean_mean_zero = TRUE, 
+                             mean1_zero = FALSE, unit_var = TRUE, diff_exp = FALSE, means_at_1 = FALSE, 
+                             preserve_counts = FALSE, debug = FALSE) {
   gene_names <- colnames(data)
   n_genes <- length(gene_names)
   n_samples <- nrow(data)
@@ -325,8 +353,18 @@ bimodal_normalize <- function(data, alpha0 = 10, mean_only = FALSE, debug = FALS
     }
     
     tryCatch({
-      # Apply GMM transformation (with or without inverse CDF)
-      bimodal_result <- get_gene_gmm_transform(gene_exp, alpha0, mean_only)
+      # Apply GMM transformation with all parameters
+      bimodal_result <- get_gene_gmm_transform(
+        gene_exp, 
+        alpha0 = alpha0,
+        nonlinear = nonlinear,
+        mean_mean_zero = mean_mean_zero,
+        mean1_zero = mean1_zero,
+        unit_var = unit_var,
+        diff_exp = diff_exp,
+        means_at_1 = means_at_1,
+        preserve_counts = preserve_counts
+      )
       
       # Validate result
       if (all(is.na(bimodal_result)) || all(is.infinite(bimodal_result))) {
@@ -378,14 +416,19 @@ bimodal_normalize <- function(data, alpha0 = 10, mean_only = FALSE, debug = FALS
 #' @param data Matrix of gene expression data (samples x genes)
 #' @param batch Vector of batch labels for each sample
 #' @param alpha0 Dirichlet prior parameter for GMM weights
-#' @param mean_only If TRUE, only adjust means without using inverse CDF transformation
+#' @param nonlinear If TRUE, apply inverse CDF transformation (default TRUE)
+#' @param mean_mean_zero If TRUE, center means around zero (default TRUE)
+#' @param unit_var If TRUE, scale to unit variance (default TRUE)
+#' @param diff_exp If TRUE, adjust first mean to zero for differential expression preservation (default FALSE)
+#' @param means_at_1 If TRUE, place means at ±1 (default FALSE)
+#' @param preserve_counts If TRUE, attempt to preserve count structure (default FALSE)
 #' @param debug If TRUE, print progress messages
 #' 
-#' @details When mean_only=TRUE, the function performs a simpler adjustment that
-#' only shifts the means of the two GMM components to -1 and 1, without applying
-#' the full inverse CDF transformation. This preserves more of the original data
-#' structure while still achieving bimodal normalization.
-gmm_adjust <- function(data, batch, alpha0 = 10, mean_only = FALSE, debug = FALSE) {
+#' @details The function applies GMM-based bimodal normalization to each batch separately.
+#' Various transformation options allow control over the final distribution properties.
+gmm_adjust <- function(data, batch, alpha0 = 10, nonlinear = TRUE, mean_mean_zero = TRUE,
+                      mean1_zero = FALSE, unit_var = TRUE, diff_exp = FALSE, means_at_1 = FALSE, 
+                      preserve_counts = FALSE, debug = FALSE) {
   if (debug) {
     cat("Starting GMM adjustment...\n")
     cat("Input data dimensions:", nrow(data), "rows,", ncol(data), "columns\n")
@@ -409,7 +452,18 @@ gmm_adjust <- function(data, batch, alpha0 = 10, mean_only = FALSE, debug = FALS
     batch_data <- data[batch_indices, , drop = FALSE]
     
     # Apply bimodal normalization to all genes
-    batch_adjusted <- bimodal_normalize(batch_data, alpha0, mean_only, debug)
+    batch_adjusted <- bimodal_normalize(
+      batch_data, 
+      alpha0 = alpha0,
+      nonlinear = nonlinear,
+      mean_mean_zero = mean_mean_zero,
+      mean1_zero = mean1_zero,
+      unit_var = unit_var,
+      diff_exp = diff_exp,
+      means_at_1 = means_at_1,
+      preserve_counts = preserve_counts,
+      debug = debug
+    )
     adjusted_data[batch_indices, ] <- batch_adjusted
   }
   
