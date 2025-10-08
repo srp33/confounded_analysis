@@ -370,14 +370,14 @@ draw_heatmap <- function(data_matrix, metric_col, adjuster, train_combined, is_d
   return(ht)
 }
 
-# Unified jitter plot function
+# Unified boxplot function (formerly jitter plot)
 generate_jitter_plot <- function(all_diff_data, fig_dir, cross, plot_type = "regular") {
   # Filter out rows with missing values
   all_diff_data <- all_diff_data %>%
     filter(!is.na(Mean_Metric), is.finite(Mean_Metric))
   
   if (nrow(all_diff_data) == 0) {
-    cat("No valid data for", plot_type, "jitter plot\n")
+    cat("No valid data for", plot_type, "boxplot\n")
     return()
   }
   
@@ -386,19 +386,19 @@ generate_jitter_plot <- function(all_diff_data, fig_dir, cross, plot_type = "reg
     title <- "Distribution of Diagonal Delta Metrics for Adjusters"
     subtitle <- "Difference from diagonal (Train == Test) performance"
     y_label <- "Difference from Diagonal Performance"
-    filename_prefix <- "diagonal_delta_jitter_plot"
+    filename_prefix <- "diagonal_delta_boxplot"
   } else {
     title <- "Distribution of Metric Differences for Adjusters"
     subtitle <- NULL
     y_label <- "Difference in Metric (Adjusted - Unadjusted)"
-    filename_prefix <- "jitter_plot"
+    filename_prefix <- "boxplot"
   }
   
   p <- ggplot(all_diff_data, aes(x = Adjuster, y = Mean_Metric, color = Metric)) +
-    geom_jitter(width = 0.25, height = 0, size = 2, alpha = 0.7) +
+    geom_boxplot(outlier.shape = 16, outlier.size = 2, outlier.alpha = 0.7, 
+                 alpha = 0.7, width = 0.6) +
     scale_color_manual(values = c("MCC" = "skyblue", "AUC" = "orange")) +
     geom_hline(yintercept = 0, color = "black", linewidth = 0.3, alpha = 0.8) +
-    stat_summary(fun = mean, geom = "crossbar", width = 0.5, color = "black", linewidth = 0.5) +
     theme_minimal() +
     labs(
       title = title,
@@ -416,7 +416,7 @@ generate_jitter_plot <- function(all_diff_data, fig_dir, cross, plot_type = "reg
   cross_suffix = ifelse(cross, "_cross", "")
   file_path <- file.path(fig_dir, paste0(filename_prefix, cross_suffix, ".png"))
   ggsave(file_path, plot = p, width = 10, height = 6)
-  cat(paste(plot_type, "jitter plot saved to:"), file_path, "\n")
+  cat(paste(plot_type, "boxplot saved to:"), file_path, "\n")
 }
 
 generate_all_heatmaps_to_pdf <- function(adjuster, train_combined, fig_dir = "/outputs/figures") {
@@ -562,16 +562,16 @@ all_diag_diffs <- results$combined$diagonal
 all_adjuster_diffs_cross <- results$cross$regular
 all_diag_diffs_cross <- results$cross$diagonal
  
-# Generate all jitter plots
-jitter_configs <- list(
+# Generate all boxplots
+boxplot_configs <- list(
   list(data = all_adjuster_diffs, cross = FALSE, type = "regular"),
   list(data = all_adjuster_diffs_cross, cross = TRUE, type = "regular"),
   list(data = all_diag_diffs, cross = FALSE, type = "diagonal"),
   list(data = all_diag_diffs_cross, cross = TRUE, type = "diagonal")
 )
 
-for (config in jitter_configs) {
+for (config in boxplot_configs) {
   generate_jitter_plot(config$data, FIG_DIR, config$cross, config$type)
 }
 
-cat("All heatmaps and jitter plots generated successfully.\n")
+cat("All heatmaps and boxplots generated successfully.\n")
