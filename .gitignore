@@ -10,3 +10,4 @@ outputs/metrics/archive
 *.sif
 grp_batch_effects
 core.*
+.kiro
