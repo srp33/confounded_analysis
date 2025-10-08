@@ -14,5 +14,5 @@ mkdir -p $SHARED_DIR/outputs/figures/ $SHARED_DIR/outputs/metrics $SHARED_DIR/ou
 module load apptainer 
 
 # Export creates global variables that are useful later on
-export APPTAINER_BINDPATH="$SHARED_DIR/data:/data,$SHARED_DIR/outputs:/outputs,$SCRIPTS_DIR:/scripts"
+export APPTAINER_BINDPATH="$SHARED_DIR/data:/data,$SHARED_DIR/outputs:/outputs,$SCRIPTS_DIR:/scripts,$SHARED_DIR:$ANALYSIS_DIR/grp_batch_effects_folders_are_now_located_at_root"
 export APPTAINER_IMAGE="$SHARED_DIR/remove-batch-effects.sif"
