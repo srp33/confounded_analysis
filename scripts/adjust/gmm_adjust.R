@@ -235,7 +235,7 @@ get_gene_gmm_transform <- function(
 
   # --- Fit 2-component GMM ---
   gmm <- GaussianMixture2D(alpha0 = alpha0)
-  gmm <- fit(gmm, x_transformed)
+  gmm <- fit.GaussianMixture2D(gmm, x_transformed)
 
   qnorm_fallback <- qnorm(quantiles)
 
@@ -326,8 +326,16 @@ bimodal_normalize <- function(data, alpha0 = 10, nonlinear = TRUE, mean_mean_zer
                              mean1_zero = FALSE, unit_var = TRUE, diff_exp = FALSE, means_at_1 = FALSE, 
                              preserve_counts = FALSE, debug = FALSE) {
   gene_names <- colnames(data)
+  if (is.null(gene_names)) {
+    gene_names <- paste0("Gene", 1:ncol(data))
+  }
   n_genes <- length(gene_names)
   n_samples <- nrow(data)
+  
+  if (debug) {
+    cat("bimodal_normalize: n_samples =", n_samples, ", n_genes =", n_genes, "\n")
+    cat("Gene names:", head(gene_names), "\n")
+  }
   
   # Initialize results
   bimodal_data <- matrix(NA, nrow = n_samples, ncol = n_genes)
@@ -449,7 +457,15 @@ gmm_adjust <- function(data, batch, alpha0 = 10, nonlinear = TRUE, mean_mean_zer
     }
     
     batch_indices <- which(batch == b)
+    if (debug) {
+      cat("Batch indices:", batch_indices, "\n")
+      cat("Number of samples in batch:", length(batch_indices), "\n")
+    }
+    
     batch_data <- data[batch_indices, , drop = FALSE]
+    if (debug) {
+      cat("Batch data dimensions:", nrow(batch_data), "x", ncol(batch_data), "\n")
+    }
     
     # Apply bimodal normalization to all genes
     batch_adjusted <- bimodal_normalize(
@@ -464,6 +480,12 @@ gmm_adjust <- function(data, batch, alpha0 = 10, nonlinear = TRUE, mean_mean_zer
       preserve_counts = preserve_counts,
       debug = debug
     )
+    
+    if (debug) {
+      cat("Batch adjusted dimensions:", nrow(batch_adjusted), "x", ncol(batch_adjusted), "\n")
+      cat("Assigning to indices:", batch_indices, "\n")
+    }
+    
     adjusted_data[batch_indices, ] <- batch_adjusted
   }
   
