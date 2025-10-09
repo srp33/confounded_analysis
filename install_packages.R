@@ -39,7 +39,7 @@ all_other_packages <- c(
     "MCMCpack", "nnls", "glmnet", "e1071", "MLmetrics", "tidyverse", "data.table",
     "caret", "illuminaHumanv4.db", "hugene11sttranscriptcluster.db", "annotate",
     "DESeq2", "ROCR", "reshape2", "plyr", "rpart", "genefilter", "nnet",
-    "RcppArmadillo", "foreach", "parallel", "doParallel", "scales", "DelayedMatrixStats"
+    "RcppArmadillo", "foreach", "parallel", "doParallel", "scales", "DelayedMatrixStats", "RUVSeq"
 )
 
 # Install the bulk of packages first.
