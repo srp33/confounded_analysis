@@ -1,6 +1,6 @@
 rm(list=ls())
 sapply(c("GEOquery", "annotate", "hugene11sttranscriptcluster.db",
-         "SummarizedExperiment", "limma", "BatchQC", "ggplot2"), require, character.only=TRUE)
+         "SummarizedExperiment", "limma", "BatchQC", "ggplot2"), require, character.only=TRUE, quietly=TRUE)
 set.seed(123)
 
 ##  Download data from GEO
@@ -22,7 +22,7 @@ dat <- exprs(gse)
 rownames(dat) <- gene_symbols
 
 # annotate samples and create group
-sample_info <- read.csv("./data/new_data_info.csv", as.is=TRUE)
+sample_info <- read.csv("/scripts/evaluations/robustifying/data/new_data_info.csv", as.is=TRUE)
 identical(sample_info$ID, colnames(dat))
 colnames(dat) <- sample_info$Label
 
@@ -32,7 +32,7 @@ group[grep("_TB_", colnames(dat))] <- 1
 
 
 ##  Clean together with the other studies
-rds_obj <- readRDS("./data/combined.rds")
+rds_obj <- readRDS("/scripts/evaluations/robustifying/data/combined.rds")
 overlapping_genes <- intersect(rownames(rds_obj), rownames(dat))
 length(overlapping_genes)
 
@@ -89,7 +89,7 @@ label_lst <- list(US=group, Africa=group_a, India=group_i)
 
 
 ##  Download new data from GEO
-library("illuminaHumanv4.db")
+library("illuminaHumanv4.db", quietly = TRUE)
 # GSE37250
 gse <- getGEO("GSE37250", GSEMatrix=TRUE)[[1]]
 meta_info <- pData(gse)[, c(8, 10, 11, 12, 35, 36, 37)]
@@ -251,4 +251,4 @@ names(label_lst) <- study_names
 
 ##  Save data
 label_lst <- lapply(label_lst, function(lb){as.numeric(as.character(lb))})
-save(dat_lst, label_lst, file="./data/TB_real_data.RData")
+save(dat_lst, label_lst, file="/scripts/evaluations/robustifying/data/TB_real_data.RData")

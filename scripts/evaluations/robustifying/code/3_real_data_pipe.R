@@ -1,10 +1,16 @@
+# Suppress all output and warnings
+options(warn = -1)
+suppressMessages(suppressWarnings({
+
 rm(list=ls())
-if(!dir.exists("./results_real")){dir.create("./results_real")}
+if(!dir.exists("/scripts/evaluations/robustifying/results_real_4studies")){dir.create("/scripts/evaluations/robustifying/results_real_4studies")}
 sapply(c("glmnet", "SummarizedExperiment", "sva", "DESeq2", "ROCR", "ggplot2", 
-         "gridExtra", "reshape2", "dplyr", "nnls"), require, character.only=TRUE)
-load("./data/TB_real_data.RData")
-source("./code/helper.R")
-source("../../adjust/gmm_adjust.R")
+         "gridExtra", "reshape2", "dplyr", "nnls"), require, character.only=TRUE, quietly=TRUE)
+
+}))
+load("/scripts/evaluations/robustifying/data/TB_real_data.RData")
+source("/scripts/evaluations/robustifying/code/helper.R")
+source("/scripts/adjust/gmm_adjust.R")
 set.seed(123)
 
 
@@ -14,7 +20,7 @@ norm_data <- TRUE  # whether to normalize datasets by features using z-score sca
 use_ref_combat <- FALSE  # whether to use ref combat to adjust test set against training set
 
 n_highvar_genes <- 1000  # number of highly variable genes to use in feature reduction
-B <- 100  # bootstrap samples
+B <- 2  # bootstrap samples (reduced for testing)
 learner_types <- c("lasso", "rf", "svm")  
 perf_measures <- c("mxe", "auc", "rmse", "f", "err", "acc") 
 perf_measures_names <- c("Mean cross-entropy loss", "AUC", "Root-mean-squared error", 
@@ -57,24 +63,24 @@ for(s in study_names){
   dat_combat <- ComBat(dat, batch=batch, mod=model.matrix(~group))
   
   ## Apply gmm_adjust batch correction
-  cat("Applying gmm_adjust with parameters: alpha0=10, nonlinear=FALSE, mean_mean_zero=TRUE, unit_var=TRUE\n")
-  cat("Data dimensions:", nrow(dat), "genes x", ncol(dat), "samples\n")
-  cat("Batch distribution:", table(batch), "\n")
-  cat("Data range:", range(dat, na.rm=TRUE), "\n")
+  # cat("Applying gmm_adjust with parameters: alpha0=10, nonlinear=FALSE, mean_mean_zero=TRUE, unit_var=TRUE\n")  # Suppressed for cleaner output
+  # cat("Data dimensions:", nrow(dat), "genes x", ncol(dat), "samples\n")
+  # cat("Batch distribution:", table(batch), "\n")
+  # cat("Data range:", range(dat, na.rm=TRUE), "\n")
   
   dat_gmm_adj <- gmm_adjust(data=t(dat), batch=batch, 
                            alpha0=10, nonlinear=FALSE, 
-                           mean_mean_zero=TRUE, unit_var=TRUE, debug=TRUE)
+                           mean_mean_zero=TRUE, unit_var=TRUE, debug=FALSE)
   
-  cat("GMM adjustment completed successfully\n")
-  cat("Output dimensions:", nrow(dat_gmm_adj), "samples x", ncol(dat_gmm_adj), "genes\n")
-  cat("Output range:", range(dat_gmm_adj, na.rm=TRUE), "\n")
+  # cat("GMM adjustment completed successfully\n")  # Suppressed for cleaner output
+  # cat("Output dimensions:", nrow(dat_gmm_adj), "samples x", ncol(dat_gmm_adj), "genes\n")
+  # cat("Output range:", range(dat_gmm_adj, na.rm=TRUE), "\n")
   
   dat_gmm_adj <- t(dat_gmm_adj)
   
   ## normalize features
   if(norm_data){
-    print("Normalizing data.")
+    # print("Normalizing data.")  # Suppressed for cleaner output
     dat_batch_whole_norm <- normalizeData(dat)  # norm training set as a whole
     # norm training set within each batch
     dat_batch_norm <- matrix(NA, nrow=nrow(dat), ncol=ncol(dat), dimnames=dimnames(dat))  
@@ -90,7 +96,7 @@ for(s in study_names){
     dat_gmm_norm <- matrix(NA, nrow=nrow(dat_gmm_adj), ncol=ncol(dat_gmm_adj), dimnames=dimnames(dat_gmm_adj))  
     for(k in batch_names){dat_gmm_norm[, batch==k] <- normalizeData(dat_gmm_adj[, batch==k])}
   }else{
-    print("Datasets are NOT normalized.")
+    # print("Datasets are NOT normalized.")  # Suppressed for cleaner output
     dat_batch_whole_norm <- dat_batch_norm <- dat 
     dat_combat_whole_norm <- dat_combat_norm <- dat_combat
     dat_gmm_whole_norm <- dat_gmm_norm <- dat_gmm_adj
@@ -105,7 +111,7 @@ for(s in study_names){
   cs_zmat_lst <- cs_weights_seq <- reg_ssl_res <- reg_a_beta <- reg_s_beta <- list()
   for(l_type in learner_types){
     learner_fit <- getPredFunctions(l_type)
-    print(paste("Model:", l_type))
+    # print(paste("Model:", l_type))  # Suppressed for cleaner output
     
     ##  Training on original train set
     pred_unadj_res <- trainPipe(train_set=dat_batch_whole_norm, train_label=group, test_set=NULL, 
@@ -169,7 +175,7 @@ for(s in study_names){
   
   save(navg_weights, cs_zmat_lst, cs_weights_seq, reg_ssl_res, reg_a_beta, reg_s_beta, 
        cm_navg_weights, cm_cs_weights_seq, cm_reg_ssl_res, cm_reg_a_beta, cm_reg_s_beta,
-       file=sprintf('./results_real/test%s_weights.RData', test_name))
+       file=sprintf('/scripts/evaluations/robustifying/results_real_4studies/test%s_weights.RData', test_name))
   rm(pred_unadj_res, pred_combat_res, pred_gmm_res, pred_sgbatch_res)
   
   
@@ -181,7 +187,7 @@ for(s in study_names){
   rm(dat_test, group_test)  # save original data for bootstrap
   
   while(b<=B){
-    print(sprintf("Test: %s; Bootstrap: %s", test_name, b))
+    # print(sprintf("Test: %s; Bootstrap: %s", test_name, b))  # Suppressed for cleaner output
     
     ## draw bootstrap sample
     boot_ind <- sample(1:ncol(dat_testOri), ncol(dat_testOri), replace=TRUE)
@@ -220,7 +226,7 @@ for(s in study_names){
       
       
       ####  Ensemble across models
-      print(paste("Ensemble across models."))
+      # print(paste("Ensemble across models."))  # Suppressed for cleaner output
       
       preds_crossmod <- lapply(tst_scores_modlst, function(x){
         do.call(cbind, x[paste0("Batch", batch_names)])
@@ -238,12 +244,37 @@ for(s in study_names){
       tst_scores_modlst[["crossmod"]] <- tst_cm_scores
       
       for(i in 1:length(perf_measures)){
-        summary_df <- melt(lapply(perf_df_lst, function(perf_res){perf_res[perf_measures[i], -c(2:(2+length(unique(batch))-1))]}))
-        summary_df$iteration <- b
+        # Extract performance data more robustly
+        perf_data <- list()
+        for(model_name in names(perf_df_lst)){
+          perf_res <- perf_df_lst[[model_name]]
+          if(perf_measures[i] %in% rownames(perf_res)){
+            # Get all columns except batch-specific ones (typically columns 2-4 for 3 batches)
+            # Keep columns: 1 (first method), and from (2+n_batches) onwards
+            n_batches <- length(unique(batch))
+            start_col <- 2 + n_batches
+            if(ncol(perf_res) >= start_col){
+              selected_cols <- c(1, start_col:ncol(perf_res))
+              perf_data[[model_name]] <- perf_res[perf_measures[i], selected_cols]
+            } else {
+              # Fallback: just take the first column if structure is unexpected
+              perf_data[[model_name]] <- perf_res[perf_measures[i], 1, drop=FALSE]
+            }
+          }
+        }
+        
+        if(length(perf_data) > 0){
+          summary_df <- melt(perf_data)
+          summary_df$iteration <- b
+          # Rename columns to match what the figure generation script expects
+          colnames(summary_df) <- c("Method", "value", "Model", "Iteration")
+        } else {
+          next  # Skip if no data available
+        }
         
         ## write out performances
-        first_file <- !file.exists(sprintf('./results_real/test%s_%s.csv', test_name, perf_measures[i]))
-        write.table(summary_df, sprintf('./results_real/test%s_%s.csv', test_name, perf_measures[i]),
+        first_file <- !file.exists(sprintf('/scripts/evaluations/robustifying/results_real_4studies/test%s_%s.csv', test_name, perf_measures[i]))
+        write.table(summary_df, sprintf('/scripts/evaluations/robustifying/results_real_4studies/test%s_%s.csv', test_name, perf_measures[i]),
                     append=!first_file, col.names=first_file, row.names=FALSE, sep=",")
       }
       

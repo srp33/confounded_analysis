@@ -1,13 +1,19 @@
+# Suppress all output and warnings
+options(warn = -1)
+suppressMessages(suppressWarnings({
+
 rm(list=ls())
 setwd("/scripts/evaluations/robustifying")
-message(getwd())
-if(!dir.exists("./results")){dir.create("./results")}
+# message(getwd())  # Suppressed for cleaner output
+if(!dir.exists("/scripts/evaluations/robustifying/results")){dir.create("/scripts/evaluations/robustifying/results")}
 all(sapply(c("SummarizedExperiment", "plyr", "sva", "MCMCpack", "ROCR", "ggplot2", "limma", "nnls",  "glmnet", 
              "rpart", "genefilter", "nnet", "e1071", "RcppArmadillo", "foreach", "parallel", "doParallel",  
-             "ranger", "scales"), require, character.only=TRUE))
-source("./code/helper.R")
-source("../../adjust/gmm_adjust.R")
-load("./data/combined_sub.RData")
+             "ranger", "scales"), require, character.only=TRUE, quietly=TRUE))
+
+}))
+source("/scripts/evaluations/robustifying/code/helper.R")
+source("/scripts/adjust/gmm_adjust.R")
+load("/scripts/evaluations/robustifying/data/combined_sub.RData")
 
 ####  Load data
 #select 1000 genes with largest variance in training set (Africa)
@@ -38,9 +44,9 @@ hyper_pars <- list(hyper_mu=seq(from=-max_batch_mean, to=max_batch_mean, length.
                                      v=rep(0.01, N_batch))$alpha,  #c(3.28, 2.02, 2.845, 2.32, 2.125),
                    hyper_beta=mv2ab(m=seq(from=1/max_batch_var, to=max_batch_var, length.out=N_batch), 
                                     v=rep(0.01, N_batch))$beta)  #c(0.1824, 0.0102, 0.12, 0.0528, 0.028))
-cat("\nBatch changes\n");
-print(hyper_pars$hyper_mu);
-print(hyper_pars$hyper_beta/(hyper_pars$hyper_alpha-1))
+# cat("\nBatch changes\n");  # Suppressed for cleaner output
+# print(hyper_pars$hyper_mu);
+# print(hyper_pars$hyper_beta/(hyper_pars$hyper_alpha-1))
 #print((hyper_pars$hyper_beta^2)/((hyper_pars$hyper_alpha-1)^2*(hyper_pars$hyper_alpha-2)))
 
 ## Pipeline
@@ -83,7 +89,7 @@ for(ID in 1:iterations){
   
   ## Normalize datasets before training
   if(norm_data){
-    if(ID==1){print("Normalizing data.")}
+    # if(ID==1){print("Normalizing data.")}  # Suppressed for cleaner output
     train_expr_norm <- normalizeData(curr_train_expr)
     test_expr_norm <- normalizeData(curr_test_expr)
     # for train set with batch effect: normalize as a whole
@@ -95,7 +101,7 @@ for(ID in 1:iterations){
       train_expr_batch_norm[, batches_ind[[k]]] <- normalizeData(train_expr_batch[, batches_ind[[k]]])
     }
   }else{
-    if(ID==1){print("Datasets are NOT normalized.")}
+    # if(ID==1){print("Datasets are NOT normalized.")}  # Suppressed for cleaner output
     train_expr_norm <- curr_train_expr;  test_expr_norm <- curr_test_expr
     train_expr_batch_whole_norm <- train_expr_batch_norm <- train_expr_batch
   }
@@ -105,7 +111,7 @@ for(ID in 1:iterations){
   ####  Training with single model
   for(l_type in learner_types){
     learner_fit <- getPredFunctions(l_type)
-    print(sprintf("Simulation: %s, Model: %s", ID, l_type))
+    # print(sprintf("Simulation: %s, Model: %s", ID, l_type))  # Suppressed for cleaner output
     
     ## Prediction from original training to test, without batch effect
     pred_base_res <- try(trainPipe(train_set=train_expr_norm, train_label=curr_y_train, 
@@ -133,14 +139,14 @@ for(ID in 1:iterations){
     if(inherits(pred_combat_res, "try-error")){ID <- ID - 1; break; next}
     
     ##  Prediction from training after GMM adjustment
-    cat("Applying gmm_adjust with parameters: alpha0=10, nonlinear=FALSE, mean_mean_zero=TRUE, unit_var=TRUE\n")
-    cat("Data dimensions:", nrow(train_expr_batch), "genes x", ncol(train_expr_batch), "samples\n")
-    cat("Batch distribution:", table(batch), "\n")
-    cat("Data range:", range(train_expr_batch, na.rm=TRUE), "\n")
+    # cat("Applying gmm_adjust with parameters: alpha0=10, nonlinear=FALSE, mean_mean_zero=TRUE, unit_var=TRUE\n")  # Suppressed for cleaner output
+    # cat("Data dimensions:", nrow(train_expr_batch), "genes x", ncol(train_expr_batch), "samples\n")
+    # cat("Batch distribution:", table(batch), "\n")  # Suppressed for cleaner output
+    # cat("Data range:", range(train_expr_batch, na.rm=TRUE), "\n")
     
     train_expr_gmm_adj <- try(gmm_adjust(data=t(train_expr_batch), batch=batch, 
                                          alpha0=10, nonlinear=FALSE, 
-                                         mean_mean_zero=TRUE, unit_var=TRUE, debug=TRUE))
+                                         mean_mean_zero=TRUE, unit_var=TRUE, debug=FALSE))
     if(inherits(train_expr_gmm_adj, "try-error")){
       cat("ERROR in gmm_adjust:", train_expr_gmm_adj, "\n")
       cat("Batch info - unique batches:", unique(batch), "\n")
@@ -150,9 +156,9 @@ for(ID in 1:iterations){
       ID <- ID - 1; break; next
     }
     
-    cat("GMM adjustment completed successfully\n")
-    cat("Output dimensions:", nrow(train_expr_gmm_adj), "samples x", ncol(train_expr_gmm_adj), "genes\n")
-    cat("Output range:", range(train_expr_gmm_adj, na.rm=TRUE), "\n")
+    # cat("GMM adjustment completed successfully\n")  # Suppressed for cleaner output
+    # cat("Output dimensions:", nrow(train_expr_gmm_adj), "samples x", ncol(train_expr_gmm_adj), "genes\n")
+    # cat("Output range:", range(train_expr_gmm_adj, na.rm=TRUE), "\n")
     
     train_expr_gmm_adj <- t(train_expr_gmm_adj)
     if(norm_data){

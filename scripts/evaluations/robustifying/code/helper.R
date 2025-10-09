@@ -1,3 +1,6 @@
+# Suppress warnings and messages for cleaner output
+options(warn = -1)
+
 ####  Wrappers
 ensemble_wrapper <- function(pred_test_lst, cs_zmat, reg_ssl_res, 
                              batches_ind, y_sgbatch){
@@ -317,7 +320,7 @@ predLasso <- function(
   y_trn
   # response of training set, binary & numeric
 ){
-  library(glmnet)
+  library(glmnet, quietly = TRUE)
   obj <- cv.glmnet(x=t(trn_set), y=factor(y_trn), family="binomial", alpha=1,
                    lambda=10^(seq(from=-4, to=4, by=0.1)),
                    type.measure="mse", nfolds=10)#, intercept=FALSE)
@@ -370,7 +373,7 @@ predSVM <- function(
   y_trn
   # response of training set, binary & numeric
 ){
-  library(e1071)
+  library(e1071, quietly = TRUE)
   tune_ctrl <- tune.control(sampling="cross", cross=4)#, error.fun=LogLossBinary)
   obj <- tune(svm, train.x=t(trn_set), train.y=as.factor(y_trn),
               tunecontrol=tune_ctrl,
@@ -402,7 +405,7 @@ predRF <- function(
   y_trn
   # response of training set, binary & numeric
 ){
-  library(caret)
+  library(caret, quietly = TRUE)
   
   training_df <- data.frame(t(trn_set), as.factor(y_trn))
   colnames(training_df) <- c(paste("gene", 1:nrow(trn_set), sep=""), "response")
@@ -434,7 +437,7 @@ predNnet <- function(
   y_trn
   # response of training set, binary & numeric
 ){
-  library(caret)
+  library(caret, quietly = TRUE)
   parGrid <- expand.grid(size=seq(from=2, to=3, by=1),
                          decay=10^seq(from=-4, to=-1, by=0.5))
   ctrl <- trainControl(method = "cv", number=10)

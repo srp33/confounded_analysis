@@ -1,24 +1,29 @@
+# Suppress all output and warnings
+options(warn = -1)
+suppressMessages(suppressWarnings({
+
 rm(list = ls())
-setwd("./")
-if (!dir.exists("./figures")) {
-  dir.create("./figures")
+setwd("/scripts/evaluations/robustifying")
+if (!dir.exists("/scripts/evaluations/robustifying/figures")) {
+  dir.create("/scripts/evaluations/robustifying/figures")
 }
 sapply(c("ggplot2", "gridExtra", "reshape2", "DelayedMatrixStats", "plyr", "ggpubr", 
-         "SummarizedExperiment", "MCMCpack", "dplyr", "scales"), require, character.only = TRUE)
+         "SummarizedExperiment", "MCMCpack", "dplyr", "scales"), require, character.only = TRUE, quietly = TRUE)
+
+}))
 
 
 
 ########  Figure 1: simulation studies  ########
-source("./code/helper.R")
-results_dir <- "./results_sim/"
+source("/scripts/evaluations/robustifying/code/helper.R")
+results_dir <- "/scripts/evaluations/robustifying/results/"
 file_lst <- grep(".csv", dir(results_dir), fixed = TRUE, value = TRUE)  # all results files
-method_names <- c("lasso", "rf", "nnet", "svm")
-method_names_plt <- c("Lasso logistic regression", "Random Forest",
-                      "Neural Networks", "Support Vector Machines")
+method_names <- c("lasso", "rf", "svm")
+method_names_plt <- c("Lasso logistic regression", "Random Forest", "Support Vector Machines")
 names(method_names_plt) <- method_names
 Nbatch <- 3
 N_sample_size <- 20
-batch_mean_vec <- c(0, 5)
+batch_mean_vec <- c(0, 3, 5)
 batch_var_vec <- c(1, 3, 5)
 perf_measures <- c("mxe", "auc")  
 perf_measures_plt <- c("Mean cross-entropy loss", "AUC")  
@@ -35,7 +40,7 @@ for (curr_perf in perf_measures) {
   curr_file_lst <- sort(apply(expand.grid(method_names, paste0(curr_perf, "_batchN", N_sample_size, "_",
                                                                curr_files_mv_suffix, ".csv")),
                               1, paste, collapse = "_"))
-  print(curr_file_lst)
+  # print(curr_file_lst)  # Suppressed for cleaner output
   sgmod_res_lst <- base_lst <- list()
   
   for (bl in batch_levels) {
@@ -82,19 +87,19 @@ for (curr_perf in perf_measures) {
     labs(y=perf_measures_plt[curr_perf])
 }
 
-png("./figures/Fig1.png", width=5, height=8, units="in", res=300)
+png("/scripts/evaluations/robustifying/figures/Fig1.png", width=5, height=8, units="in", res=300)
 plt_lst[["auc"]]
-dev.off()
+invisible(dev.off())
 
 
 
 
 ########  Figure 2: real data application  ########
 rm(list=ls())
-source("./code/helper.R")
+source("/scripts/evaluations/robustifying/code/helper.R")
 
 #### 4 studies
-results_dir <- "./results_real_4studies"
+results_dir <- "/scripts/evaluations/robustifying/results_real_4studies"
 study_names <- c("GSE37250_SA", "GSE37250_M", "US", "India")
 study_label <- c("F", "G", "E", "D")
 names(study_label) <- study_names
@@ -182,7 +187,7 @@ for(i in 1:length(perf_measures)){
 }
 
 #### 6 studies
-results_dir <- "./results_real_6studies"
+results_dir <- "/scripts/evaluations/robustifying/results_real_6studies"
 study_names <- c("GSE37250_SA", "GSE37250_M", "GSE39941_M", "US", "Africa", "India")
 study_label <- c("F", "G", "C", "E", "A", "D")
 names(study_label) <- study_names
@@ -283,7 +288,7 @@ p <- arrangeGrob(plt_4studies, plt_6studies, lgd,
                  ncol=3, nrow=3, layout_matrix=rbind(c(2,2,2), c(NA,NA,NA), c(1,1,3)),
                  heights=c(1,0.1,1))
 
-png("./figures/Fig2.png", width=13, height=6, units="in", res=300)
+png("/scripts/evaluations/robustifying/figures/Fig2.png", width=13, height=6, units="in", res=300)
 print(as_ggplot(p))
-dev.off()
+invisible(dev.off())
 
