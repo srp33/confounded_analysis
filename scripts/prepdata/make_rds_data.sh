@@ -1,4 +1,18 @@
 #!/bin/bash
+
+#SBATCH --job-name=counts_to_rds
+#SBATCH --output=logs/%x_%j.out
+#SBATCH --error=logs/%x_%j.err
+#SBATCH --time=02:00:00              # Adjust time as needed
+#SBATCH --mem=8G                     # Adjust memory as needed
+#SBATCH --cpus-per-task=1           # Adjust CPUs as needed
+#SBATCH --mail-type=END,FAIL        # Optional: get email on job end/fail
+#SBATCH --mail-user=aw998@byu.edu  # Replace with your email
+
+module purge
+module load gcc-runtime/13.2.0-j5cf6qt
+module load r/4.5.1-gg7txi7
+
 set -euo pipefail
 
 if [ $# -lt 1 ]; then
