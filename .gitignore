@@ -11,3 +11,5 @@ outputs/metrics/archive
 grp_batch_effects
 core.*
 .kiro
+scripts/evaluations/robustifying/results*
+scripts/evaluations/robustifying/results
