@@ -156,12 +156,13 @@ batch_var_vec <- 1:5
 perf_measures <- c("mxe", "auc")   
 perf_measures_plt <- c("Mean cross-entropy loss", "AUC")   
 names(perf_measures_plt) <- perf_measures
-subset_colnames_crossmod <- c("NoBatch", "Batch", "ComBat", "Avg", "n_Avg", "CS_Avg", "Reg_a", "Reg_s") 
+subset_colnames_crossmod <- c("NoBatch", "Batch", "ComBat", "GMM", "Avg", "n_Avg", "CS_Avg", "Reg_a", "Reg_s") 
 curr_perf <- "auc"
 
 i = 2; curr_mod = 'lasso'
 plt_label_vec <- c("lasso.Batch" = "No adjustment",   
-                   "lasso.ComBat" = "Merge + ComBat",  
+                   "lasso.ComBat" = "Merge + ComBat",
+                   "lasso.GMM" = "GMM adjust",
                    "lasso.Avg" = "Simple average",  
                    "lasso.n_Avg" = "Batch size",   
                    "lasso.CS_Avg" = "Cross-study",  
@@ -188,14 +189,14 @@ for(bl in batch_levels){
   
   tmp <- read.csv(paste0(results_dir, curr_file_lst_bl[i]), header=TRUE)[, subset_colnames_crossmod[-1]]
   colnames(tmp) <- paste0(curr_mod, '.', subset_colnames_crossmod[-1])
-  tmp <- data.frame(melt(tmp), Type=rep(c("With batch effect, no adjustment", "Merge + ComBat", rep("Ensemble (single learner)",5)), each=nrow(tmp)))
+  tmp <- data.frame(melt(tmp), Type=rep(c("With batch effect, no adjustment", "Merge + ComBat", "GMM adjust", rep("Ensemble (single learner)",5)), each=nrow(tmp)))
   crossmod_res_lst[[bl]] <- rbind(crossmod_res, tmp)
   
   base_lst[[bl]] <- read.csv(paste0(results_dir, curr_file_lst_bl[i]), header=TRUE)[, "NoBatch"]
 }
 plt_df <- melt(crossmod_res_lst)
 plt_df$variable <- factor(plt_df$variable, levels=c(paste0(strsplit(curr_file_lst_bl[i],"_")[[1]][1], '.', subset_colnames_crossmod[-1]), subset_colnames_crossmod[-c(1:3)]))
-plt_df$Type <- factor(plt_df$Type, levels=c("With batch effect, no adjustment", "Merge + ComBat", 
+plt_df$Type <- factor(plt_df$Type, levels=c("With batch effect, no adjustment", "Merge + ComBat", "GMM adjust",
                                             "Ensemble (single learner)", "Ensemble (across learners)"))
 plt_df$variable <- revalue(plt_df$variable, plt_label_vec)
 plt_df$L1 <- revalue(plt_df$L1, c("m0_v1"="Mean difference 0\nVariance fold change 1", 
@@ -250,12 +251,13 @@ batch_var_vec <- 1:5
 perf_measures <- c("mxe", "auc")   
 perf_measures_plt <- c("Mean cross-entropy loss", "AUC")   
 names(perf_measures_plt) <- perf_measures
-subset_colnames_crossmod <- c("NoBatch", "Batch", "ComBat", "Avg", "n_Avg", "CS_Avg", "Reg_a", "Reg_s") 
+subset_colnames_crossmod <- c("NoBatch", "Batch", "ComBat", "GMM", "Avg", "n_Avg", "CS_Avg", "Reg_a", "Reg_s") 
 curr_perf <- "auc"
 
 i = 3; curr_mod = 'rf'
 plt_label_vec <- c("rf.Batch" = "No adjustment",  
-                   "rf.ComBat" = "Merge + ComBat",  
+                   "rf.ComBat" = "Merge + ComBat",
+                   "rf.GMM" = "GMM adjust",
                    "rf.Avg" = "Simple average",  
                    "rf.n_Avg" = "Batch size weights",    
                    "rf.CS_Avg" = "Cross-study weights", 
@@ -282,14 +284,14 @@ for(bl in batch_levels){
   
   tmp <- read.csv(paste0(results_dir, curr_file_lst_bl[i]), header=TRUE)[, subset_colnames_crossmod[-1]]
   colnames(tmp) <- paste0(curr_mod, '.', subset_colnames_crossmod[-1])
-  tmp <- data.frame(melt(tmp), Type=rep(c("With batch effect, no adjustment", "Merge + ComBat", rep("Ensemble (single learner)",5)), each=nrow(tmp)))
+  tmp <- data.frame(melt(tmp), Type=rep(c("With batch effect, no adjustment", "Merge + ComBat", "GMM adjust", rep("Ensemble (single learner)",5)), each=nrow(tmp)))
   crossmod_res_lst[[bl]] <- rbind(crossmod_res, tmp)
   
   base_lst[[bl]] <- read.csv(paste0(results_dir, curr_file_lst_bl[i]), header=TRUE)[, "NoBatch"]
 }
 plt_df <- melt(crossmod_res_lst)
 plt_df$variable <- factor(plt_df$variable, levels=c(paste0(strsplit(curr_file_lst_bl[i],"_")[[1]][1], '.', subset_colnames_crossmod[-1]), subset_colnames_crossmod[-c(1:3)]))
-plt_df$Type <- factor(plt_df$Type, levels=c("With batch effect, no adjustment", "Merge + ComBat", 
+plt_df$Type <- factor(plt_df$Type, levels=c("With batch effect, no adjustment", "Merge + ComBat", "GMM adjust",
                                             "Ensemble (single learner)", "Ensemble (across learners)"))
 plt_df$variable <- revalue(plt_df$variable, plt_label_vec)
 plt_df$L1 <- revalue(plt_df$L1, c("m0_v1"="Mean difference 0\nVariance fold change 1", 
@@ -344,14 +346,15 @@ batch_var_vec <- 1:5
 perf_measures <- c("mxe", "auc")   
 perf_measures_plt <- c("Mean cross-entropy loss", "AUC")   
 names(perf_measures_plt) <- perf_measures
-subset_colnames_crossmod <- c("NoBatch", "Batch", "ComBat", "Avg", "n_Avg", "CS_Avg", "Reg_a", "Reg_s") 
+subset_colnames_crossmod <- c("NoBatch", "Batch", "ComBat", "GMM", "Avg", "n_Avg", "CS_Avg", "Reg_a", "Reg_s") 
 curr_perf <- "auc"
 
 i = 4; curr_mod = 'svm'
 plt_label_vec <- c("svm.Batch" = "No adjustment",   
-                   "svm.ComBat" = "Merge + ComBat",  
-                   "svm.Avg" = "Simple average",  
-                   "svm.n_Avg" = "Batch size weights",   
+                   "svm.ComBat" = "Merge + ComBat",
+                   "svm.GMM" = "GMM adjust",
+                   "svm.Avg" = "Simple average",   
+                   "svm.n_Avg" = "Batch size weights",
                    "svm.CS_Avg" = "Cross-study weights", 
                    "svm.Reg_a" = "Regression aggregate", 
                    "svm.Reg_s" = "Regression stacking",  
@@ -376,14 +379,14 @@ for(bl in batch_levels){
   
   tmp <- read.csv(paste0(results_dir, curr_file_lst_bl[i]), header=TRUE)[, subset_colnames_crossmod[-1]]
   colnames(tmp) <- paste0(curr_mod, '.', subset_colnames_crossmod[-1])
-  tmp <- data.frame(melt(tmp), Type=rep(c("With batch effect, no adjustment", "Merge + ComBat", rep("Ensemble (single learner)",5)), each=nrow(tmp)))
+  tmp <- data.frame(melt(tmp), Type=rep(c("With batch effect, no adjustment", "Merge + ComBat", "GMM adjust", rep("Ensemble (single learner)",5)), each=nrow(tmp)))
   crossmod_res_lst[[bl]] <- rbind(crossmod_res, tmp)
   
   base_lst[[bl]] <- read.csv(paste0(results_dir, curr_file_lst_bl[i]), header=TRUE)[, "NoBatch"]
 }
 plt_df <- melt(crossmod_res_lst)
 plt_df$variable <- factor(plt_df$variable, levels=c(paste0(strsplit(curr_file_lst_bl[i],"_")[[1]][1], '.', subset_colnames_crossmod[-1]), subset_colnames_crossmod[-c(1:3)]))
-plt_df$Type <- factor(plt_df$Type, levels=c("With batch effect, no adjustment", "Merge + ComBat", 
+plt_df$Type <- factor(plt_df$Type, levels=c("With batch effect, no adjustment", "Merge + ComBat", "GMM adjust",
                                             "Ensemble (single learner)", "Ensemble (across learners)"))
 plt_df$variable <- revalue(plt_df$variable, plt_label_vec)
 plt_df$L1 <- revalue(plt_df$L1, c("m0_v1"="Mean difference 0\nVariance fold change 1", 

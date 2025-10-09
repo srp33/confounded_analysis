@@ -4,6 +4,7 @@ sapply(c("glmnet", "SummarizedExperiment", "sva", "DESeq2", "ROCR", "ggplot2",
          "gridExtra", "reshape2", "dplyr", "nnls"), require, character.only=TRUE)
 load("./data/TB_real_data.RData")
 source("./code/helper.R")
+source("../../adjust/gmm_adjust.R")
 set.seed(123)
 
 
@@ -55,6 +56,22 @@ for(s in study_names){
   ## batch correction again after feature
   dat_combat <- ComBat(dat, batch=batch, mod=model.matrix(~group))
   
+  ## Apply gmm_adjust batch correction
+  cat("Applying gmm_adjust with parameters: alpha0=10, nonlinear=FALSE, mean_mean_zero=TRUE, unit_var=TRUE\n")
+  cat("Data dimensions:", nrow(dat), "genes x", ncol(dat), "samples\n")
+  cat("Batch distribution:", table(batch), "\n")
+  cat("Data range:", range(dat, na.rm=TRUE), "\n")
+  
+  dat_gmm_adj <- gmm_adjust(data=t(dat), batch=batch, 
+                           alpha0=10, nonlinear=FALSE, 
+                           mean_mean_zero=TRUE, unit_var=TRUE, debug=TRUE)
+  
+  cat("GMM adjustment completed successfully\n")
+  cat("Output dimensions:", nrow(dat_gmm_adj), "samples x", ncol(dat_gmm_adj), "genes\n")
+  cat("Output range:", range(dat_gmm_adj, na.rm=TRUE), "\n")
+  
+  dat_gmm_adj <- t(dat_gmm_adj)
+  
   ## normalize features
   if(norm_data){
     print("Normalizing data.")
@@ -67,10 +84,16 @@ for(s in study_names){
     # norm combat adjusted data within each batch
     dat_combat_norm <- matrix(NA, nrow=nrow(dat_combat), ncol=ncol(dat_combat), dimnames=dimnames(dat_combat))  
     for(k in batch_names){dat_combat_norm[, batch==k] <- normalizeData(dat_combat[, batch==k])}
+    
+    dat_gmm_whole_norm <- normalizeData(dat_gmm_adj)  # norm gmm adjusted data as a whole
+    # norm gmm adjusted data within each batch
+    dat_gmm_norm <- matrix(NA, nrow=nrow(dat_gmm_adj), ncol=ncol(dat_gmm_adj), dimnames=dimnames(dat_gmm_adj))  
+    for(k in batch_names){dat_gmm_norm[, batch==k] <- normalizeData(dat_gmm_adj[, batch==k])}
   }else{
     print("Datasets are NOT normalized.")
     dat_batch_whole_norm <- dat_batch_norm <- dat 
     dat_combat_whole_norm <- dat_combat_norm <- dat_combat
+    dat_gmm_whole_norm <- dat_gmm_norm <- dat_gmm_adj
   }
   train_lst <- lapply(batch_names, function(k){dat_batch_norm[, batch==k]})
   
@@ -78,7 +101,7 @@ for(s in study_names){
   
   ####  Training 
   #l_type="lasso"
-  unadj_mod_lst <- combat_mod_lst <- sgbatch_mod_lst <- sgbatch_mod_comb <- list()
+  unadj_mod_lst <- combat_mod_lst <- gmm_mod_lst <- sgbatch_mod_lst <- sgbatch_mod_comb <- list()
   cs_zmat_lst <- cs_weights_seq <- reg_ssl_res <- reg_a_beta <- reg_s_beta <- list()
   for(l_type in learner_types){
     learner_fit <- getPredFunctions(l_type)
@@ -93,6 +116,11 @@ for(s in study_names){
     pred_combat_res <- trainPipe(train_set=dat_combat_whole_norm, train_label=group, test_set=NULL, 
                                  lfit=learner_fit, use_ref_combat=use_ref_combat)
     combat_mod_lst[[l_type]] <- pred_combat_res$mod
+    
+    ##  Training on train set after GMM adjustment
+    pred_gmm_res <- trainPipe(train_set=dat_gmm_whole_norm, train_label=group, test_set=NULL, 
+                             lfit=learner_fit, use_ref_combat=use_ref_combat)
+    gmm_mod_lst[[l_type]] <- pred_gmm_res$mod
     
     ##  Training within each batch from train set
     pred_sgbatch_res <- lapply(batch_names, function(k){
@@ -142,7 +170,7 @@ for(s in study_names){
   save(navg_weights, cs_zmat_lst, cs_weights_seq, reg_ssl_res, reg_a_beta, reg_s_beta, 
        cm_navg_weights, cm_cs_weights_seq, cm_reg_ssl_res, cm_reg_a_beta, cm_reg_s_beta,
        file=sprintf('./results_real/test%s_weights.RData', test_name))
-  rm(pred_unadj_res, pred_combat_res, pred_sgbatch_res)
+  rm(pred_unadj_res, pred_combat_res, pred_gmm_res, pred_sgbatch_res)
   
   
   ####  Prediction & Ensemble
@@ -172,13 +200,14 @@ for(s in study_names){
         ##  Obtain prediction on each test set
         unadj_tst_prob <- predWrapper(unadj_mod_lst[[l_type]], dat_test_norm, l_type)
         combat_tst_prob <-  predWrapper(combat_mod_lst[[l_type]], dat_test_norm, l_type)
+        gmm_tst_prob <- predWrapper(gmm_mod_lst[[l_type]], dat_test_norm, l_type)
         onestep_res <- ensemble_wrapper_realdata(sgbatch_mod_lst, l_type, dat_test_norm, 
                                                  navg_weights, cs_weights_seq, reg_a_beta, reg_s_beta)
         
         
         ##  Evaluate performance
         tst_scores <- c(list(Batch=unadj_tst_prob), onestep_res$pred_test_lst, 
-                        list(ComBat=combat_tst_prob, 
+                        list(ComBat=combat_tst_prob, GMM=gmm_tst_prob,
                              Avg=onestep_res$pred_avg, n_Avg=onestep_res$pred_N_avg, 
                              CS_Avg=onestep_res$pred_cs_avg, Reg_a=onestep_res$pred_reg_a, 
                              Reg_s=onestep_res$pred_reg_s))

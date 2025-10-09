@@ -1,10 +1,12 @@
 rm(list=ls())
-setwd("./")
+setwd("/scripts/evaluations/robustifying")
+message(getwd())
 if(!dir.exists("./results")){dir.create("./results")}
 all(sapply(c("SummarizedExperiment", "plyr", "sva", "MCMCpack", "ROCR", "ggplot2", "limma", "nnls",  "glmnet", 
              "rpart", "genefilter", "nnet", "e1071", "RcppArmadillo", "foreach", "parallel", "doParallel",  
              "ranger", "scales"), require, character.only=TRUE))
 source("./code/helper.R")
+source("../../adjust/gmm_adjust.R")
 load("./data/combined_sub.RData")
 
 ####  Load data
@@ -130,6 +132,42 @@ for(ID in 1:iterations){
                                      lfit=learner_fit, use_ref_combat=use_ref_combat))
     if(inherits(pred_combat_res, "try-error")){ID <- ID - 1; break; next}
     
+    ##  Prediction from training after GMM adjustment
+    cat("Applying gmm_adjust with parameters: alpha0=10, nonlinear=FALSE, mean_mean_zero=TRUE, unit_var=TRUE\n")
+    cat("Data dimensions:", nrow(train_expr_batch), "genes x", ncol(train_expr_batch), "samples\n")
+    cat("Batch distribution:", table(batch), "\n")
+    cat("Data range:", range(train_expr_batch, na.rm=TRUE), "\n")
+    
+    train_expr_gmm_adj <- try(gmm_adjust(data=t(train_expr_batch), batch=batch, 
+                                         alpha0=10, nonlinear=FALSE, 
+                                         mean_mean_zero=TRUE, unit_var=TRUE, debug=TRUE))
+    if(inherits(train_expr_gmm_adj, "try-error")){
+      cat("ERROR in gmm_adjust:", train_expr_gmm_adj, "\n")
+      cat("Batch info - unique batches:", unique(batch), "\n")
+      cat("Samples per batch:", table(batch), "\n")
+      cat("Data summary:\n")
+      print(summary(as.vector(train_expr_batch)))
+      ID <- ID - 1; break; next
+    }
+    
+    cat("GMM adjustment completed successfully\n")
+    cat("Output dimensions:", nrow(train_expr_gmm_adj), "samples x", ncol(train_expr_gmm_adj), "genes\n")
+    cat("Output range:", range(train_expr_gmm_adj, na.rm=TRUE), "\n")
+    
+    train_expr_gmm_adj <- t(train_expr_gmm_adj)
+    if(norm_data){
+      train_expr_gmm_norm <- normalizeData(train_expr_gmm_adj)
+    } else {
+      train_expr_gmm_norm <- train_expr_gmm_adj
+    }
+    pred_gmm_res <- try(trainPipe(train_set=train_expr_gmm_norm, train_label=curr_y_train, 
+                                  test_set=test_expr_norm, 
+                                  lfit=learner_fit, use_ref_combat=use_ref_combat))
+    if(inherits(pred_gmm_res, "try-error")){
+      cat("ERROR in GMM prediction pipeline:", pred_gmm_res, "\n")
+      ID <- ID - 1; break; next
+    }
+    
     ## Obtain predictions from learner trained within each batch
     pred_sgbatch_res <- try(lapply(1:N_batch, function(batch_id){
       trainPipe(train_set=train_expr_batch_norm[, batches_ind[[batch_id]]], 
@@ -174,7 +212,7 @@ for(ID in 1:iterations){
     ####  Evaluate performance
     tst_scores <- c(list(NoBatch=pred_base_res$pred_tst_prob, Batch=pred_batch_res$pred_tst_prob), 
                     pred_test_lst,
-                    list(ComBat=pred_combat_res$pred_tst_prob, Avg=pred_avg, n_Avg=pred_N_avg, 
+                    list(ComBat=pred_combat_res$pred_tst_prob, GMM=pred_gmm_res$pred_tst_prob, Avg=pred_avg, n_Avg=pred_N_avg, 
                          CS_Avg=pred_cs_avg, Reg_a=pred_reg_a, Reg_s=pred_reg_s))
     
     perf_df <- lapply(perf_measures, function(perf_name){

@@ -40,6 +40,11 @@ source ~/confounded_analysis/init_apptainer.sh
 
 # Helper function to detect script type and normalize path
 detect_script_type() {
+    if [[ $# -eq 0 || -z "${1:-}" ]]; then
+        echo "Error: detect_script_type requires a script path argument" >&2
+        return 1
+    fi
+    
     local script_path="$1"
     local executable=""
     local normalized_script=""
@@ -52,7 +57,7 @@ detect_script_type() {
     fi
     
     # Auto-detect script type
-    case "$script_path" in
+    case "${script_path:-}" in
         *.R)
             executable="Rscript"
             ;;
@@ -63,7 +68,7 @@ detect_script_type() {
             executable="bash"
             ;;
         *)
-            executable="$script_path"
+            executable="${script_path:-}"
             normalized_script=""
             ;;
     esac
@@ -181,7 +186,12 @@ EOF
         EXECUTABLE=$MODE
 
         # Auto-detect script type and normalize path
-        detect_script_type "$EXECUTABLE"
+        if [[ -n "$EXECUTABLE" ]]; then
+            detect_script_type "$EXECUTABLE"
+        else
+            echo "Error: No executable specified" >&2
+            exit 1
+        fi
         if [[ -n "$NORMALIZED_SCRIPT" ]]; then
             set -- "$NORMALIZED_SCRIPT" "$@"
         fi
