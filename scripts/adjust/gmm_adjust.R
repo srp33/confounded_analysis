@@ -320,7 +320,16 @@ bimodal_normalize <- function(data, alpha0 = 10, nonlinear = TRUE, mean_mean_zer
   # Use parallel processing if num_workers > 1
   if (!is.null(num_workers) && num_workers > 1) {
     num_cores <- if (num_workers == -1) detectCores() else min(num_workers, detectCores())
-    cl <- makeCluster(num_cores)
+    if (.Platform$OS.type == "unix") {
+      cl <- tryCatch({
+        parallel::makeForkCluster(num_cores)
+      }, error = function(e) {
+        if (debug) cat("Fork cluster failed, using PSOCK:", e$message, "\n")
+        parallel::makePSOCKcluster(num_cores)
+      })
+    } else {
+      cl <- parallel::makePSOCKcluster(num_cores)
+    }
     registerDoParallel(cl)
     on.exit(stopCluster(cl), add = TRUE)
     
