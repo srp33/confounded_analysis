@@ -3,6 +3,8 @@
 suppressPackageStartupMessages({
   library(tidyverse)
   library(data.table)
+  library(foreach)
+  library(doParallel)
 })
 
 # ============================================================================
@@ -92,25 +94,6 @@ fit.GaussianMixture2D <- function(model, X, prior_alpha = 0.5) {
   return(model)
 }
 
-
-#' Predict probabilities
-predict_proba.GaussianMixture2D <- function(model, X) {
-  X <- as.vector(X)
-  n <- length(X)
-  K <- 2
-  
-  pdfs <- matrix(0, nrow = n, ncol = K)
-  for (k in 1:K) {
-    pdfs[, k] <- model$weights_[k] * normal_pdf(X, model$means_[k], sqrt(model$variances_[k]))
-  }
-  
-  return(pdfs / (rowSums(pdfs) + 1e-12))
-}
-
-# ============================================================================
-# INVERSE CDF TRANSFORMATION
-# ============================================================================
-
 #' Inverse CDF for GMM distribution with robust error handling
 inverse_cdf_gmm <- function(p, means, variances, weights) {
   # Input validation
@@ -120,16 +103,19 @@ inverse_cdf_gmm <- function(p, means, variances, weights) {
   
   # Check for degenerate cases
   if (length(unique(means)) == 1 || any(variances < 1e-12)) {
-    # Fallback to normal quantiles if parameters are degenerate
     return(qnorm(p))
   }
+
+  overall_mean = sum(means * weights)
+  overall_variance = sum(variances * weights) + sum((means - overall_mean)^2 * weights)
+  overall_std = sqrt(pmax(overall_variance, 1e-10))
+  stds <- sqrt(pmax(variances, 1e-10))
   
   gmm_cdf <- function(x) {
-    sum(weights * pnorm(x, mean = means, sd = sqrt(pmax(variances, 1e-10))))
+    sum(weights * pnorm(x, mean = means, sd = stds))
   }
   
   # More robust search interval calculation
-  stds <- sqrt(pmax(variances, 1e-10))
   min_bound <- min(means - 15 * stds)
   max_bound <- max(means + 15 * stds)
   
@@ -174,12 +160,11 @@ inverse_cdf_gmm <- function(p, means, variances, weights) {
       if (sign(f_left) != sign(f_right)) {
         return(uniroot(root_function, interval = search_interval, tol = 1e-4)$root)
       } else {
-        # If still same sign, use normal quantile as fallback
-        return(qnorm(p_val))
+        # Use overall characteristics
+        return(qnorm(p_val, mean = overall_mean, sd = overall_std))
       }
     }, error = function(e) {
-      # Fallback to normal quantile on any error
-      return(qnorm(p_val))
+      return(qnorm(p_val, mean = overall_mean, sd = overall_std))
     })
   }
   
@@ -197,6 +182,19 @@ inverse_cdf_gmm <- function(p, means, variances, weights) {
 # ============================================================================
 # ADJUSTMENT FUNCTIONS
 # ============================================================================
+
+#' Simple fallback normalization
+simple_fallback <- function(gene_exp) {
+  min_val <- min(gene_exp, na.rm = TRUE)
+  x_transformed <- log(gene_exp - min_val + 1)
+  n_valid <- sum(!is.na(x_transformed))
+  if (n_valid > 1) {
+    quantiles <- rank(x_transformed, na.last = "keep", ties.method = "average") / (n_valid + 1)
+    qnorm(quantiles)
+  } else {
+    gene_exp
+  }
+}
 
 get_gene_gmm_transform <- function(
     gene_exp,
@@ -220,9 +218,7 @@ get_gene_gmm_transform <- function(
 
   # --- Log-transform ---
   min_val <- min(gene_exp, na.rm = TRUE)
-
   x_transformed <- log(gene_exp - min_val + 1)
-
   mean_shift_fallback <- scale(x_transformed, scale = FALSE)[, 1]
 
   # Check for small variance
@@ -261,12 +257,7 @@ get_gene_gmm_transform <- function(
   # --- Nonlinear mapping to original GMM distribution ---
   if (nonlinear) {
     mapped <- tryCatch({
-      inverse_cdf_gmm(
-        quantiles,
-        means = means,
-        variances = variances,
-        weights = weights
-      )
+      inverse_cdf_gmm(quantiles, means = means, variances = variances, weights = weights)
     }, error = function(e) {
       NA
     })
@@ -283,7 +274,6 @@ get_gene_gmm_transform <- function(
     # Adjusts the first mean to be 0
     if (mean_mean_zero) stop("Cannot have both mean1_zero and mean_mean_zero")
     if (means_at_1) stop("Cannot have both mean1_zero and means_at_1")
-
     x_transformed <- x_transformed - means[1]
   }
 
@@ -320,102 +310,56 @@ get_gene_gmm_transform <- function(
   return(x_transformed)
 }
 
-
-#' Bimodal normalization using GMM with full inverse CDF
+#' Bimodal normalization using GMM with parallel processing
 bimodal_normalize <- function(data, alpha0 = 10, nonlinear = TRUE, mean_mean_zero = TRUE, 
                              mean1_zero = FALSE, unit_var = TRUE, diff_exp = FALSE, means_at_1 = FALSE, 
-                             preserve_counts = FALSE, debug = FALSE) {
+                             preserve_counts = FALSE, debug = FALSE, num_workers = NULL) {
   gene_names <- colnames(data)
-  if (is.null(gene_names)) {
-    gene_names <- paste0("Gene", 1:ncol(data))
-  }
-  n_genes <- length(gene_names)
-  n_samples <- nrow(data)
+  if (is.null(gene_names)) gene_names <- paste0("Gene", 1:ncol(data))
   
-  if (debug) {
-    cat("bimodal_normalize: n_samples =", n_samples, ", n_genes =", n_genes, "\n")
-    cat("Gene names:", head(gene_names), "\n")
-  }
-  
-  # Initialize results
-  bimodal_data <- matrix(NA, nrow = n_samples, ncol = n_genes)
-  
-  for (i in seq_along(gene_names)) {
-    gene_name <- gene_names[i]
-    gene_exp <- data[, i]
+  # Use parallel processing if num_workers > 1
+  if (!is.null(num_workers) && num_workers > 1) {
+    num_cores <- if (num_workers == -1) detectCores() else min(num_workers, detectCores())
+    cl <- makeCluster(num_cores)
+    registerDoParallel(cl)
+    on.exit(stopCluster(cl), add = TRUE)
     
-    if (debug && i %% 1000 == 0) {
-      cat("Processed", i, "/", n_genes, "genes\n")
-    }
-    
-    # Skip if all NA
-    if (all(is.na(gene_exp))) {
-      bimodal_data[, i] <- gene_exp
-      next
-    }
-    
-    # Skip if all identical values
-    if (all(gene_exp == gene_exp[1], na.rm = TRUE)) {
-      bimodal_data[, i] <- gene_exp
-      next
-    }
-    
-    tryCatch({
-      # Apply GMM transformation with all parameters
-      bimodal_result <- get_gene_gmm_transform(
-        gene_exp, 
-        alpha0 = alpha0,
-        nonlinear = nonlinear,
-        mean_mean_zero = mean_mean_zero,
-        mean1_zero = mean1_zero,
-        unit_var = unit_var,
-        diff_exp = diff_exp,
-        means_at_1 = means_at_1,
-        preserve_counts = preserve_counts
-      )
-      
-      # Validate result
-      if (all(is.na(bimodal_result)) || all(is.infinite(bimodal_result))) {
-        stop("Invalid transformation result")
+    results <- foreach(i = seq_along(gene_names), .combine = cbind, 
+                      .packages = c("stats"), .errorhandling = 'pass') %dopar% {
+      gene_exp <- data[, i]
+      if (all(is.na(gene_exp)) || all(gene_exp == gene_exp[1], na.rm = TRUE)) {
+        return(gene_exp)
       }
       
-      bimodal_data[, i] <- bimodal_result
-      
-    }, error = function(e) {
-      if (debug) {
-        cat("Error processing gene", gene_name, ":", e$message, "\n")
-      }
-      # Fallback to simple quantile normalization
       tryCatch({
-        min_val <- min(gene_exp, na.rm = TRUE)
-        x_transformed <- log(gene_exp - min_val + 1)
-        n_valid <- sum(!is.na(x_transformed))
-        
-        if (n_valid > 1) {
-          quantiles <- rank(x_transformed, na.last = "keep", ties.method = "average") / (n_valid + 1)
-          fallback_result <- qnorm(quantiles)
-          
-          # Standardize if possible
-          result_sd <- sd(fallback_result, na.rm = TRUE)
-          if (!is.na(result_sd) && result_sd > 1e-10) {
-            bimodal_data[, i] <- fallback_result / result_sd
-          } else {
-            bimodal_data[, i] <- fallback_result
-          }
-        } else {
-          # If only one valid value or all NA, keep original
-          bimodal_data[, i] <- gene_exp
-        }
-      }, error = function(e2) {
-        # Ultimate fallback - keep original data
-        bimodal_data[, i] <- gene_exp
+        get_gene_gmm_transform(gene_exp, alpha0, nonlinear, mean_mean_zero, mean1_zero, 
+                              unit_var, diff_exp, means_at_1, preserve_counts)
+      }, error = function(e) {
+        simple_fallback(gene_exp)
       })
-    })
+    }
+    bimodal_data <- as.matrix(results)
+  } else {
+    # Sequential processing
+    bimodal_data <- matrix(NA, nrow = nrow(data), ncol = ncol(data))
+    for (i in seq_along(gene_names)) {
+      gene_exp <- data[, i]
+      if (all(is.na(gene_exp)) || all(gene_exp == gene_exp[1], na.rm = TRUE)) {
+        bimodal_data[, i] <- gene_exp
+        next
+      }
+      
+      tryCatch({
+        bimodal_data[, i] <- get_gene_gmm_transform(gene_exp, alpha0, nonlinear, mean_mean_zero, 
+                                                   mean1_zero, unit_var, diff_exp, means_at_1, preserve_counts)
+      }, error = function(e) {
+        bimodal_data[, i] <- simple_fallback(gene_exp)
+      })
+    }
   }
   
   colnames(bimodal_data) <- gene_names
   rownames(bimodal_data) <- rownames(data)
-  
   return(bimodal_data)
 }
 
@@ -436,61 +380,24 @@ bimodal_normalize <- function(data, alpha0 = 10, nonlinear = TRUE, mean_mean_zer
 #' Various transformation options allow control over the final distribution properties.
 gmm_adjust <- function(data, batch, alpha0 = 10, nonlinear = TRUE, mean_mean_zero = TRUE,
                       mean1_zero = FALSE, unit_var = TRUE, diff_exp = FALSE, means_at_1 = FALSE, 
-                      preserve_counts = FALSE, debug = FALSE) {
-  if (debug) {
-    cat("Starting GMM adjustment...\n")
-    cat("Input data dimensions:", nrow(data), "rows,", ncol(data), "columns\n")
-    cat("Input batch dimensions:", length(batch), "elements\n")
-  }
-  
+                      preserve_counts = FALSE, debug = FALSE, num_workers = NULL) {
   batch_factor <- as.factor(batch)
   batch_levels <- levels(batch_factor)
-  
-  n_samples <- nrow(data)
-  n_genes <- ncol(data)
-  
-  adjusted_data <- matrix(NA, nrow = n_samples, ncol = n_genes)
+  adjusted_data <- matrix(NA, nrow = nrow(data), ncol = ncol(data))
   
   for (b in batch_levels) {
-    if (debug) {
-      cat("Processing batch:", b, "\n")
-    }
-    
     batch_indices <- which(batch == b)
-    if (debug) {
-      cat("Batch indices:", batch_indices, "\n")
-      cat("Number of samples in batch:", length(batch_indices), "\n")
-    }
-    
     batch_data <- data[batch_indices, , drop = FALSE]
-    if (debug) {
-      cat("Batch data dimensions:", nrow(batch_data), "x", ncol(batch_data), "\n")
-    }
     
-    # Apply bimodal normalization to all genes
     batch_adjusted <- bimodal_normalize(
-      batch_data, 
-      alpha0 = alpha0,
-      nonlinear = nonlinear,
-      mean_mean_zero = mean_mean_zero,
-      mean1_zero = mean1_zero,
-      unit_var = unit_var,
-      diff_exp = diff_exp,
-      means_at_1 = means_at_1,
-      preserve_counts = preserve_counts,
-      debug = debug
+      batch_data, alpha0, nonlinear, mean_mean_zero, mean1_zero, 
+      unit_var, diff_exp, means_at_1, preserve_counts, debug, num_workers
     )
-    
-    if (debug) {
-      cat("Batch adjusted dimensions:", nrow(batch_adjusted), "x", ncol(batch_adjusted), "\n")
-      cat("Assigning to indices:", batch_indices, "\n")
-    }
     
     adjusted_data[batch_indices, ] <- batch_adjusted
   }
   
   colnames(adjusted_data) <- colnames(data)
   rownames(adjusted_data) <- rownames(data)
-  
   return(adjusted_data)
 }
