@@ -20,7 +20,7 @@ norm_data <- TRUE  # whether to normalize datasets by features using z-score sca
 use_ref_combat <- FALSE  # whether to use ref combat to adjust test set against training set
 
 n_highvar_genes <- 1000  # number of highly variable genes to use in feature reduction
-B <- 2  # bootstrap samples (reduced for testing)
+B <- 100  # bootstrap samples
 learner_types <- c("lasso", "rf", "svm")  
 perf_measures <- c("mxe", "auc", "rmse", "f", "err", "acc") 
 perf_measures_names <- c("Mean cross-entropy loss", "AUC", "Root-mean-squared error", 
@@ -264,7 +264,7 @@ for(s in study_names){
         }
         
         if(length(perf_data) > 0){
-          summary_df <- melt(perf_data)
+          summary_df <- reshape2::melt(perf_data)
           summary_df$iteration <- b
           # Rename columns to match what the figure generation script expects
           colnames(summary_df) <- c("Method", "value", "Model", "Iteration")

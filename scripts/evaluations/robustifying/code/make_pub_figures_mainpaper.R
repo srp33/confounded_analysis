@@ -91,6 +91,65 @@ png("/scripts/evaluations/robustifying/figures/Fig1.png", width=5, height=8, uni
 plt_lst[["auc"]]
 invisible(dev.off())
 
+########  Figure 1b: simulation studies - Mean shift 5 only  ########
+# Create a version of Figure 1 showing only mean shift 5 conditions
+plt_lst_mean5 <- list()
+
+for (curr_perf in perf_measures) {
+  curr_file_lst <- sort(apply(expand.grid(method_names, paste0(curr_perf, "_batchN", N_sample_size, "_",
+                                                               curr_files_mv_suffix, ".csv")),
+                              1, paste, collapse = "_"))
+  
+  sgmod_res_lst <- base_lst <- list()
+  
+  # Filter to only mean shift 5 conditions
+  batch_levels_mean5 <- batch_levels[grepl("^m5_", batch_levels)]
+  
+  for (bl in batch_levels_mean5) {
+    curr_file_lst_bl <- grep(bl, curr_file_lst, value = TRUE)
+    curr_res <- read.csv(paste0(results_dir, grep(curr_mod, curr_file_lst_bl, value = TRUE)), header = TRUE)
+    tmp <- curr_res[, subset_colnames_single]
+    tmp <- data.frame(melt(tmp),
+                      Type = rep(c("With batch effect,\nno adjustment", "Merging", "Merging", rep("Ensemble", 3)),
+                                 each = nrow(tmp)))
+    sgmod_res_lst[[bl]] <- tmp
+    base_lst[[bl]] <- curr_res[, "NoBatch"]
+  }
+  plt_df <- melt(sgmod_res_lst)
+
+  plt_df$variable <- factor(plt_df$variable, levels=subset_colnames_single)
+  plt_df$variable <- revalue(plt_df$variable, c("Batch" = "No adjustment",
+                                                      "ComBat" = "Merge + ComBat",
+                                                      "GMM" = "GMM adjust",
+                                                      "n_Avg" = "Batch size",
+                                                      "CS_Avg" = "Cross-study",
+                                                      "Reg_s" = "Stacking regression"))
+  plt_df$L1 <- revalue(plt_df$L1, c("m5_v1"="Mean difference 5\nVariance fold change 1",
+                                    "m5_v3"="Mean difference 5\nVariance fold change 3",
+                                    "m5_v5"="Mean difference 5\nVariance fold change 5"))
+  plt_df$Type <- factor(plt_df$Type, levels=c("With batch effect,\nno adjustment", "Merging", "Ensemble"))
+
+  plt_lst_mean5[[curr_perf]] <- ggplot(plt_df, aes(x=variable, y=value, fill=Type)) +
+    geom_boxplot() +
+    geom_hline(aes(yintercept=median(do.call(c, base_lst)),
+                   linetype="Average AUC on data\nwithout simulated batch\neffect"), color="red") +
+    scale_linetype_manual(name="limit", values=2,
+                          guide=guide_legend(override.aes=list(color=c("red")))) +
+    scale_fill_manual(values=c("#999999", "#E69F00", "#56B4E9")) +
+    facet_wrap(~L1, ncol=length(batch_var_vec)) +
+    theme(axis.text.x=element_text(angle=30, hjust=1),
+          axis.title.x=element_blank(),
+          legend.title=element_blank(),
+          legend.position="top",
+          legend.direction="vertical",
+          plot.margin = margin(0.1, 0.1, 0.1, 0.4, "cm")) +
+    labs(y=perf_measures_plt[curr_perf])
+}
+
+png("/scripts/evaluations/robustifying/figures/Fig1b_mean5only.png", width=8, height=5, units="in", res=300)
+plt_lst_mean5[["auc"]]
+invisible(dev.off())
+
 
 
 
