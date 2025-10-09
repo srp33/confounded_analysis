@@ -15,6 +15,15 @@ source("/scripts/evaluations/robustifying/code/helper.R")
 source("/scripts/adjust/gmm_adjust.R")
 load("/scripts/evaluations/robustifying/data/combined_sub.RData")
 
+# Get allocated cores from SLURM or default to 1
+get_allocated_cores <- function() {
+  slurm_cpus <- as.integer(Sys.getenv("SLURM_CPUS_PER_TASK", unset = NA))
+  if (!is.na(slurm_cpus) && slurm_cpus > 0) {
+    return(slurm_cpus)
+  }
+  return(1)  # Default to sequential processing
+}
+
 ####  Load data
 #select 1000 genes with largest variance in training set (Africa)
 var_trn <- rowVars(train_expr)
@@ -146,7 +155,8 @@ for(ID in 1:iterations){
     
     train_expr_gmm_adj <- try(gmm_adjust(data=t(train_expr_batch), batch=batch, 
                                          alpha0=10, nonlinear=FALSE, 
-                                         mean_mean_zero=TRUE, unit_var=TRUE, debug=FALSE))
+                                         mean_mean_zero=TRUE, unit_var=TRUE, debug=FALSE,
+                                         num_workers=get_allocated_cores()))
     if(inherits(train_expr_gmm_adj, "try-error")){
       cat("ERROR in gmm_adjust:", train_expr_gmm_adj, "\n")
       cat("Batch info - unique batches:", unique(batch), "\n")

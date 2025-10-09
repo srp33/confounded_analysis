@@ -13,6 +13,15 @@ source("/scripts/evaluations/robustifying/code/helper.R")
 source("/scripts/adjust/gmm_adjust.R")
 set.seed(123)
 
+# Get allocated cores from SLURM or default to -1
+get_allocated_cores <- function() {
+  slurm_cpus <- as.integer(Sys.getenv("SLURM_CPUS_PER_TASK", unset = NA))
+  if (!is.na(slurm_cpus) && slurm_cpus > 0) {
+    return(slurm_cpus)
+  }
+  return(-1)
+}
+
 
 
 ####  Parameters  ####
@@ -70,7 +79,8 @@ for(s in study_names){
   
   dat_gmm_adj <- gmm_adjust(data=t(dat), batch=batch, 
                            alpha0=10, nonlinear=FALSE, 
-                           mean_mean_zero=TRUE, unit_var=TRUE, debug=FALSE)
+                           mean_mean_zero=TRUE, unit_var=TRUE, debug=FALSE,
+                           num_workers=get_allocated_cores())
   
   # cat("GMM adjustment completed successfully\n")  # Suppressed for cleaner output
   # cat("Output dimensions:", nrow(dat_gmm_adj), "samples x", ncol(dat_gmm_adj), "genes\n")

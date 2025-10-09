@@ -592,7 +592,7 @@ adjust_gmm_common <- function(matrix_, batch, adjustment_strategy, strategy_name
   }
   
   # Use GMM adjustment (always bimodal with inverse CDF)
-  adjusted_genes_df <- gmm_adjust(genes_df, batch, alpha0 = 10, nonlinear = TRUE, debug = debug)
+  adjusted_genes_df <- gmm_adjust(genes_df, batch, alpha0 = 10, nonlinear = TRUE, debug = debug, num_workers = get_allocated_cores())
 
   # Convert bactrix format (features x samples)
   return(t(as.matrix(adjusted_genes_df)))
@@ -679,7 +679,8 @@ adjust_gmm <- function(matrix_, batch, debug = FALSE,
     diff_exp = diff_exp,
     means_at_1 = means_at_1,
     preserve_counts = preserve_counts,
-    debug = debug
+    debug = debug,
+    num_workers = get_allocated_cores()
   )
   
   # Convert back to matrix format (features x samples)
