@@ -580,8 +580,8 @@ adjust_gmm_common <- function(matrix_, batch, adjustment_strategy, strategy_name
   #' @param strategy_name Human-readable name for the strategy (for logging).
   #' @param debug Logical flag for debug output.
   #' @return The adjusted matrix (features x samples).
-  
-  message("Adjusting with GMM-based a", strategy_name, ").")
+
+  message("Adjusting with GMM-based ", strategy_name, ").")
 
   # Convert to the format expected by gmm_adjust (samples x genes)
   genes_df <- as.data.frame(t(matrix_))
