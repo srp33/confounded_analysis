@@ -14,3 +14,4 @@ core.*
 scripts/evaluations/robustifying/results*
 scripts/evaluations/robustifying/results
 scripts/evaluations/robustifying/figures
+scripts/evaluations/robustifying/Rplots.pdf
