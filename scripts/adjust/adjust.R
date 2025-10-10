@@ -880,6 +880,37 @@ reconstruct_tidy_data_frame <- function(adjusted_matrix, batch, batch_col, debug
 }
 
 
+create_gene_matrix <- function(cache_valid, genes, lock_file, reduce_cols, reduce_rows, transposed_cache_file) {
+  if (cache_valid) {
+    message("Loading cached transposed data from '", transposed_cache_file, "'")
+    mat_genes <- tryCatch(
+      as.matrix(read.csv(transposed_cache_file, row.names = 1, check.names = FALSE)),
+      error = function(e) NULL
+    )
+    # Validate dimensions
+    if (is.null(mat_genes) || ncol(mat_genes) != nrow(genes)) cache_valid <- FALSE
+  }
+  if (!cache_valid) {
+    message("3. Transposing gene data for adjustment (features x samples).")
+    mat_genes <- transpose_essential(genes)
+    # Safe caching with lock
+    if (!file.exists(lock_file)) {
+      file.create(lock_file)
+      write.csv(mat_genes, transposed_cache_file, row.names = TRUE, quote = FALSE)
+      file.remove(lock_file)
+    }
+  }
+  if (!is.null(reduce_cols)) {
+    message("Reducing gene expression columns to ", reduce_cols, " columns.")
+    mat_genes <- mat_genes[1:reduce_cols,]
+  }
+  if (!is.null(reduce_rows)) {
+    message("Reducing gene expression rows to ", reduce_rows, " rows.")
+    mat_genes <- mat_genes[, 1:reduce_rows]
+  }
+  return(mat_genes)
+}
+
 batch_adjust_tidy <- function(df, input_file, adjuster, batch_col, column, full_design_matrix, reduce_rows=NULL, reduce_cols=NULL, debug=FALSE, meta_file=NULL) {
   #' Main function to orchestrate the batch adjustment process.
   #' @param df The input tidy data frame (samples x columns).
@@ -959,46 +990,16 @@ batch_adjust_tidy <- function(df, input_file, adjuster, batch_col, column, full_
   # Check cache validity (size > 1KB and no lock file)
   # This is to prevent race conditions with multiple processes trying to create/read
   # A cache at the same time
-  cache_valid <- file.exists(transposed_cache_file) && 
-                 !file.exists(lock_file) && 
+  cache_valid <- file.exists(transposed_cache_file) &&
+    !file.exists(lock_file) &&
                  file.info(transposed_cache_file)$size > 1024
-  
-  if (cache_valid) {
-    message("Loading cached transposed data from '", transposed_cache_file, "'")
-    mat_genes <- tryCatch(
-      as.matrix(read.csv(transposed_cache_file, row.names = 1, check.names = FALSE)),
-      error = function(e) NULL
-    )
-    # Validate dimensions
-    if (is.null(mat_genes) || ncol(mat_genes) != nrow(genes)) cache_valid <- FALSE
-  }
-  
-  if (!cache_valid) {
-    message("3. Transposing gene data for adjustment (features x samples).")
-    mat_genes <- transpose_essential(genes)
-    # Safe caching with lock
-    if (!file.exists(lock_file)) {
-      file.create(lock_file)
-      write.csv(mat_genes, transposed_cache_file, row.names = TRUE, quote = FALSE)
-      file.remove(lock_file)
-    }
-  }
 
-  if (!is.null(reduce_cols)) {
-    message("Reducing gene expression columns to ", reduce_cols, " columns.")
-    mat_genes <- mat_genes[1:reduce_cols, ]
-  }
-  if (!is.null(reduce_rows)) {
-    message("Reducing gene expression rows to ", reduce_rows, " rows.")
-    mat_genes <- mat_genes[, 1:reduce_rows]
-  }
+  mat_genes <- create_gene_matrix(cache_valid, genes, lock_file, reduce_cols, reduce_rows, transposed_cache_file)
 
   # Determine if data are counts (all non-negative).
   data_are_counts <- !any(mat_genes < 0, na.rm = TRUE)
-  
-  # --- 4. Apply adjustment method ---
+
   message("4. Applying '", adjuster, "' adjustment method.")
-  
   adjusted_matrix <- switch(adjuster,
     "gmm_nonlinear_unit_var" = adjust_gmm_nonlinear_unit_var(mat_genes, batch, debug=debug),
     "gmm_nonlinear_mean_ones" = adjust_gmm_mean_ones(mat_genes, batch, debug=debug),
