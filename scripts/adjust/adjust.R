@@ -846,6 +846,40 @@ adjust_log_combat <- function(matrix_, batch, design, debug = FALSE) {
 
 # Main Orchestration Function -------------------------------------------------
 
+reconstruct_tidy_data_frame <- function(adjusted_matrix, batch, batch_col, debug, gene_col_names, genes, metadata_cols, reduce_cols) {
+  adjusted_df <- as.data.frame(t(adjusted_matrix))
+  if (ncol(adjusted_df) != length(gene_col_names)) {
+    message("WARNING: Dimension mismatch between adjusted data (", ncol(adjusted_df), " cols) and original gene columns (", length(gene_col_names), " cols)")
+    if (ncol(adjusted_df) < length(gene_col_names)) {
+      # Use only the available columns
+      gene_col_names <- gene_col_names[1:ncol(adjusted_df)]
+      message("Using first ", ncol(adjusted_df), " gene column names")
+    } else {
+      # Pad with generic names if needed
+      extra_names <- paste0("Gene_", (length(gene_col_names) + 1):ncol(adjusted_df))
+      gene_col_names <- c(gene_col_names, extra_names)
+      message("Added ", length(extra_names), " generic column names")
+    }
+  }
+  colnames(adjusted_df) <- gene_col_names
+  if (debug) message("DEBUG: Dimensions of final adjusted matrix after transposing: ", nrow(adjusted_df), " rows, ", ncol(adjusted_df), " cols")
+  if (!is.null(reduce_cols)) {
+    message(" 5.1 Restoring skipped columns (reduced)")
+    adjusted_df <- cbind(adjusted_df, genes[, reduce_cols:ncol(genes)])
+  }
+  if (is.null(batch)) {
+    message(" 5.2 Restoring metadata columns")
+    final_df <- cbind(metadata_cols, adjusted_df)
+  }
+  else {
+    message(" 5.2 Restoring batch and metadata columns")
+    final_df <- cbind(batch, metadata_cols, adjusted_df)
+    colnames(final_df)[1] <- batch_col
+  }
+  return(final_df)
+}
+
+
 batch_adjust_tidy <- function(df, input_file, adjuster, batch_col, column, full_design_matrix, reduce_rows=NULL, reduce_cols=NULL, debug=FALSE, meta_file=NULL) {
   #' Main function to orchestrate the batch adjustment process.
   #' @param df The input tidy data frame (samples x columns).
@@ -993,45 +1027,9 @@ batch_adjust_tidy <- function(df, input_file, adjuster, batch_col, column, full_
   )
   
   if (debug) message("DEBUG: Dimensions of final adjusted matrix before transposing: ", nrow(adjusted_matrix), " rows, ", ncol(adjusted_matrix), " cols")
-  
-  # --- 5. Reconstruct tidy data frame ---
+
   message("5. Reconstructing the tidy data frame.")
-  adjusted_df <- as.data.frame(t(adjusted_matrix))
-
-  # Ensure column names match - handle dimension mismatches
-  if (ncol(adjusted_df) != length(gene_col_names)) {
-    message("WARNING: Dimension mismatch between adjusted data (", ncol(adjusted_df), " cols) and original gene columns (", length(gene_col_names), " cols)")
-    if (ncol(adjusted_df) < length(gene_col_names)) {
-      # Use only the available columns
-      gene_col_names <- gene_col_names[1:ncol(adjusted_df)]
-      message("Using first ", ncol(adjusted_df), " gene column names")
-    } else {
-      # Pad with generic names if needed
-      extra_names <- paste0("Gene_", (length(gene_col_names) + 1):ncol(adjusted_df))
-      gene_col_names <- c(gene_col_names, extra_names)
-      message("Added ", length(extra_names), " generic column names")
-    }
-  }
-  
-  colnames(adjusted_df) <- gene_col_names
-
-  if (debug) message("DEBUG: Dimensions of final adjusted matrix after transposing: ", nrow(adjusted_df), " rows, ", ncol(adjusted_df), " cols")
-
-  # Restore other columns if reduced
-  if (!is.null(reduce_cols)) {
-    message(" 5.1 Restoring skipped columns (reduced)")
-    adjusted_df <- cbind(adjusted_df, genes[ ,reduce_cols:ncol(genes)])
-  }
-  
-  if (is.null(batch)){
-    message(" 5.2 Restoring metadata columns")
-    final_df <- cbind(metadata_cols, adjusted_df)
-  }
-  else {
-    message(" 5.2 Restoring batch and metadata columns")
-    final_df <- cbind(batch, metadata_cols, adjusted_df)
-    colnames(final_df)[1] <- batch_col
-  }
+  final_df <- reconstruct_tidy_data_frame(adjusted_matrix, batch, batch_col, debug, gene_col_names, genes, metadata_cols, reduce_cols)
   
   if (sum(startsWith(colnames(final_df), "meta_")) == 0 && length(meta_data_names) > 0) {
     stop("No metadata columns found in final data frame.")
