@@ -12,9 +12,13 @@ import random
 import numpy as np
 
 # --- Local Imports from utils module ---
-from scripts.utils import DataFrameCache, HashCache
-
-from scripts.evaluations.util import repeated_cross_val
+try:
+    from scripts.utils import DataFrameCache, HashCache
+    from scripts.evaluations.util import repeated_cross_val
+except:
+    sys.path.append(os.path.join(os.path.dirname(__file__), "scripts"))
+    from utils import DataFrameCache, HashCache
+    from evaluations.util import repeated_cross_val
 
 
 def setup_learners():
