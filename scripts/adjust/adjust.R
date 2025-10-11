@@ -911,15 +911,15 @@ create_gene_matrix <- function(cache_valid, genes, lock_file, reduce_cols, reduc
   return(mat_genes)
 }
 
-batch_adjust_tidy <- function(df, input_file, adjuster, batch_col, column, full_design_matrix, reduce_rows=NULL, reduce_cols=NULL, debug=FALSE, meta_file=NULL) {
-  #' Main function to orchestrate the batch adjustment process.
-  #' @param df The input tidy data frame (samples x columns).
-  #' @param adjuster The name of the adjustment method to use.
+preprocess_input_data <- function(df, batch_col, reduce_rows, debug = FALSE) {
+  #' Preprocess input data by handling NA values and row reduction.
+  #' @param df The input data frame.
   #' @param batch_col The name of the batch column.
-  #' @return A tidy data frame with adjusted values.
+  #' @param reduce_rows Number of rows to reduce to (optional).
+  #' @param debug Logical flag for debug output.
+  #' @return The preprocessed data frame.
   
-  # --- 0. Pre-processing: Handle NA values ---
-  message("0. Pre-processing: Checking for NA values in the batch column.")
+  message("--- Pre-processing: Checking for NA values in the batch column. ---")
   if (!is.null(batch_col) && any(is.na(df[[batch_col]]))) {
     na_count <- sum(is.na(df[[batch_col]]))
     message("WARNING: Found ", na_count, " NA values in batch column ('", batch_col, "'). These samples (rows) will be removed before adjustment.")
@@ -931,17 +931,21 @@ batch_adjust_tidy <- function(df, input_file, adjuster, batch_col, column, full_
     }
   }
 
-  # --- 0.5. Reduce rows, if applicable ---
   if (!is.null(reduce_rows)) {
     message("Reducing rows to ", reduce_rows, " rows.")
     df <- df[1:reduce_rows, ]
   }
   
-  # --- 1. Separate data components ---
-  message("1. Separating metadata, batch, and gene data.")
-  original_colnames <- colnames(df)
+  return(df)
+}
 
-  # Handle first column containing sample IDs
+
+handle_sample_ids <- function(df, debug = FALSE) {
+  #' Handle first column containing sample IDs by setting as row names.
+  #' @param df The input data frame.
+  #' @param debug Logical flag for debug output.
+  #' @return The data frame with sample IDs as row names.
+  
   first_col_name <- colnames(df)[1]
   if (first_col_name %in% c("...1", "", "X", "meta_Sample_ID")) {
     if (first_col_name == "meta_Sample_ID") {
@@ -954,22 +958,34 @@ batch_adjust_tidy <- function(df, input_file, adjuster, batch_col, column, full_
     rownames(df) <- df[[1]]
     df <- df[, -1]
   }
+  
+  return(df)
+}
 
+
+separate_data_components <- function(df, batch_col, debug = FALSE) {
+  #' Separate data into batch, metadata, and gene components.
+  #' @param df The input data frame.
+  #' @param batch_col The name of the batch column.
+  #' @param debug Logical flag for debug output.
+  #' @return A list containing batch, metadata_cols, gene_col_names, and genes.
+  
+  message("--- Separating metadata, batch, and gene data. ---")
+  
+  # Extract batch information
   if (!is.null(batch_col)) {
     batch <- df[[batch_col]]
     df[[batch_col]] <- NULL
-  }
-  else {
+  } else {
     batch <- NULL
   }
   
-  # Metadata columns start with "meta_".
-
+  # Separate metadata and gene columns
   meta_data_names <- colnames(df)[startsWith(colnames(df), "meta_")]
   metadata_cols <- df[, startsWith(colnames(df), "meta_"), drop = FALSE]
   message("Metadata cols: ", paste(colnames(metadata_cols), collapse = ", "))
   
-  gene_col_names = colnames(df)[!startsWith(colnames(df), "meta_")]
+  gene_col_names <- colnames(df)[!startsWith(colnames(df), "meta_")]
   genes <- df[, !startsWith(colnames(df), "meta_")]
   
   # Verify all gene columns are numeric
@@ -979,11 +995,26 @@ batch_adjust_tidy <- function(df, input_file, adjuster, batch_col, column, full_
     stop(sprintf("Non-numeric columns found in gene data: %s", paste(non_numeric, collapse = ", ")))
   }
   
-  # --- 2. Create design matrix ---
-  message("2. Creating design matrix.")
-  design <- create_design_matrix(metadata_cols, column, full_design_matrix)
+  return(list(
+    batch = batch,
+    metadata_cols = metadata_cols,
+    gene_col_names = gene_col_names,
+    genes = genes,
+    meta_data_names = meta_data_names
+  ))
+}
+
+
+prepare_gene_matrix <- function(genes, input_file, reduce_cols, reduce_rows, debug = FALSE) {
+  #' Prepare gene matrix with caching support.
+  #' @param genes The gene data frame.
+  #' @param input_file Path to the input file (for cache naming).
+  #' @param reduce_cols Number of columns to reduce to (optional).
+  #' @param reduce_rows Number of rows to reduce to (optional).
+  #' @param debug Logical flag for debug output.
+  #' @return The transposed gene matrix.
   
-  # --- 3. Transpose gene data (with caching) ---
+  message("---  Transpose gene data (with caching) ---")
   transposed_cache_file <- sub("(\\.[^.]+)$", "_t\\1", input_file)
   lock_file <- paste0(transposed_cache_file, ".lock")
   
@@ -992,14 +1023,28 @@ batch_adjust_tidy <- function(df, input_file, adjuster, batch_col, column, full_
   # A cache at the same time
   cache_valid <- file.exists(transposed_cache_file) &&
     !file.exists(lock_file) &&
-                 file.info(transposed_cache_file)$size > 1024
+    file.info(transposed_cache_file)$size > 1024
 
   mat_genes <- create_gene_matrix(cache_valid, genes, lock_file, reduce_cols, reduce_rows, transposed_cache_file)
+  
+  return(mat_genes)
+}
 
-  # Determine if data are counts (all non-negative).
+
+apply_adjustment_method <- function(mat_genes, batch, design, genes, adjuster, debug = FALSE) {
+  #' Apply the specified adjustment method to the gene matrix.
+  #' @param mat_genes The gene matrix (features x samples).
+  #' @param batch The batch variable vector.
+  #' @param design The design matrix.
+  #' @param genes The original gene data frame (for fairadapt).
+  #' @param adjuster The name of the adjustment method.
+  #' @param debug Logical flag for debug output.
+  #' @return The adjusted matrix.
+  
+  # Determine if data are counts (all non-negative)
   data_are_counts <- !any(mat_genes < 0, na.rm = TRUE)
-
-  message("4. Applying '", adjuster, "' adjustment method.")
+  
+  message("--- Applying '", adjuster, "' adjustment method. ---")
   adjusted_matrix <- switch(adjuster,
     "gmm_nonlinear_unit_var" = adjust_gmm_nonlinear_unit_var(mat_genes, batch, debug=debug),
     "gmm_nonlinear_mean_ones" = adjust_gmm_mean_ones(mat_genes, batch, debug=debug),
@@ -1028,8 +1073,44 @@ batch_adjust_tidy <- function(df, input_file, adjuster, batch_col, column, full_
   )
   
   if (debug) message("DEBUG: Dimensions of final adjusted matrix before transposing: ", nrow(adjusted_matrix), " rows, ", ncol(adjusted_matrix), " cols")
+  
+  return(adjusted_matrix)
+}
 
-  message("5. Reconstructing the tidy data frame.")
+
+batch_adjust_tidy <- function(df, input_file, adjuster, batch_col, column, full_design_matrix, reduce_rows=NULL, reduce_cols=NULL, debug=FALSE, meta_file=NULL) {
+  #' Main function to orchestrate the batch adjustment process.
+  #' @param df The input tidy data frame (samples x columns).
+  #' @param adjuster The name of the adjustment method to use.
+  #' @param batch_col The name of the batch column.
+  #' @return A tidy data frame with adjusted values.
+  
+  # Step 1: Preprocess input data
+  df <- preprocess_input_data(df, batch_col, reduce_rows, debug)
+  
+  # Step 2: Handle sample IDs
+  df <- handle_sample_ids(df, debug)
+  
+  # Step 3: Separate data components
+  data_components <- separate_data_components(df, batch_col, debug)
+  batch <- data_components$batch
+  metadata_cols <- data_components$metadata_cols
+  gene_col_names <- data_components$gene_col_names
+  genes <- data_components$genes
+  meta_data_names <- data_components$meta_data_names
+  
+  # Step 4: Create design matrix
+  message("---  Creating design matrix ---")
+  design <- create_design_matrix(metadata_cols, column, full_design_matrix)
+  
+  # Step 5: Prepare gene matrix
+  mat_genes <- prepare_gene_matrix(genes, input_file, reduce_cols, reduce_rows, debug)
+  
+  # Step 6: Apply adjustment method
+  adjusted_matrix <- apply_adjustment_method(mat_genes, batch, design, genes, adjuster, debug)
+  
+  # Step 7: Reconstruct tidy data frame
+  message("--- Reconstructing the tidy data frame ---")
   final_df <- reconstruct_tidy_data_frame(adjusted_matrix, batch, batch_col, debug, gene_col_names, genes, metadata_cols, reduce_cols)
   
   if (sum(startsWith(colnames(final_df), "meta_")) == 0 && length(meta_data_names) > 0) {

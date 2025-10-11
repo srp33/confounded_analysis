@@ -193,19 +193,22 @@ for(bl in batch_levels){
   # For crossmod files, only select the columns that actually exist
   crossmod_cols <- c("Avg", "n_Avg", "CS_Avg", "Reg_a", "Reg_s")
   crossmod_res <- read.csv(paste0(results_dir, curr_file_lst_bl[1]), header=TRUE)[, crossmod_cols]
-  crossmod_res <- data.frame(melt(crossmod_res), Type="Ensemble (across learners)")
+  crossmod_res <- data.frame(quiet_melt(crossmod_res), Type="Ensemble (across learners)")
   
   # Find the specific model file for this batch level
   model_file <- grep(paste0(curr_mod, "_", curr_perf), curr_file_lst_bl, value = TRUE)[1]
-  tmp <- read.csv(paste0(results_dir, model_file), header=TRUE)[, subset_colnames_crossmod[-1]]
-  colnames(tmp) <- paste0(curr_mod, '.', subset_colnames_crossmod[-1])
-  tmp <- data.frame(melt(tmp), Type=rep(c("With batch effect, no adjustment", "Merge + ComBat", "GMM adjust", rep("Ensemble (single learner)",5)), each=nrow(tmp)))
+  tmp_data <- read.csv(paste0(results_dir, model_file), header=TRUE)
+  # Only select columns that actually exist in the data
+  available_cols <- intersect(subset_colnames_crossmod[-1], colnames(tmp_data))
+  tmp <- tmp_data[, available_cols, drop=FALSE]
+  colnames(tmp) <- paste0(curr_mod, '.', available_cols)
+  tmp <- data.frame(quiet_melt(tmp), Type=rep(sapply(available_cols, function(col) if(col %in% c("Batch", "ComBat", "GMM")) c("Batch"="With batch effect, no adjustment", "ComBat"="Merge + ComBat", "GMM"="GMM adjust")[col] else "Ensemble (single learner)"), each=nrow(tmp)))
   crossmod_res_lst[[bl]] <- rbind(crossmod_res, tmp)
   
   base_lst[[bl]] <- read.csv(paste0(results_dir, model_file), header=TRUE)[, "NoBatch"]
 }
-plt_df <- melt(crossmod_res_lst)
-plt_df$variable <- factor(plt_df$variable, levels=c(paste0(strsplit(curr_file_lst_bl[i],"_")[[1]][1], '.', subset_colnames_crossmod[-1]), subset_colnames_crossmod[-c(1:3)]))
+plt_df <- quiet_melt(crossmod_res_lst)
+plt_df$variable <- factor(plt_df$variable, levels=c(paste0(strsplit(curr_file_lst_bl[i],"_")[[1]][1], '.', subset_colnames_crossmod[-1]), subset_colnames_crossmod[-c(1:4)]))
 plt_df$Type <- factor(plt_df$Type, levels=c("With batch effect, no adjustment", "Merge + ComBat", "GMM adjust",
                                             "Ensemble (single learner)", "Ensemble (across learners)"))
 plt_df$variable <- revalue(plt_df$variable, plt_label_vec)
@@ -292,19 +295,22 @@ for(bl in batch_levels){
   # For crossmod files, only select the columns that actually exist
   crossmod_cols <- c("Avg", "n_Avg", "CS_Avg", "Reg_a", "Reg_s")
   crossmod_res <- read.csv(paste0(results_dir, curr_file_lst_bl[1]), header=TRUE)[, crossmod_cols]
-  crossmod_res <- data.frame(melt(crossmod_res), Type="Ensemble (across learners)")
+  crossmod_res <- data.frame(quiet_melt(crossmod_res), Type="Ensemble (across learners)")
   
   # Find the specific model file for this batch level
   model_file <- grep(paste0(curr_mod, "_", curr_perf), curr_file_lst_bl, value = TRUE)[1]
-  tmp <- read.csv(paste0(results_dir, model_file), header=TRUE)[, subset_colnames_crossmod[-1]]
-  colnames(tmp) <- paste0(curr_mod, '.', subset_colnames_crossmod[-1])
-  tmp <- data.frame(melt(tmp), Type=rep(c("With batch effect, no adjustment", "Merge + ComBat", "GMM adjust", rep("Ensemble (single learner)",5)), each=nrow(tmp)))
+  tmp_data <- read.csv(paste0(results_dir, model_file), header=TRUE)
+  # Only select columns that actually exist in the data
+  available_cols <- intersect(subset_colnames_crossmod[-1], colnames(tmp_data))
+  tmp <- tmp_data[, available_cols, drop=FALSE]
+  colnames(tmp) <- paste0(curr_mod, '.', available_cols)
+  tmp <- data.frame(quiet_melt(tmp), Type=rep(sapply(available_cols, function(col) if(col %in% c("Batch", "ComBat", "GMM")) c("Batch"="With batch effect, no adjustment", "ComBat"="Merge + ComBat", "GMM"="GMM adjust")[col] else "Ensemble (single learner)"), each=nrow(tmp)))
   crossmod_res_lst[[bl]] <- rbind(crossmod_res, tmp)
   
   base_lst[[bl]] <- read.csv(paste0(results_dir, model_file), header=TRUE)[, "NoBatch"]
 }
-plt_df <- melt(crossmod_res_lst)
-plt_df$variable <- factor(plt_df$variable, levels=c(paste0(strsplit(curr_file_lst_bl[i],"_")[[1]][1], '.', subset_colnames_crossmod[-1]), subset_colnames_crossmod[-c(1:3)]))
+plt_df <- quiet_melt(crossmod_res_lst)
+plt_df$variable <- factor(plt_df$variable, levels=c(paste0(strsplit(curr_file_lst_bl[i],"_")[[1]][1], '.', subset_colnames_crossmod[-1]), subset_colnames_crossmod[-c(1:4)]))
 plt_df$Type <- factor(plt_df$Type, levels=c("With batch effect, no adjustment", "Merge + ComBat", "GMM adjust",
                                             "Ensemble (single learner)", "Ensemble (across learners)"))
 plt_df$variable <- revalue(plt_df$variable, plt_label_vec)
@@ -391,19 +397,22 @@ for(bl in batch_levels){
   # For crossmod files, only select the columns that actually exist
   crossmod_cols <- c("Avg", "n_Avg", "CS_Avg", "Reg_a", "Reg_s")
   crossmod_res <- read.csv(paste0(results_dir, curr_file_lst_bl[1]), header=TRUE)[, crossmod_cols]
-  crossmod_res <- data.frame(melt(crossmod_res), Type="Ensemble (across learners)")
+  crossmod_res <- data.frame(quiet_melt(crossmod_res), Type="Ensemble (across learners)")
   
   # Find the specific model file for this batch level
   model_file <- grep(paste0(curr_mod, "_", curr_perf), curr_file_lst_bl, value = TRUE)[1]
-  tmp <- read.csv(paste0(results_dir, model_file), header=TRUE)[, subset_colnames_crossmod[-1]]
-  colnames(tmp) <- paste0(curr_mod, '.', subset_colnames_crossmod[-1])
-  tmp <- data.frame(melt(tmp), Type=rep(c("With batch effect, no adjustment", "Merge + ComBat", "GMM adjust", rep("Ensemble (single learner)",5)), each=nrow(tmp)))
+  tmp_data <- read.csv(paste0(results_dir, model_file), header=TRUE)
+  # Only select columns that actually exist in the data
+  available_cols <- intersect(subset_colnames_crossmod[-1], colnames(tmp_data))
+  tmp <- tmp_data[, available_cols, drop=FALSE]
+  colnames(tmp) <- paste0(curr_mod, '.', available_cols)
+  tmp <- data.frame(quiet_melt(tmp), Type=rep(sapply(available_cols, function(col) if(col %in% c("Batch", "ComBat", "GMM")) c("Batch"="With batch effect, no adjustment", "ComBat"="Merge + ComBat", "GMM"="GMM adjust")[col] else "Ensemble (single learner)"), each=nrow(tmp)))
   crossmod_res_lst[[bl]] <- rbind(crossmod_res, tmp)
   
   base_lst[[bl]] <- read.csv(paste0(results_dir, model_file), header=TRUE)[, "NoBatch"]
 }
-plt_df <- melt(crossmod_res_lst)
-plt_df$variable <- factor(plt_df$variable, levels=c(paste0(strsplit(curr_file_lst_bl[i],"_")[[1]][1], '.', subset_colnames_crossmod[-1]), subset_colnames_crossmod[-c(1:3)]))
+plt_df <- quiet_melt(crossmod_res_lst)
+plt_df$variable <- factor(plt_df$variable, levels=c(paste0(strsplit(curr_file_lst_bl[i],"_")[[1]][1], '.', subset_colnames_crossmod[-1]), subset_colnames_crossmod[-c(1:4)]))
 plt_df$Type <- factor(plt_df$Type, levels=c("With batch effect, no adjustment", "Merge + ComBat", "GMM adjust",
                                             "Ensemble (single learner)", "Ensemble (across learners)"))
 plt_df$variable <- revalue(plt_df$variable, plt_label_vec)
@@ -462,7 +471,7 @@ batch_mean_vec <- 3
 batch_var_vec <- c(2,4,6,8)
 batch_levels <- sort(apply(expand.grid(paste0("m", batch_mean_vec), paste0("v", batch_var_vec)), 1, paste, collapse="_"))
 curr_perf <- "auc"
-subset_colnames_crossmod <- c("NoBatch", "Batch", "ComBat", "n_Avg", "CS_Avg", "Reg_s") 
+subset_colnames_crossmod <- c("NoBatch", "Batch", "ComBat", "GMM", "n_Avg", "CS_Avg", "Reg_s") 
 
 curr_files_mv_suffix <- sort(apply(expand.grid(paste0("m", batch_mean_vec), paste0("v", batch_var_vec)), 1, paste, collapse="_"))
 curr_file_lst <- sort(sort(apply(expand.grid(c("crossmod", method_names), paste0(curr_perf, "_batchN20_", curr_files_mv_suffix, ".csv")), 1, paste, collapse="_")))
@@ -479,14 +488,14 @@ for(bl in batch_levels){
     
     curr_f_id <- strsplit(curr_fname, "_")[[1]]
     if(curr_f_id[1]=="crossmod"){
-      res <- rbind(data.frame(res_3b[, subset_colnames_crossmod[-c(1:3)]], Nbatch="3 simulated batches"),
-                   data.frame(res_5b[, subset_colnames_crossmod[-c(1:3)]], Nbatch="5 simulated batches"))
-      res <- data.frame(melt(res), Type="Ensemble")
+      res <- rbind(data.frame(res_3b[, subset_colnames_crossmod[-c(1:4)]], Nbatch="3 simulated batches"),
+                   data.frame(res_5b[, subset_colnames_crossmod[-c(1:4)]], Nbatch="5 simulated batches"))
+      res <- data.frame(quiet_melt(res), Type="Ensemble")
     }else if(curr_f_id[1] %in% c("lasso", "rf")){
-      res <- rbind(data.frame(res_3b[, c("NoBatch", "Batch", "ComBat")], Nbatch="3 simulated batches"),
-                   data.frame(res_5b[, c("NoBatch", "Batch", "ComBat")], Nbatch="5 simulated batches"))
-      colnames(res)[1:3] <- paste0(curr_f_id[1], c(".NoBatch", ".Batch", ".ComBat"))
-      res <- data.frame(melt(res), Type=rep(c("Baseline", "Batch", "ComBat"), each=nrow(res)))
+      res <- rbind(data.frame(res_3b[, c("NoBatch", "Batch", "ComBat", "GMM")], Nbatch="3 simulated batches"),
+                   data.frame(res_5b[, c("NoBatch", "Batch", "ComBat", "GMM")], Nbatch="5 simulated batches"))
+      colnames(res)[1:4] <- paste0(curr_f_id[1], c(".NoBatch", ".Batch", ".ComBat", ".GMM"))
+      res <- data.frame(quiet_melt(res), Type=rep(c("Baseline", "Batch", "ComBat", "GMM"), each=nrow(res)))
     }else{
       res <- NULL
     }
@@ -496,10 +505,10 @@ for(bl in batch_levels){
   crossmod_res_lst[[bl]] <- do.call(rbind, crossmod_res)
 }
 names(crossmod_res_lst) <- batch_levels
-plt_df <- melt(crossmod_res_lst)
+plt_df <- quiet_melt(crossmod_res_lst)
 plt_df$variable <- factor(plt_df$variable, levels=c("lasso.NoBatch", "rf.NoBatch", "lasso.Batch", "rf.Batch", 
-                                                    "lasso.ComBat", "rf.ComBat", subset_colnames_crossmod[-c(1:3)]))
-plt_df$Type <- factor(plt_df$Type, levels=c("Baseline", "Batch", "ComBat", "Ensemble"))
+                                                    "lasso.ComBat", "rf.ComBat", "lasso.GMM", "rf.GMM", subset_colnames_crossmod[-c(1:4)]))
+plt_df$Type <- factor(plt_df$Type, levels=c("Baseline", "Batch", "ComBat", "GMM", "Ensemble"))
 
 plt_df$variable <- revalue(plt_df$variable, c("lasso.NoBatch"="No batch effect, LASSO",
                                               "rf.NoBatch"="No batch effect, RF",
@@ -507,12 +516,15 @@ plt_df$variable <- revalue(plt_df$variable, c("lasso.NoBatch"="No batch effect, 
                                               "rf.Batch"="With batch, no adjustment, RF",
                                               "lasso.ComBat"="Merge + ComBat, LASSO",
                                               "rf.ComBat"="Merge + ComBat, RF",
+                                              "lasso.GMM"="GMM adjust, LASSO",
+                                              "rf.GMM"="GMM adjust, RF",
                                               "n_Avg"="Batch size weights (across learners)",
                                               "CS_Avg"="Cross-study weights (across learners)",
                                               "Reg_s"="Regression stacking (across learners)"))
 plt_df$Type <- revalue(plt_df$Type, c("Baseline"="No batch effect",
                                       "Batch"="With batch, no adjustment",
-                                      "ComBat"="Merge + ComBat",
+                                      "ComBat"="Merge + ComBat", "GMM"="GMM adjust",
+                                      "GMM"="GMM adjust",
                                       "Ensemble" = "Ensemble (across learners)"))
 plt_df$L1 <- revalue(plt_df$L1, c("m3_v2"="Mean difference 3\nVariance fold change 2",
   "m3_v4"="Mean difference 3\nVariance fold change 4",
@@ -522,7 +534,7 @@ plt_df$L1 <- revalue(plt_df$L1, c("m3_v2"="Mean difference 3\nVariance fold chan
 png("/scripts/evaluations/robustifying/figures/FigS6.png", width=10, height=7, units="in", res=300)
 print(ggplot(plt_df, aes(x=variable, y=value, fill=Type)) +
         geom_boxplot() +
-        scale_fill_manual(values=c("white","#999999", "#E69F00", "#56B4E9")) +
+        scale_fill_manual(values=c("white","#999999", "#E69F00", "#CC79A7", "#56B4E9")) +
         facet_grid(Nbatch~L1) +
         theme(axis.text.x=element_text(angle=40, hjust=1),
               axis.title.x=element_blank(), 
@@ -550,7 +562,7 @@ batch_mean_vec <- 3
 batch_var_vec <- 1:5
 batch_levels <- sort(apply(expand.grid(paste0("m", batch_mean_vec), paste0("v", batch_var_vec)), 1, paste, collapse="_"))
 curr_perf <- "auc"
-subset_colnames_crossmod <- c("NoBatch", "Batch", "ComBat", "n_Avg", "CS_Avg", "Reg_s") 
+subset_colnames_crossmod <- c("NoBatch", "Batch", "ComBat", "GMM", "n_Avg", "CS_Avg", "Reg_s") 
 
 curr_files_mv_suffix <- sort(apply(expand.grid(paste0("m", batch_mean_vec), paste0("v", batch_var_vec)), 1, paste, collapse="_"))
 curr_file_lst <- sort(c(sort(apply(expand.grid(c("crossmod", method_names), 
@@ -568,12 +580,12 @@ for(bl in batch_levels){
     res <- read.csv(file.path(results_dir, curr_fname), header=TRUE)
     curr_f_id <- strsplit(curr_fname, "_")[[1]]
     if(curr_f_id[1]=="crossmod"){
-      res <- res[, subset_colnames_crossmod[-c(1:3)]]
-      res <- data.frame(melt(res), Type="Ensemble", N_sample=curr_f_id[3])
+      res <- res[, subset_colnames_crossmod[-c(1:4)]]
+      res <- data.frame(quiet_melt(res), Type="Ensemble", N_sample=curr_f_id[3])
     }else if(curr_f_id[1] %in% c("lasso", "rf")){
-      res <- res[, c("NoBatch", "Batch", "ComBat")]
-      colnames(res) <- paste0(curr_f_id[1], c(".NoBatch", ".Batch", ".ComBat"))
-      res <- data.frame(melt(res), Type=rep(c("Baseline", "Batch", "ComBat"), each=nrow(res)), N_sample=curr_f_id[3])
+      res <- res[, c("NoBatch", "Batch", "ComBat", "GMM")]
+      colnames(res) <- paste0(curr_f_id[1], c(".NoBatch", ".Batch", ".ComBat", ".GMM"))
+      res <- data.frame(quiet_melt(res), Type=rep(c("Baseline", "Batch", "ComBat", "GMM"), each=nrow(res)), N_sample=curr_f_id[3])
     }else{
       res <- NULL
     }
@@ -583,10 +595,10 @@ for(bl in batch_levels){
   crossmod_res_lst[[bl]] <- do.call(rbind, crossmod_res)
 }
 names(crossmod_res_lst) <- batch_levels
-plt_df <- melt(crossmod_res_lst)
+plt_df <- quiet_melt(crossmod_res_lst)
 plt_df$variable <- factor(plt_df$variable, levels=c("lasso.NoBatch", "rf.NoBatch", "lasso.Batch", "rf.Batch", 
-                                                    "lasso.ComBat", "rf.ComBat", subset_colnames_crossmod[-c(1:3)]))
-plt_df$Type <- factor(plt_df$Type, levels=c("Baseline", "Batch", "ComBat", "Ensemble"))
+                                                    "lasso.ComBat", "rf.ComBat", "lasso.GMM", "rf.GMM", subset_colnames_crossmod[-c(1:4)]))
+plt_df$Type <- factor(plt_df$Type, levels=c("Baseline", "Batch", "ComBat", "GMM", "Ensemble"))
 
 plt_df$variable <- revalue(plt_df$variable, c("lasso.NoBatch"="No batch effect, LASSO",
                                               "rf.NoBatch"="No batch effect, RF",
@@ -594,12 +606,15 @@ plt_df$variable <- revalue(plt_df$variable, c("lasso.NoBatch"="No batch effect, 
                                               "rf.Batch"="With batch, no adjustment, RF",
                                               "lasso.ComBat"="Merge + ComBat, LASSO",
                                               "rf.ComBat"="Merge + ComBat, RF",
+                                              "lasso.GMM"="GMM adjust, LASSO",
+                                              "rf.GMM"="GMM adjust, RF",
                                               "n_Avg"="Batch size weights (across learners)",
                                               "CS_Avg"="Cross-study weights (across learners)",
                                               "Reg_s"="Regression stacking (across learners)"))
 plt_df$Type <- revalue(plt_df$Type, c("Baseline"="No batch effect",
                                       "Batch"="With batch, no adjustment",
-                                      "ComBat"="Merge + ComBat",
+                                      "ComBat"="Merge + ComBat", "GMM"="GMM adjust",
+                                      "GMM"="GMM adjust",
                                       "Ensemble" = "Ensemble (across learners)"))
 plt_df$N_sample <- revalue(plt_df$N_sample, c("batchN20"="Batch size 20", "batchN40"="Batch size 40"))
 plt_df$L1 <- revalue(plt_df$L1, c("m3_v1"="Mean difference 3\nVariance fold change 1", 
@@ -611,7 +626,7 @@ plt_df$L1 <- revalue(plt_df$L1, c("m3_v1"="Mean difference 3\nVariance fold chan
 png("/scripts/evaluations/robustifying/figures/FigS7.png", width=11, height=7, units="in", res=300)
 print(ggplot(plt_df, aes(x=variable, y=value, fill=Type)) +
         geom_boxplot() +
-        scale_fill_manual(values=c("white","#999999", "#E69F00", "#56B4E9")) +
+        scale_fill_manual(values=c("white","#999999", "#E69F00", "#CC79A7", "#56B4E9")) +
         facet_grid(N_sample~L1) +
         theme(axis.text.x=element_text(angle=40, hjust=1),
               axis.title.x=element_blank(), 
@@ -627,7 +642,9 @@ invisible(dev.off())
 ########  Supplementary figure S8: 6-study mxe and weights (rf only)   ########
 rm(list=ls())
 source("/scripts/evaluations/robustifying/code/helper.R")
-results_dir <- "/scripts/evaluations/robustifying/results_real_6studies/"
+# Use smart results loader to find the correct directory
+results_info <- load_results("real_6studies")
+results_dir <- results_info$dir
 study_names <- c("GSE37250_SA", "GSE37250_M", "GSE39941_M", "US", "Africa", "India")
 study_label <- c("F", "G", "C", "E", "A", "D")
 names(study_label) <- study_names
@@ -638,11 +655,11 @@ perf_measures <- c("mxe", "auc", "rmse", "f", "err", "acc")
 perf_measures_names <- c("Mean cross-entropy loss", "AUC", "Root-mean-squared error", 
                          "F1 score", "Error rate", "Accuracy") 
 names(perf_measures_names) <- perf_measures
-selected_method <- c("Batch", "ComBat", "n_Avg", "CS_Avg", "Reg_s")
+selected_method <- c("Batch", "ComBat", "GMM", "n_Avg", "CS_Avg", "Reg_s")
 learner_types <- c("lasso", "rf", "svm", "crossmod")
 
 plt <- function(weights_df){
-  mlt_df <- melt(weights_df)
+  mlt_df <- quiet_melt(weights_df)
   colnames(mlt_df)[1:2] <- c("Type", "Study")
   mlt_df$Study <- factor(mlt_df$Study, levels=c("A", "C", "D", "E", "F", "G"))
   colors <- c("A"="#999999", "C"="#E69F00", "D"="#56B4E9", 
@@ -671,15 +688,15 @@ for(STUDY in study_names){
     colnames(res_lst[[curr_perf]]) <- c("Method", "value", "Model", "Iteration")
     
     sumstats <- res_lst[[curr_perf]] %>%
-      dplyr::filter(Method %in% c("Batch", "ComBat", "n_Avg", "CS_Avg", "Reg_s")) %>%
+      dplyr::filter(Method %in% c("Batch", "ComBat", "GMM", "n_Avg", "CS_Avg", "Reg_s")) %>%
       dplyr::group_by(Method, Model) %>%
-      dplyr::summarise(Avg=mean(value), Up=quantile(value, 0.975), Down=quantile(value, 0.025))
+      dplyr::summarise(Avg=mean(value), Up=quantile(value, 0.975), Down=quantile(value, 0.025), .groups = "drop")
     sumstats$Type <- rep("Original Data", nrow(sumstats))
-    sumstats$Type[sumstats$Method=="ComBat"] <- "ComBat"
+    sumstats$Type[sumstats$Method %in% c("ComBat", "GMM")] <- "Merging"
     sumstats$Type[sumstats$Method %in% c("n_Avg","CS_Avg","Reg_s")] <- "Ensemble"
-    sumstats$Type <- factor(sumstats$Type, levels=c("Original Data", "ComBat", "Ensemble"))
-    sumstats$Method <- factor(sumstats$Method, levels=c("Batch", "ComBat", "n_Avg", "CS_Avg", "Reg_s"))
-    sumstats$Method <- plyr::revalue(sumstats$Method, c("Batch"="Original data", "ComBat"="Merge + ComBat",
+    sumstats$Type <- factor(sumstats$Type, levels=c("Original Data", "Merging", "Ensemble"))
+    sumstats$Method <- factor(sumstats$Method, levels=c("Batch", "ComBat", "GMM", "n_Avg", "CS_Avg", "Reg_s"))
+    sumstats$Method <- plyr::revalue(sumstats$Method, c("Batch"="Original data", "ComBat"="Merge + ComBat", "GMM"="GMM adjust",
                                                         "n_Avg"="Batch size weights", "CS_Avg"="Cross-study weights",
                                                         "Reg_s"="Regression stacking"))
     
@@ -699,7 +716,9 @@ for(STUDY in study_names){
     }
   }
   
-  load(sprintf("/scripts/evaluations/robustifying/results_real_6studies/test%s_weights.RData", STUDY))
+  # Use smart loader to find weights file
+  weights_dir <- load_results("real_6studies")$dir
+  load(sprintf("%s/test%s_weights.RData", weights_dir, STUDY))
   
   lasso_weights <- t(data.frame(`Batch-size weights`=navg_weights,
                                 `Cross-study weights`=cs_weights_seq$lasso,  
@@ -738,7 +757,9 @@ invisible(dev.off())
 ########  Supplementary figure S9: AUC ##########
 rm(list=ls())
 source("/scripts/evaluations/robustifying/code/helper.R")
-results_dir <- "/scripts/evaluations/robustifying/results_real_4studies/"
+# Use smart results loader to find the correct directory
+results_info <- load_results("real_4studies")
+results_dir <- results_info$dir
 study_names <- c("GSE37250_SA", "GSE37250_M", "US", "India")
 study_label <- c("F", "G", "E", "D")
 names(study_label) <- study_names
@@ -748,7 +769,7 @@ match_preval <- FALSE
 perf_measures <- c("mxe", "auc")  
 perf_measures_names <- c("Mean cross-entropy loss", "AUC")  
 names(perf_measures_names) <- perf_measures
-selected_method <- c("Batch", "ComBat", "n_Avg", "CS_Avg", "Reg_s")
+selected_method <- c("Batch", "ComBat", "GMM", "n_Avg", "CS_Avg", "Reg_s")
 MODEL <- "crossmod"
 
 ## calculate frequency table
@@ -762,13 +783,13 @@ for(j in 1:length(study_names)){
   colnames(res) <- c("Method", "value", "Model", "Iteration")
   res$Study <- curr_testset
   
-  total_count <- rep(0, 5)
+  total_count <- rep(0, 6)
   for(b in 1:100){
     curr_iter <- dplyr::filter(res, Iteration==b, Model=="crossmod", 
-                               Method %in% c("Batch", "ComBat", "n_Avg", "CS_Avg", "Reg_s"))
+                               Method %in% c("Batch", "ComBat", "GMM", "n_Avg", "CS_Avg", "Reg_s"))
     total_count[which.max(curr_iter$value)] <- total_count[which.max(curr_iter$value)] + 1 
   }
-  names(total_count) <- c("Batch", "ComBat", "n_Avg", "CS_Avg", "Reg_s")
+  names(total_count) <- c("Batch", "ComBat", "GMM", "n_Avg", "CS_Avg", "Reg_s")
   freq_lst[[study_names[j]]] <- total_count / 100
 }
 annot_tb <- do.call(rbind, freq_lst)
@@ -787,15 +808,15 @@ for(i in 1:length(perf_measures)){
     colnames(res_lst[[curr_perf]][[curr_testset]]) <- c("Method", "value", "Model", "Iteration")
     
     sumstats <- res_lst[[curr_perf]][[curr_testset]] %>%
-      dplyr::filter(Method %in% c("Batch", "ComBat", "n_Avg", "CS_Avg", "Reg_s")) %>%
+      dplyr::filter(Method %in% c("Batch", "ComBat", "GMM", "n_Avg", "CS_Avg", "Reg_s")) %>%
       dplyr::group_by(Method, Model) %>%
-      dplyr::summarise(Avg=mean(value), Up=quantile(value, 0.975), Down=quantile(value, 0.025))
+      dplyr::summarise(Avg=mean(value), Up=quantile(value, 0.975), Down=quantile(value, 0.025), .groups = "drop")
     sumstats$Type <- rep("Original Data", nrow(sumstats))
     sumstats$Type[sumstats$Method=="ComBat"] <- "Merging"
     sumstats$Type[sumstats$Method %in% c("n_Avg","CS_Avg","Reg_s")] <- "Ensemble"
     sumstats$Type <- factor(sumstats$Type, levels=c("Original Data", "Merging", "Ensemble"))
-    sumstats$Method <- factor(sumstats$Method, levels=c("Batch", "ComBat", "n_Avg", "CS_Avg", "Reg_s"))
-    sumstats$Method <- plyr::revalue(sumstats$Method, c("Batch"="Original data", "ComBat"="Merge + ComBat",
+    sumstats$Method <- factor(sumstats$Method, levels=c("Batch", "ComBat", "GMM", "n_Avg", "CS_Avg", "Reg_s"))
+    sumstats$Method <- plyr::revalue(sumstats$Method, c("Batch"="Original data", "ComBat"="Merge + ComBat", "GMM"="GMM adjust",
                                                         "n_Avg"="Batch size weights", "CS_Avg"="Cross-study weights",
                                                         "Reg_s"="Regression stacking"))
     
@@ -825,7 +846,9 @@ for(i in 1:length(perf_measures)){
 }
 
 #### 6 studies
-results_dir <- "/scripts/evaluations/robustifying/results_real_6studies/"
+# Use smart results loader to find the correct directory
+results_info <- load_results("real_6studies")
+results_dir <- results_info$dir
 study_names <- c("GSE37250_SA", "GSE37250_M", "GSE39941_M", "US", "Africa", "India")
 study_label <- c("F", "G", "C", "E", "A", "D")
 names(study_label) <- study_names
@@ -836,7 +859,7 @@ perf_measures <- c("mxe", "auc", "rmse", "f", "err", "acc")
 perf_measures_names <- c("Mean cross-entropy loss", "AUC", "Root-mean-squared error", 
                          "F1 score", "Error rate", "Accuracy") 
 names(perf_measures_names) <- perf_measures
-selected_method <- c("Batch", "ComBat", "n_Avg", "CS_Avg", "Reg_s")
+selected_method <- c("Batch", "ComBat", "GMM", "n_Avg", "CS_Avg", "Reg_s")
 MODEL <- "crossmod"
 
 curr_perf <- "auc"
@@ -848,13 +871,13 @@ for(j in 1:length(study_names)){
   colnames(res) <- c("Method", "value", "Model", "Iteration")
   res$Study <- curr_testset
   
-  total_count <- rep(0, 5)
+  total_count <- rep(0, 6)
   for(b in 1:100){
     curr_iter <- dplyr::filter(res, Iteration==b, Model=="crossmod", 
-                               Method %in% c("Batch", "ComBat", "n_Avg", "CS_Avg", "Reg_s"))
+                               Method %in% c("Batch", "ComBat", "GMM", "n_Avg", "CS_Avg", "Reg_s"))
     total_count[which.max(curr_iter$value)] <- total_count[which.max(curr_iter$value)] + 1 
   }
-  names(total_count) <- c("Batch", "ComBat", "n_Avg", "CS_Avg", "Reg_s")
+  names(total_count) <- c("Batch", "ComBat", "GMM", "n_Avg", "CS_Avg", "Reg_s")
   freq_lst[[study_names[j]]] <- total_count / 100
 }
 annot_tb <- do.call(rbind, freq_lst)
@@ -871,15 +894,15 @@ for(i in 1:length(perf_measures)){
     colnames(res_lst[[curr_perf]][[curr_testset]]) <- c("Method", "value", "Model", "Iteration")
     
     sumstats <- res_lst[[curr_perf]][[curr_testset]] %>%
-      dplyr::filter(Method %in% c("Batch", "ComBat", "n_Avg", "CS_Avg", "Reg_s")) %>%
+      dplyr::filter(Method %in% c("Batch", "ComBat", "GMM", "n_Avg", "CS_Avg", "Reg_s")) %>%
       dplyr::group_by(Method, Model) %>%
-      dplyr::summarise(Avg=mean(value), Up=quantile(value, 0.975), Down=quantile(value, 0.025))
+      dplyr::summarise(Avg=mean(value), Up=quantile(value, 0.975), Down=quantile(value, 0.025), .groups = "drop")
     sumstats$Type <- rep("Original Data", nrow(sumstats))
     sumstats$Type[sumstats$Method=="ComBat"] <- "Merging"
     sumstats$Type[sumstats$Method %in% c("n_Avg","CS_Avg","Reg_s")] <- "Ensemble"
     sumstats$Type <- factor(sumstats$Type, levels=c("Original Data", "Merging", "Ensemble"))
-    sumstats$Method <- factor(sumstats$Method, levels=c("Batch", "ComBat", "n_Avg", "CS_Avg", "Reg_s"))
-    sumstats$Method <- plyr::revalue(sumstats$Method, c("Batch"="Original data", "ComBat"="Merge + ComBat",
+    sumstats$Method <- factor(sumstats$Method, levels=c("Batch", "ComBat", "GMM", "n_Avg", "CS_Avg", "Reg_s"))
+    sumstats$Method <- plyr::revalue(sumstats$Method, c("Batch"="Original data", "ComBat"="Merge + ComBat", "GMM"="GMM adjust",
                                                         "n_Avg"="Batch size weights", "CS_Avg"="Cross-study weights",
                                                         "Reg_s"="Regression stacking"))
     
@@ -935,7 +958,9 @@ invisible(dev.off())
 rm(list=ls())
 source("/scripts/evaluations/robustifying/code/helper.R")
 #### 4 studies
-results_dir <- "/scripts/evaluations/robustifying/results_real_4studies/"
+# Use smart results loader to find the correct directory
+results_info <- load_results("real_4studies")
+results_dir <- results_info$dir
 study_names <- c("GSE37250_SA", "GSE37250_M", "US", "India")
 study_label <- c("F", "G", "E", "D")
 names(study_label) <- study_names
@@ -945,7 +970,7 @@ match_preval <- FALSE
 perf_measures <- c("mxe", "auc")  
 perf_measures_names <- c("Mean cross-entropy loss", "AUC")  
 names(perf_measures_names) <- perf_measures
-selected_method <- c("Batch", "ComBat", "n_Avg", "CS_Avg", "Reg_s")
+selected_method <- c("Batch", "ComBat", "GMM", "n_Avg", "CS_Avg", "Reg_s")
 MODEL <- "crossmod"
 curr_perf <- "mxe"
 freq_lst <- list()
@@ -955,13 +980,13 @@ for(j in 1:length(study_names)){
   res <- read.csv(paste0(results_dir, "/", file_prefix, "_", curr_perf, ".csv"))
   colnames(res) <- c("Method", "value", "Model", "Iteration")
   res$Study <- curr_testset
-  total_count <- rep(0, 5)
+  total_count <- rep(0, 6)
   for(b in 1:100){
     curr_iter <- dplyr::filter(res, Iteration==b, Model=="crossmod", 
-                               Method %in% c("Batch", "ComBat", "n_Avg", "CS_Avg", "Reg_s"))
+                               Method %in% c("Batch", "ComBat", "GMM", "n_Avg", "CS_Avg", "Reg_s"))
     total_count[which.min(curr_iter$value)] <- total_count[which.min(curr_iter$value)] + 1 
   }
-  names(total_count) <- c("Batch", "ComBat", "n_Avg", "CS_Avg", "Reg_s")
+  names(total_count) <- c("Batch", "ComBat", "GMM", "n_Avg", "CS_Avg", "Reg_s")
   freq_lst[[study_names[j]]] <- total_count / 100
 }
 annot_tb <- do.call(rbind, freq_lst)
@@ -978,15 +1003,15 @@ for(i in 1:length(perf_measures)){
     colnames(res_lst[[curr_perf]][[curr_testset]]) <- c("Method", "value", "Model", "Iteration")
     
     sumstats <- res_lst[[curr_perf]][[curr_testset]] %>%
-      dplyr::filter(Method %in% c("Batch", "ComBat", "n_Avg", "CS_Avg", "Reg_s")) %>%
+      dplyr::filter(Method %in% c("Batch", "ComBat", "GMM", "n_Avg", "CS_Avg", "Reg_s")) %>%
       dplyr::group_by(Method, Model) %>%
-      dplyr::summarise(Avg=mean(value), Up=quantile(value, 0.975), Down=quantile(value, 0.025))
+      dplyr::summarise(Avg=mean(value), Up=quantile(value, 0.975), Down=quantile(value, 0.025), .groups = "drop")
     sumstats$Type <- rep("Original Data", nrow(sumstats))
     sumstats$Type[sumstats$Method=="ComBat"] <- "Merging"
     sumstats$Type[sumstats$Method %in% c("n_Avg","CS_Avg","Reg_s")] <- "Ensemble"
     sumstats$Type <- factor(sumstats$Type, levels=c("Original Data", "Merging", "Ensemble"))
-    sumstats$Method <- factor(sumstats$Method, levels=c("Batch", "ComBat", "n_Avg", "CS_Avg", "Reg_s"))
-    sumstats$Method <- plyr::revalue(sumstats$Method, c("Batch"="Original data", "ComBat"="Merge + ComBat",
+    sumstats$Method <- factor(sumstats$Method, levels=c("Batch", "ComBat", "GMM", "n_Avg", "CS_Avg", "Reg_s"))
+    sumstats$Method <- plyr::revalue(sumstats$Method, c("Batch"="Original data", "ComBat"="Merge + ComBat", "GMM"="GMM adjust",
                                                         "n_Avg"="Batch size", "CS_Avg"="Cross-study",
                                                         "Reg_s"="Stacking regression"))
     sumstats_crossmod <- dplyr::filter(sumstats, Model==MODEL)
@@ -1012,7 +1037,9 @@ for(i in 1:length(perf_measures)){
   }
 }
 #### 6 studies
-results_dir <- "/scripts/evaluations/robustifying/results_real_6studies/"
+# Use smart results loader to find the correct directory
+results_info <- load_results("real_6studies")
+results_dir <- results_info$dir
 study_names <- c("GSE37250_SA", "GSE37250_M", "GSE39941_M", "US", "Africa", "India")
 study_label <- c("F", "G", "C", "E", "A", "D")
 names(study_label) <- study_names
@@ -1023,7 +1050,7 @@ perf_measures <- c("mxe", "auc", "rmse", "f", "err", "acc")
 perf_measures_names <- c("Mean cross-entropy loss", "AUC", "Root-mean-squared error", 
                          "F1 score", "Error rate", "Accuracy") 
 names(perf_measures_names) <- perf_measures
-selected_method <- c("Batch", "ComBat", "n_Avg", "CS_Avg", "Reg_s")
+selected_method <- c("Batch", "ComBat", "GMM", "n_Avg", "CS_Avg", "Reg_s")
 MODEL <- "crossmod"
 curr_perf <- "mxe"
 freq_lst <- list()
@@ -1033,13 +1060,13 @@ for(j in 1:length(study_names)){
   res <- read.csv(paste0(results_dir, "/", file_prefix, "_", curr_perf, ".csv"))
   colnames(res) <- c("Method", "value", "Model", "Iteration")
   res$Study <- curr_testset
-  total_count <- rep(0, 5)
+  total_count <- rep(0, 6)
   for(b in 1:100){
     curr_iter <- dplyr::filter(res, Iteration==b, Model=="crossmod", 
-                               Method %in% c("Batch", "ComBat", "n_Avg", "CS_Avg", "Reg_s"))
+                               Method %in% c("Batch", "ComBat", "GMM", "n_Avg", "CS_Avg", "Reg_s"))
     total_count[which.min(curr_iter$value)] <- total_count[which.min(curr_iter$value)] + 1 
   }
-  names(total_count) <- c("Batch", "ComBat", "n_Avg", "CS_Avg", "Reg_s")
+  names(total_count) <- c("Batch", "ComBat", "GMM", "n_Avg", "CS_Avg", "Reg_s")
   freq_lst[[study_names[j]]] <- total_count / 100
 }
 annot_tb <- do.call(rbind, freq_lst)
@@ -1055,15 +1082,15 @@ for(i in 1:length(perf_measures)){
     colnames(res_lst[[curr_perf]][[curr_testset]]) <- c("Method", "value", "Model", "Iteration")
     
     sumstats <- res_lst[[curr_perf]][[curr_testset]] %>%
-      dplyr::filter(Method %in% c("Batch", "ComBat", "n_Avg", "CS_Avg", "Reg_s")) %>%
+      dplyr::filter(Method %in% c("Batch", "ComBat", "GMM", "n_Avg", "CS_Avg", "Reg_s")) %>%
       dplyr::group_by(Method, Model) %>%
-      dplyr::summarise(Avg=mean(value), Up=quantile(value, 0.975), Down=quantile(value, 0.025))
+      dplyr::summarise(Avg=mean(value), Up=quantile(value, 0.975), Down=quantile(value, 0.025), .groups = "drop")
     sumstats$Type <- rep("Original Data", nrow(sumstats))
     sumstats$Type[sumstats$Method=="ComBat"] <- "Merging"
     sumstats$Type[sumstats$Method %in% c("n_Avg","CS_Avg","Reg_s")] <- "Ensemble"
     sumstats$Type <- factor(sumstats$Type, levels=c("Original Data", "Merging", "Ensemble"))
-    sumstats$Method <- factor(sumstats$Method, levels=c("Batch", "ComBat", "n_Avg", "CS_Avg", "Reg_s"))
-    sumstats$Method <- plyr::revalue(sumstats$Method, c("Batch"="Original data", "ComBat"="Merge + ComBat",
+    sumstats$Method <- factor(sumstats$Method, levels=c("Batch", "ComBat", "GMM", "n_Avg", "CS_Avg", "Reg_s"))
+    sumstats$Method <- plyr::revalue(sumstats$Method, c("Batch"="Original data", "ComBat"="Merge + ComBat", "GMM"="GMM adjust",
                                                         "n_Avg"="Batch size", "CS_Avg"="Cross-study",
                                                         "Reg_s"="Stacking regression"))
     sumstats_crossmod <- dplyr::filter(sumstats, Model==MODEL)
@@ -1109,7 +1136,9 @@ plt_10gene <- annotate_figure(plt_10gene, top=text_grob("Top 10 genes", face="bo
 
 
 #### 4 studies
-results_dir <- "/scripts/evaluations/robustifying/results_real_4studies/"
+# Use smart results loader to find the correct directory
+results_info <- load_results("real_4studies")
+results_dir <- results_info$dir
 study_names <- c("GSE37250_SA", "GSE37250_M", "US", "India")
 study_label <- c("F", "G", "E", "D")
 names(study_label) <- study_names
@@ -1119,7 +1148,7 @@ match_preval <- FALSE
 perf_measures <- c("mxe", "auc")  
 perf_measures_names <- c("Mean cross-entropy loss", "AUC")  
 names(perf_measures_names) <- perf_measures
-selected_method <- c("Batch", "ComBat", "n_Avg", "CS_Avg", "Reg_s")
+selected_method <- c("Batch", "ComBat", "GMM", "n_Avg", "CS_Avg", "Reg_s")
 MODEL <- "crossmod"
 curr_perf <- "mxe"
 freq_lst <- list()
@@ -1129,13 +1158,13 @@ for(j in 1:length(study_names)){
   res <- read.csv(paste0(results_dir, "/", file_prefix, "_", curr_perf, ".csv"))
   colnames(res) <- c("Method", "value", "Model", "Iteration")
   res$Study <- curr_testset
-  total_count <- rep(0, 5)
+  total_count <- rep(0, 6)
   for(b in 1:100){
     curr_iter <- dplyr::filter(res, Iteration==b, Model=="crossmod", 
-                               Method %in% c("Batch", "ComBat", "n_Avg", "CS_Avg", "Reg_s"))
+                               Method %in% c("Batch", "ComBat", "GMM", "n_Avg", "CS_Avg", "Reg_s"))
     total_count[which.min(curr_iter$value)] <- total_count[which.min(curr_iter$value)] + 1 
   }
-  names(total_count) <- c("Batch", "ComBat", "n_Avg", "CS_Avg", "Reg_s")
+  names(total_count) <- c("Batch", "ComBat", "GMM", "n_Avg", "CS_Avg", "Reg_s")
   freq_lst[[study_names[j]]] <- total_count / 100
 }
 annot_tb <- do.call(rbind, freq_lst)
@@ -1151,15 +1180,15 @@ for(i in 1:length(perf_measures)){
     res_lst[[curr_perf]][[curr_testset]] <- read.csv(paste0(results_dir, "/", file_prefix, "_", curr_perf, ".csv"))
     colnames(res_lst[[curr_perf]][[curr_testset]]) <- c("Method", "value", "Model", "Iteration")
     sumstats <- res_lst[[curr_perf]][[curr_testset]] %>%
-      dplyr::filter(Method %in% c("Batch", "ComBat", "n_Avg", "CS_Avg", "Reg_s")) %>%
+      dplyr::filter(Method %in% c("Batch", "ComBat", "GMM", "n_Avg", "CS_Avg", "Reg_s")) %>%
       dplyr::group_by(Method, Model) %>%
-      dplyr::summarise(Avg=mean(value), Up=quantile(value, 0.975), Down=quantile(value, 0.025))
+      dplyr::summarise(Avg=mean(value), Up=quantile(value, 0.975), Down=quantile(value, 0.025), .groups = "drop")
     sumstats$Type <- rep("Original Data", nrow(sumstats))
     sumstats$Type[sumstats$Method=="ComBat"] <- "Merging"
     sumstats$Type[sumstats$Method %in% c("n_Avg","CS_Avg","Reg_s")] <- "Ensemble"
     sumstats$Type <- factor(sumstats$Type, levels=c("Original Data", "Merging", "Ensemble"))
-    sumstats$Method <- factor(sumstats$Method, levels=c("Batch", "ComBat", "n_Avg", "CS_Avg", "Reg_s"))
-    sumstats$Method <- plyr::revalue(sumstats$Method, c("Batch"="Original data", "ComBat"="Merge + ComBat",
+    sumstats$Method <- factor(sumstats$Method, levels=c("Batch", "ComBat", "GMM", "n_Avg", "CS_Avg", "Reg_s"))
+    sumstats$Method <- plyr::revalue(sumstats$Method, c("Batch"="Original data", "ComBat"="Merge + ComBat", "GMM"="GMM adjust",
                                                         "n_Avg"="Batch size", "CS_Avg"="Cross-study",
                                                         "Reg_s"="Stacking regression"))
     sumstats_crossmod <- dplyr::filter(sumstats, Model==MODEL)
@@ -1185,7 +1214,9 @@ for(i in 1:length(perf_measures)){
   }
 }
 #### 6 studies
-results_dir <- "/scripts/evaluations/robustifying/results_real_6studies/"
+# Use smart results loader to find the correct directory
+results_info <- load_results("real_6studies")
+results_dir <- results_info$dir
 study_names <- c("GSE37250_SA", "GSE37250_M", "GSE39941_M", "US", "Africa", "India")
 study_label <- c("F", "G", "C", "E", "A", "D")
 names(study_label) <- study_names
@@ -1196,7 +1227,7 @@ perf_measures <- c("mxe", "auc", "rmse", "f", "err", "acc")
 perf_measures_names <- c("Mean cross-entropy loss", "AUC", "Root-mean-squared error", 
                          "F1 score", "Error rate", "Accuracy") 
 names(perf_measures_names) <- perf_measures
-selected_method <- c("Batch", "ComBat", "n_Avg", "CS_Avg", "Reg_s")
+selected_method <- c("Batch", "ComBat", "GMM", "n_Avg", "CS_Avg", "Reg_s")
 MODEL <- "crossmod"
 curr_perf <- "mxe"
 freq_lst <- list()
@@ -1206,13 +1237,13 @@ for(j in 1:length(study_names)){
   res <- read.csv(paste0(results_dir, "/", file_prefix, "_", curr_perf, ".csv"))
   colnames(res) <- c("Method", "value", "Model", "Iteration")
   res$Study <- curr_testset
-  total_count <- rep(0, 5)
+  total_count <- rep(0, 6)
   for(b in 1:100){
     curr_iter <- dplyr::filter(res, Iteration==b, Model=="crossmod", 
-                               Method %in% c("Batch", "ComBat", "n_Avg", "CS_Avg", "Reg_s"))
+                               Method %in% c("Batch", "ComBat", "GMM", "n_Avg", "CS_Avg", "Reg_s"))
     total_count[which.min(curr_iter$value)] <- total_count[which.min(curr_iter$value)] + 1 
   }
-  names(total_count) <- c("Batch", "ComBat", "n_Avg", "CS_Avg", "Reg_s")
+  names(total_count) <- c("Batch", "ComBat", "GMM", "n_Avg", "CS_Avg", "Reg_s")
   freq_lst[[study_names[j]]] <- total_count / 100
 }
 annot_tb <- do.call(rbind, freq_lst)
@@ -1227,15 +1258,15 @@ for(i in 1:length(perf_measures)){
     res_lst[[curr_perf]][[curr_testset]] <- read.csv(paste0(results_dir, "/", file_prefix, "_", curr_perf, ".csv"))
     colnames(res_lst[[curr_perf]][[curr_testset]]) <- c("Method", "value", "Model", "Iteration")
     sumstats <- res_lst[[curr_perf]][[curr_testset]] %>%
-      dplyr::filter(Method %in% c("Batch", "ComBat", "n_Avg", "CS_Avg", "Reg_s")) %>%
+      dplyr::filter(Method %in% c("Batch", "ComBat", "GMM", "n_Avg", "CS_Avg", "Reg_s")) %>%
       dplyr::group_by(Method, Model) %>%
-      dplyr::summarise(Avg=mean(value), Up=quantile(value, 0.975), Down=quantile(value, 0.025))
+      dplyr::summarise(Avg=mean(value), Up=quantile(value, 0.975), Down=quantile(value, 0.025), .groups = "drop")
     sumstats$Type <- rep("Original Data", nrow(sumstats))
     sumstats$Type[sumstats$Method=="ComBat"] <- "Merging"
     sumstats$Type[sumstats$Method %in% c("n_Avg","CS_Avg","Reg_s")] <- "Ensemble"
     sumstats$Type <- factor(sumstats$Type, levels=c("Original Data", "Merging", "Ensemble"))
-    sumstats$Method <- factor(sumstats$Method, levels=c("Batch", "ComBat", "n_Avg", "CS_Avg", "Reg_s"))
-    sumstats$Method <- plyr::revalue(sumstats$Method, c("Batch"="Original data", "ComBat"="Merge + ComBat",
+    sumstats$Method <- factor(sumstats$Method, levels=c("Batch", "ComBat", "GMM", "n_Avg", "CS_Avg", "Reg_s"))
+    sumstats$Method <- plyr::revalue(sumstats$Method, c("Batch"="Original data", "ComBat"="Merge + ComBat", "GMM"="GMM adjust",
                                                         "n_Avg"="Batch size", "CS_Avg"="Cross-study",
                                                         "Reg_s"="Stacking regression"))
     sumstats_crossmod <- dplyr::filter(sumstats, Model==MODEL)
@@ -1281,7 +1312,9 @@ plt_100gene <- annotate_figure(plt_100gene, top=text_grob("Top 100 genes", face=
 
 
 #### 4 studies
-results_dir <- "/scripts/evaluations/robustifying/results_real_4studies/"
+# Use smart results loader to find the correct directory
+results_info <- load_results("real_4studies")
+results_dir <- results_info$dir
 study_names <- c("GSE37250_SA", "GSE37250_M", "US", "India")
 study_label <- c("F", "G", "E", "D")
 names(study_label) <- study_names
@@ -1291,7 +1324,7 @@ match_preval <- FALSE
 perf_measures <- c("mxe", "auc")  
 perf_measures_names <- c("Mean cross-entropy loss", "AUC")  
 names(perf_measures_names) <- perf_measures
-selected_method <- c("Batch", "ComBat", "n_Avg", "CS_Avg", "Reg_s")
+selected_method <- c("Batch", "ComBat", "GMM", "n_Avg", "CS_Avg", "Reg_s")
 MODEL <- "crossmod"
 curr_perf <- "mxe"
 freq_lst <- list()
@@ -1301,13 +1334,13 @@ for(j in 1:length(study_names)){
   res <- read.csv(paste0(results_dir, "/", file_prefix, "_", curr_perf, ".csv"))
   colnames(res) <- c("Method", "value", "Model", "Iteration")
   res$Study <- curr_testset
-  total_count <- rep(0, 5)
+  total_count <- rep(0, 6)
   for(b in 1:100){
     curr_iter <- dplyr::filter(res, Iteration==b, Model=="crossmod", 
-                               Method %in% c("Batch", "ComBat", "n_Avg", "CS_Avg", "Reg_s"))
+                               Method %in% c("Batch", "ComBat", "GMM", "n_Avg", "CS_Avg", "Reg_s"))
     total_count[which.min(curr_iter$value)] <- total_count[which.min(curr_iter$value)] + 1 
   }
-  names(total_count) <- c("Batch", "ComBat", "n_Avg", "CS_Avg", "Reg_s")
+  names(total_count) <- c("Batch", "ComBat", "GMM", "n_Avg", "CS_Avg", "Reg_s")
   freq_lst[[study_names[j]]] <- total_count / 100
 }
 annot_tb <- do.call(rbind, freq_lst)
@@ -1323,15 +1356,15 @@ for(i in 1:length(perf_measures)){
     res_lst[[curr_perf]][[curr_testset]] <- read.csv(paste0(results_dir, "/", file_prefix, "_", curr_perf, ".csv"))
     colnames(res_lst[[curr_perf]][[curr_testset]]) <- c("Method", "value", "Model", "Iteration")
     sumstats <- res_lst[[curr_perf]][[curr_testset]] %>%
-      dplyr::filter(Method %in% c("Batch", "ComBat", "n_Avg", "CS_Avg", "Reg_s")) %>%
+      dplyr::filter(Method %in% c("Batch", "ComBat", "GMM", "n_Avg", "CS_Avg", "Reg_s")) %>%
       dplyr::group_by(Method, Model) %>%
-      dplyr::summarise(Avg=mean(value), Up=quantile(value, 0.975), Down=quantile(value, 0.025))
+      dplyr::summarise(Avg=mean(value), Up=quantile(value, 0.975), Down=quantile(value, 0.025), .groups = "drop")
     sumstats$Type <- rep("Original Data", nrow(sumstats))
     sumstats$Type[sumstats$Method=="ComBat"] <- "Merging"
     sumstats$Type[sumstats$Method %in% c("n_Avg","CS_Avg","Reg_s")] <- "Ensemble"
     sumstats$Type <- factor(sumstats$Type, levels=c("Original Data", "Merging", "Ensemble"))
-    sumstats$Method <- factor(sumstats$Method, levels=c("Batch", "ComBat", "n_Avg", "CS_Avg", "Reg_s"))
-    sumstats$Method <- plyr::revalue(sumstats$Method, c("Batch"="Original data", "ComBat"="Merge + ComBat",
+    sumstats$Method <- factor(sumstats$Method, levels=c("Batch", "ComBat", "GMM", "n_Avg", "CS_Avg", "Reg_s"))
+    sumstats$Method <- plyr::revalue(sumstats$Method, c("Batch"="Original data", "ComBat"="Merge + ComBat", "GMM"="GMM adjust",
                                                         "n_Avg"="Batch size", "CS_Avg"="Cross-study",
                                                         "Reg_s"="Stacking regression"))
     sumstats_crossmod <- dplyr::filter(sumstats, Model==MODEL)
@@ -1357,7 +1390,9 @@ for(i in 1:length(perf_measures)){
   }
 }
 #### 6 studies
-results_dir <- "/scripts/evaluations/robustifying/results_real_6studies/"
+# Use smart results loader to find the correct directory
+results_info <- load_results("real_6studies")
+results_dir <- results_info$dir
 study_names <- c("GSE37250_SA", "GSE37250_M", "GSE39941_M", "US", "Africa", "India")
 study_label <- c("F", "G", "C", "E", "A", "D")
 names(study_label) <- study_names
@@ -1368,7 +1403,7 @@ perf_measures <- c("mxe", "auc", "rmse", "f", "err", "acc")
 perf_measures_names <- c("Mean cross-entropy loss", "AUC", "Root-mean-squared error", 
                          "F1 score", "Error rate", "Accuracy") 
 names(perf_measures_names) <- perf_measures
-selected_method <- c("Batch", "ComBat", "n_Avg", "CS_Avg", "Reg_s")
+selected_method <- c("Batch", "ComBat", "GMM", "n_Avg", "CS_Avg", "Reg_s")
 MODEL <- "crossmod"
 curr_perf <- "mxe"
 freq_lst <- list()
@@ -1378,13 +1413,13 @@ for(j in 1:length(study_names)){
   res <- read.csv(paste0(results_dir, "/", file_prefix, "_", curr_perf, ".csv"))
   colnames(res) <- c("Method", "value", "Model", "Iteration")
   res$Study <- curr_testset
-  total_count <- rep(0, 5)
+  total_count <- rep(0, 6)
   for(b in 1:100){
     curr_iter <- dplyr::filter(res, Iteration==b, Model=="crossmod", 
-                               Method %in% c("Batch", "ComBat", "n_Avg", "CS_Avg", "Reg_s"))
+                               Method %in% c("Batch", "ComBat", "GMM", "n_Avg", "CS_Avg", "Reg_s"))
     total_count[which.min(curr_iter$value)] <- total_count[which.min(curr_iter$value)] + 1 
   }
-  names(total_count) <- c("Batch", "ComBat", "n_Avg", "CS_Avg", "Reg_s")
+  names(total_count) <- c("Batch", "ComBat", "GMM", "n_Avg", "CS_Avg", "Reg_s")
   freq_lst[[study_names[j]]] <- total_count / 100
 }
 annot_tb <- do.call(rbind, freq_lst)
@@ -1399,15 +1434,15 @@ for(i in 1:length(perf_measures)){
     res_lst[[curr_perf]][[curr_testset]] <- read.csv(paste0(results_dir, "/", file_prefix, "_", curr_perf, ".csv"))
     colnames(res_lst[[curr_perf]][[curr_testset]]) <- c("Method", "value", "Model", "Iteration")
     sumstats <- res_lst[[curr_perf]][[curr_testset]] %>%
-      dplyr::filter(Method %in% c("Batch", "ComBat", "n_Avg", "CS_Avg", "Reg_s")) %>%
+      dplyr::filter(Method %in% c("Batch", "ComBat", "GMM", "n_Avg", "CS_Avg", "Reg_s")) %>%
       dplyr::group_by(Method, Model) %>%
-      dplyr::summarise(Avg=mean(value), Up=quantile(value, 0.975), Down=quantile(value, 0.025))
+      dplyr::summarise(Avg=mean(value), Up=quantile(value, 0.975), Down=quantile(value, 0.025), .groups = "drop")
     sumstats$Type <- rep("Original Data", nrow(sumstats))
     sumstats$Type[sumstats$Method=="ComBat"] <- "Merging"
     sumstats$Type[sumstats$Method %in% c("n_Avg","CS_Avg","Reg_s")] <- "Ensemble"
     sumstats$Type <- factor(sumstats$Type, levels=c("Original Data", "Merging", "Ensemble"))
-    sumstats$Method <- factor(sumstats$Method, levels=c("Batch", "ComBat", "n_Avg", "CS_Avg", "Reg_s"))
-    sumstats$Method <- plyr::revalue(sumstats$Method, c("Batch"="Original data", "ComBat"="Merge + ComBat",
+    sumstats$Method <- factor(sumstats$Method, levels=c("Batch", "ComBat", "GMM", "n_Avg", "CS_Avg", "Reg_s"))
+    sumstats$Method <- plyr::revalue(sumstats$Method, c("Batch"="Original data", "ComBat"="Merge + ComBat", "GMM"="GMM adjust",
                                                         "n_Avg"="Batch size", "CS_Avg"="Cross-study",
                                                         "Reg_s"="Stacking regression"))
     sumstats_crossmod <- dplyr::filter(sumstats, Model==MODEL)
@@ -1548,9 +1583,9 @@ plt_hist <- function(curr_dat){
 #s="Africa"
 histogram_list <- list()
 for(s in study_names){
-  df_up <- melt(list(LTBI=c(dat_norm[sel_up_genes, batch_pooled==s & label_pooled==0]),
+  df_up <- quiet_melt(list(LTBI=c(dat_norm[sel_up_genes, batch_pooled==s & label_pooled==0]),
                      TB=c(dat_norm[sel_up_genes, batch_pooled==s & label_pooled==1])))
-  df_down <- melt(list(LTBI=c(dat_norm[sel_down_genes, batch_pooled==s & label_pooled==0]),
+  df_down <- quiet_melt(list(LTBI=c(dat_norm[sel_down_genes, batch_pooled==s & label_pooled==0]),
                        TB=c(dat_norm[sel_down_genes, batch_pooled==s & label_pooled==1])))
   colnames(df_up) <- colnames(df_down) <- c("Expression", "Condition")
   df_up$Type <- "Up regulated genes"; df_down$Type <- "Down regulated genes"
@@ -1583,7 +1618,9 @@ invisible(dev.off())
 ########  Supplementary figure S12: 4-study mxe and weights (rf only)   ########
 rm(list=ls())
 source("/scripts/evaluations/robustifying/code/helper.R")
-results_dir <- "/scripts/evaluations/robustifying/results_real_4studies/"
+# Use smart results loader to find the correct directory
+results_info <- load_results("real_4studies")
+results_dir <- results_info$dir
 study_names <- c("GSE37250_SA", "GSE37250_M", "US", "India")
 study_label <- c("F", "G", "E", "D")
 names(study_label) <- study_names
@@ -1594,11 +1631,11 @@ perf_measures <- c("mxe", "auc", "rmse", "f", "err", "acc")
 perf_measures_names <- c("Mean cross-entropy loss", "AUC", "Root-mean-squared error", 
                          "F1 score", "Error rate", "Accuracy") 
 names(perf_measures_names) <- perf_measures
-selected_method <- c("Batch", "ComBat", "n_Avg", "CS_Avg", "Reg_s")
+selected_method <- c("Batch", "ComBat", "GMM", "n_Avg", "CS_Avg", "Reg_s")
 learner_types <- c("lasso", "rf", "svm", "crossmod")
 
 plt <- function(weights_df){
-  mlt_df <- melt(weights_df)
+  mlt_df <- quiet_melt(weights_df)
   colnames(mlt_df)[1:2] <- c("Type", "Study")
   mlt_df$Study <- factor(mlt_df$Study, levels=c("D", "E", "F", "G"))
   colors <- c("D"="#56B4E9", "E"="#009E73", "F"="#F0E442", "G"="#0072B2")
@@ -1626,15 +1663,15 @@ for(STUDY in study_names){
     colnames(res_lst[[curr_perf]]) <- c("Method", "value", "Model", "Iteration")
     
     sumstats <- res_lst[[curr_perf]] %>%
-      dplyr::filter(Method %in% c("Batch", "ComBat", "n_Avg", "CS_Avg", "Reg_s")) %>%
+      dplyr::filter(Method %in% c("Batch", "ComBat", "GMM", "n_Avg", "CS_Avg", "Reg_s")) %>%
       dplyr::group_by(Method, Model) %>%
-      dplyr::summarise(Avg=mean(value), Up=quantile(value, 0.975), Down=quantile(value, 0.025))
+      dplyr::summarise(Avg=mean(value), Up=quantile(value, 0.975), Down=quantile(value, 0.025), .groups = "drop")
     sumstats$Type <- rep("Original Data", nrow(sumstats))
-    sumstats$Type[sumstats$Method=="ComBat"] <- "ComBat"
+    sumstats$Type[sumstats$Method %in% c("ComBat", "GMM")] <- "Merging"
     sumstats$Type[sumstats$Method %in% c("n_Avg","CS_Avg","Reg_s")] <- "Ensemble"
-    sumstats$Type <- factor(sumstats$Type, levels=c("Original Data", "ComBat", "Ensemble"))
-    sumstats$Method <- factor(sumstats$Method, levels=c("Batch", "ComBat", "n_Avg", "CS_Avg", "Reg_s"))
-    sumstats$Method <- plyr::revalue(sumstats$Method, c("Batch"="Original data", "ComBat"="Merge + ComBat",
+    sumstats$Type <- factor(sumstats$Type, levels=c("Original Data", "Merging", "Ensemble"))
+    sumstats$Method <- factor(sumstats$Method, levels=c("Batch", "ComBat", "GMM", "n_Avg", "CS_Avg", "Reg_s"))
+    sumstats$Method <- plyr::revalue(sumstats$Method, c("Batch"="Original data", "ComBat"="Merge + ComBat", "GMM"="GMM adjust",
                                                         "n_Avg"="Batch size weights", "CS_Avg"="Cross-study weights",
                                                         "Reg_s"="Regression stacking"))
     
@@ -1653,7 +1690,9 @@ for(STUDY in study_names){
     }
   }
   
-  load(sprintf("/scripts/evaluations/robustifying/results_real_4studies/test%s_weights.RData", STUDY))
+  # Use smart loader to find weights file
+  weights_dir <- load_results("real_4studies")$dir
+  load(sprintf("%s/test%s_weights.RData", weights_dir, STUDY))
   
   lasso_weights <- t(data.frame(`Batch-size weights`=navg_weights,
                                 `Cross-study weights`=cs_weights_seq$lasso, 
@@ -1685,7 +1724,9 @@ invisible(dev.off())
 ########  Supplementary figure S13: 4-study mxe and weights (rf only) - upsampling India ##########
 rm(list=ls())
 source("/scripts/evaluations/robustifying/code/helper.R")
-results_dir <- "/scripts/evaluations/robustifying/results_real_4studies/"
+# Use smart results loader to find the correct directory
+results_info <- load_results("real_4studies")
+results_dir <- results_info$dir
 study_names <- c("GSE37250_SA", "GSE37250_M", "US", "India")
 study_label <- c("F", "G", "E", "D")
 names(study_label) <- study_names
@@ -1696,11 +1737,11 @@ perf_measures <- c("mxe", "auc", "rmse", "f", "err", "acc")
 perf_measures_names <- c("Mean cross-entropy loss", "AUC", "Root-mean-squared error", 
                          "F1 score", "Error rate", "Accuracy") 
 names(perf_measures_names) <- perf_measures
-selected_method <- c("Batch", "ComBat", "n_Avg", "CS_Avg", "Reg_s")
+selected_method <- c("Batch", "ComBat", "GMM", "n_Avg", "CS_Avg", "Reg_s")
 learner_types <- c("lasso", "rf", "svm", "crossmod")
 
 plt <- function(weights_df){
-  mlt_df <- melt(weights_df)
+  mlt_df <- quiet_melt(weights_df)
   colnames(mlt_df)[1:2] <- c("Type", "Study")
   mlt_df$Study <- factor(mlt_df$Study, levels=c("D", "E", "F", "G"))
   colors <- c("D"="#56B4E9", "E"="#009E73", "F"="#F0E442", "G"="#0072B2")
@@ -1728,15 +1769,15 @@ for(STUDY in study_names){
     colnames(res_lst[[curr_perf]]) <- c("Method", "value", "Model", "Iteration")
     
     sumstats <- res_lst[[curr_perf]] %>%
-      dplyr::filter(Method %in% c("Batch", "ComBat", "n_Avg", "CS_Avg", "Reg_s")) %>%
+      dplyr::filter(Method %in% c("Batch", "ComBat", "GMM", "n_Avg", "CS_Avg", "Reg_s")) %>%
       dplyr::group_by(Method, Model) %>%
-      dplyr::summarise(Avg=mean(value), Up=quantile(value, 0.975), Down=quantile(value, 0.025))
+      dplyr::summarise(Avg=mean(value), Up=quantile(value, 0.975), Down=quantile(value, 0.025), .groups = "drop")
     sumstats$Type <- rep("Original Data", nrow(sumstats))
-    sumstats$Type[sumstats$Method=="ComBat"] <- "ComBat"
+    sumstats$Type[sumstats$Method %in% c("ComBat", "GMM")] <- "Merging"
     sumstats$Type[sumstats$Method %in% c("n_Avg","CS_Avg","Reg_s")] <- "Ensemble"
-    sumstats$Type <- factor(sumstats$Type, levels=c("Original Data", "ComBat", "Ensemble"))
-    sumstats$Method <- factor(sumstats$Method, levels=c("Batch", "ComBat", "n_Avg", "CS_Avg", "Reg_s"))
-    sumstats$Method <- plyr::revalue(sumstats$Method, c("Batch"="Original data", "ComBat"="Merge + ComBat",
+    sumstats$Type <- factor(sumstats$Type, levels=c("Original Data", "Merging", "Ensemble"))
+    sumstats$Method <- factor(sumstats$Method, levels=c("Batch", "ComBat", "GMM", "n_Avg", "CS_Avg", "Reg_s"))
+    sumstats$Method <- plyr::revalue(sumstats$Method, c("Batch"="Original data", "ComBat"="Merge + ComBat", "GMM"="GMM adjust",
                                                         "n_Avg"="Batch size weights", "CS_Avg"="Cross-study weights",
                                                         "Reg_s"="Regression stacking"))
     
@@ -1755,7 +1796,9 @@ for(STUDY in study_names){
     }
   }
   
-  load(sprintf("/scripts/evaluations/robustifying/results_real_6studies/test%s_weights.RData", STUDY))
+  # Use smart loader to find weights file
+  weights_dir <- load_results("real_6studies")$dir
+  load(sprintf("%s/test%s_weights.RData", weights_dir, STUDY))
   
   lasso_weights <- t(data.frame(`Batch-size weights`=navg_weights,
                                 `Cross-study weights`=cs_weights_seq$lasso, 
@@ -1789,7 +1832,9 @@ invisible(dev.off())
 ########  Supplementary figure S14: 4-study mxe and weights (rf only) - downsampling Africa ##########
 rm(list=ls())
 source("/scripts/evaluations/robustifying/code/helper.R")
-results_dir <- "/scripts/evaluations/robustifying/results_real_4studies/"
+# Use smart results loader to find the correct directory
+results_info <- load_results("real_4studies")
+results_dir <- results_info$dir
 study_names <- c("GSE37250_SA", "GSE37250_M", "GSE39941_M", "US", "Africa", "India")
 study_label <- c("F", "G", "C", "E", "A", "D")
 names(study_label) <- study_names
@@ -1800,11 +1845,11 @@ perf_measures <- c("mxe", "auc", "rmse", "f", "err", "acc")
 perf_measures_names <- c("Mean cross-entropy loss", "AUC", "Root-mean-squared error", 
                          "F1 score", "Error rate", "Accuracy") 
 names(perf_measures_names) <- perf_measures
-selected_method <- c("Batch", "ComBat", "n_Avg", "CS_Avg", "Reg_s")
+selected_method <- c("Batch", "ComBat", "GMM", "n_Avg", "CS_Avg", "Reg_s")
 learner_types <- c("lasso", "rf", "svm", "crossmod")
 
 plt <- function(weights_df){
-  mlt_df <- melt(weights_df)
+  mlt_df <- quiet_melt(weights_df)
   colnames(mlt_df)[1:2] <- c("Type", "Study")
   mlt_df$Study <- factor(mlt_df$Study, levels=c("A", "C", "D", "E", "F", "G"))
   colors <- c("A"="#999999", "C"="#E69F00", "D"="#56B4E9", 
@@ -1833,15 +1878,15 @@ for(STUDY in study_names){
     colnames(res_lst[[curr_perf]]) <- c("Method", "value", "Model", "Iteration")
     
     sumstats <- res_lst[[curr_perf]] %>%
-      dplyr::filter(Method %in% c("Batch", "ComBat", "n_Avg", "CS_Avg", "Reg_s")) %>%
+      dplyr::filter(Method %in% c("Batch", "ComBat", "GMM", "n_Avg", "CS_Avg", "Reg_s")) %>%
       dplyr::group_by(Method, Model) %>%
-      dplyr::summarise(Avg=mean(value), Up=quantile(value, 0.975), Down=quantile(value, 0.025))
+      dplyr::summarise(Avg=mean(value), Up=quantile(value, 0.975), Down=quantile(value, 0.025), .groups = "drop")
     sumstats$Type <- rep("Original Data", nrow(sumstats))
-    sumstats$Type[sumstats$Method=="ComBat"] <- "ComBat"
+    sumstats$Type[sumstats$Method %in% c("ComBat", "GMM")] <- "Merging"
     sumstats$Type[sumstats$Method %in% c("n_Avg","CS_Avg","Reg_s")] <- "Ensemble"
-    sumstats$Type <- factor(sumstats$Type, levels=c("Original Data", "ComBat", "Ensemble"))
-    sumstats$Method <- factor(sumstats$Method, levels=c("Batch", "ComBat", "n_Avg", "CS_Avg", "Reg_s"))
-    sumstats$Method <- plyr::revalue(sumstats$Method, c("Batch"="Original data", "ComBat"="Merge + ComBat",
+    sumstats$Type <- factor(sumstats$Type, levels=c("Original Data", "Merging", "Ensemble"))
+    sumstats$Method <- factor(sumstats$Method, levels=c("Batch", "ComBat", "GMM", "n_Avg", "CS_Avg", "Reg_s"))
+    sumstats$Method <- plyr::revalue(sumstats$Method, c("Batch"="Original data", "ComBat"="Merge + ComBat", "GMM"="GMM adjust",
                                                         "n_Avg"="Batch size weights", "CS_Avg"="Cross-study weights",
                                                         "Reg_s"="Regression stacking"))
     
@@ -1862,7 +1907,9 @@ for(STUDY in study_names){
     }
   }
   
-  load(sprintf("/scripts/evaluations/robustifying/results_real_4studies/test%s_weights.RData", STUDY))
+  # Use smart loader to find weights file
+  weights_dir <- load_results("real_4studies")$dir
+  load(sprintf("%s/test%s_weights.RData", weights_dir, STUDY))
   
   lasso_weights <- t(data.frame(`Batch-size weights`=navg_weights,
                                 `Cross-study weights`=cs_weights_seq$lasso, 

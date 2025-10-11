@@ -647,3 +647,114 @@ predWrapper <- function(mod, tst_set, function_name){
   }
   return(res)
 }
+
+####  Quiet melt wrapper
+# Suppress "No id variables; using all as measure variables" messages
+quiet_melt <- function(...) {
+  suppressMessages(melt(...))
+}
+
+####  Smart Results Loader
+# Automatically finds results in the correct directory structure
+load_results <- function(study_type = c("simulation", "real_4studies", "real_6studies"), 
+                        study_name = NULL, metric = NULL, base_dir = "/scripts/evaluations/robustifying") {
+  
+  study_type <- match.arg(study_type)
+  
+  # Define possible result directories in order of preference
+  possible_dirs <- switch(study_type,
+    "simulation" = c(
+      file.path(base_dir, "results")
+    ),
+    "real_4studies" = c(
+      file.path(base_dir, "results", "real_4studies"),  # Unified structure (preferred)
+      file.path(base_dir, "results"),                   # Copied files
+      file.path(base_dir, "results_real_4studies")      # Original structure
+    ),
+    "real_6studies" = c(
+      file.path(base_dir, "results", "real_6studies"),  # Unified structure (preferred)
+      file.path(base_dir, "results"),                   # Copied files  
+      file.path(base_dir, "results_real_6studies")      # Original structure
+    )
+  )
+  
+  # For real data, construct filename
+  if (study_type != "simulation" && !is.null(study_name) && !is.null(metric)) {
+    filename <- sprintf("test%s_%s.csv", study_name, metric)
+    cat("DEBUG: Looking for specific file:", filename, "\n")
+    
+    # Try each directory until we find the file
+    for (dir in possible_dirs) {
+      filepath <- file.path(dir, filename)
+      cat("DEBUG: Checking filepath:", filepath, "\n")
+      cat("DEBUG: File exists:", file.exists(filepath), "\n")
+      if (file.exists(filepath)) {
+        cat("DEBUG: Found file at:", filepath, "\n")
+        return(list(dir = dir, file = filepath))
+      }
+    }
+    
+    stop(sprintf("Could not find %s in any of the expected directories: %s", 
+                filename, paste(possible_dirs, collapse = ", ")))
+  }
+  
+  # For simulation data or when just getting directory
+  for (dir in possible_dirs) {
+    if (dir.exists(dir)) {
+      csv_files <- list.files(dir, pattern = "\\.csv$")
+      # For real data, we need a reasonable number of files (at least 10)
+      min_files <- if (study_type == "simulation") 1 else 10
+      if (length(csv_files) >= min_files) {
+        # Remove trailing slash to avoid double slashes in path construction
+        dir <- sub("/$", "", dir)
+        return(list(dir = dir, file = NULL))
+      }
+    }
+  }
+  
+  stop(sprintf("Could not find results directory for %s in: %s", 
+              study_type, paste(possible_dirs, collapse = ", ")))
+}
+
+# Convenience wrapper for reading CSV files
+read_results_csv <- function(study_type, study_name = NULL, metric = NULL) {
+  result_info <- load_results(study_type, study_name, metric)
+  
+  if (study_type == "simulation") {
+    stop("Use load_results() directly for simulation data - specify exact filename")
+  }
+  
+  return(read.csv(result_info$file))
+}# G
+MM Debugging Helper Functions
+debug_gmm_data <- function(data, context = "") {
+  if (nrow(data) > 0) {
+    methods <- unique(data$Method)
+    gmm_present <- "GMM" %in% methods
+    gmm_count <- sum(data$Method == "GMM", na.rm = TRUE)
+    
+    cat("DEBUG GMM", context, ":\n")
+    cat("  - Methods found:", paste(methods, collapse = ", "), "\n")
+    cat("  - GMM present:", gmm_present, "\n")
+    cat("  - GMM rows:", gmm_count, "\n")
+    
+    if (gmm_present && gmm_count > 0) {
+      gmm_sample <- data[data$Method == "GMM", ][1:min(3, gmm_count), ]
+      cat("  - Sample GMM values:", paste(round(gmm_sample$value, 4), collapse = ", "), "\n")
+    }
+  } else {
+    cat("DEBUG GMM", context, ": NO DATA\n")
+  }
+}
+
+debug_figure_data <- function(plot_data, figure_name = "") {
+  if ("Method" %in% colnames(plot_data)) {
+    methods_in_plot <- unique(plot_data$Method)
+    gmm_in_plot <- "GMM" %in% methods_in_plot
+    
+    cat("DEBUG FIGURE", figure_name, ":\n")
+    cat("  - Methods in plot:", paste(methods_in_plot, collapse = ", "), "\n") 
+    cat("  - GMM in final plot:", gmm_in_plot, "\n")
+    cat("  - Total plot rows:", nrow(plot_data), "\n")
+  }
+}

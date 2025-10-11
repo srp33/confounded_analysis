@@ -47,13 +47,13 @@ for (curr_perf in perf_measures) {
     curr_file_lst_bl <- grep(bl, curr_file_lst, value = TRUE)
     curr_res <- read.csv(paste0(results_dir, grep(curr_mod, curr_file_lst_bl, value = TRUE)), header = TRUE)
     tmp <- curr_res[, subset_colnames_single]
-    tmp <- data.frame(melt(tmp),
+    tmp <- data.frame(quiet_melt(tmp),
                       Type = rep(c("With batch effect,\nno adjustment", "Merging", "Merging", rep("Ensemble", 3)),
                                  each = nrow(tmp)))
     sgmod_res_lst[[bl]] <- tmp
     base_lst[[bl]] <- curr_res[, "NoBatch"]
   }
-  plt_df <- melt(sgmod_res_lst)
+  plt_df <- quiet_melt(sgmod_res_lst)
 
   plt_df$variable <- factor(plt_df$variable, levels=subset_colnames_single)
   plt_df$variable <- revalue(plt_df$variable, c("Batch" = "No adjustment",
@@ -109,13 +109,13 @@ for (curr_perf in perf_measures) {
     curr_file_lst_bl <- grep(bl, curr_file_lst, value = TRUE)
     curr_res <- read.csv(paste0(results_dir, grep(curr_mod, curr_file_lst_bl, value = TRUE)), header = TRUE)
     tmp <- curr_res[, subset_colnames_single]
-    tmp <- data.frame(melt(tmp),
+    tmp <- data.frame(quiet_melt(tmp),
                       Type = rep(c("With batch effect,\nno adjustment", "Merging", "Merging", rep("Ensemble", 3)),
                                  each = nrow(tmp)))
     sgmod_res_lst[[bl]] <- tmp
     base_lst[[bl]] <- curr_res[, "NoBatch"]
   }
-  plt_df <- melt(sgmod_res_lst)
+  plt_df <- quiet_melt(sgmod_res_lst)
 
   plt_df$variable <- factor(plt_df$variable, levels=subset_colnames_single)
   plt_df$variable <- revalue(plt_df$variable, c("Batch" = "No adjustment",
@@ -158,7 +158,10 @@ rm(list=ls())
 source("/scripts/evaluations/robustifying/code/helper.R")
 
 #### 4 studies
-results_dir <- "/scripts/evaluations/robustifying/results_real_4studies"
+results_dir <- "/scripts/evaluations/robustifying/results_real_4studies/"
+cat("=== DEBUG: Fig2 4-study section ===\n")
+cat("DEBUG: Using results directory:", results_dir, "\n")
+cat("DEBUG: Directory exists:", dir.exists(results_dir), "\n")
 study_names <- c("GSE37250_SA", "GSE37250_M", "US", "India")
 study_label <- c("F", "G", "E", "D")
 names(study_label) <- study_names
@@ -206,10 +209,12 @@ for(i in 1:length(perf_measures)){
     res_lst[[curr_perf]][[curr_testset]] <- read.csv(paste0(results_dir, "/", file_prefix, "_", curr_perf, ".csv"))
     colnames(res_lst[[curr_perf]][[curr_testset]]) <- c("Method", "value", "Model", "Iteration")
     
-    sumstats <- res_lst[[curr_perf]][[curr_testset]] %>%
-      dplyr::filter(Method %in% c("Batch", "ComBat", "GMM", "n_Avg", "CS_Avg", "Reg_s")) %>%
+    filtered_data <- res_lst[[curr_perf]][[curr_testset]] %>%
+      dplyr::filter(Method %in% c("Batch", "ComBat", "GMM", "n_Avg", "CS_Avg", "Reg_s"))
+    cat("DEBUG: Methods after filtering for", curr_testset, curr_perf, ":", paste(unique(filtered_data$Method), collapse=", "), "\n")
+    sumstats <- filtered_data %>%
       dplyr::group_by(Method, Model) %>%
-      dplyr::summarise(Avg=mean(value), Up=quantile(value, 0.975), Down=quantile(value, 0.025))
+      dplyr::summarise(Avg=mean(value), Up=quantile(value, 0.975), Down=quantile(value, 0.025), .groups = "drop")
     sumstats$Type <- rep("Original Data", nrow(sumstats))
     sumstats$Type[sumstats$Method %in% c("ComBat", "GMM")] <- "Merging"
     sumstats$Type[sumstats$Method %in% c("n_Avg","CS_Avg","Reg_s")] <- "Ensemble"
@@ -246,7 +251,10 @@ for(i in 1:length(perf_measures)){
 }
 
 #### 6 studies
-results_dir <- "/scripts/evaluations/robustifying/results_real_6studies"
+results_dir <- "/scripts/evaluations/robustifying/results_real_6studies/"
+cat("=== DEBUG: Fig2 6-study section ===\n")
+cat("DEBUG: Using results directory:", results_dir, "\n")
+cat("DEBUG: Directory exists:", dir.exists(results_dir), "\n")
 study_names <- c("GSE37250_SA", "GSE37250_M", "GSE39941_M", "US", "Africa", "India")
 study_label <- c("F", "G", "C", "E", "A", "D")
 names(study_label) <- study_names
