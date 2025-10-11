@@ -86,7 +86,13 @@ case "$MODE" in
 
     --sbatch)
         # Handle sbatch mode with default arguments
-        SBATCH_ARGS=("--time" "1:00:00" "--mem" "32G" "--ntasks" "4" "--nodes" "1")
+        declare -A SBATCH_PARAMS=(
+            ["--time"]="1:00:00"
+            ["--mem"]="32G"
+            ["--ntasks"]="4"
+            ["--nodes"]="1"
+        )
+        SBATCH_FLAGS=()
         SCRIPT=""
         SCRIPT_ARGS=()
         USER_PROVIDED_JOB_NAME=false
@@ -96,22 +102,17 @@ case "$MODE" in
             case $1 in
                 --job-name|-J)
                     USER_PROVIDED_JOB_NAME=true
-                    SBATCH_ARGS+=("$1")
-                    if [[ $# -gt 1 && ! "$2" =~ ^-- ]]; then
-                        shift
-                        SBATCH_ARGS+=("$1")
-                    fi
+                    SBATCH_PARAMS["$1"]="$2"
+                    shift 2
                     ;;
                 --time|--mem|--cpus-per-task|--ntasks|--nodes|--partition|--output|-o|--error|-e|--mail-type|--mail-user|--array)
-                    SBATCH_ARGS+=("$1")
-                    if [[ $# -gt 1 && ! "$2" =~ ^-- ]]; then
-                        shift
-                        SBATCH_ARGS+=("$1")
-                    fi
+                    SBATCH_PARAMS["$1"]="$2"
+                    shift 2
                     ;;
                 --*)
                     # Other sbatch flags without arguments
-                    SBATCH_ARGS+=("$1")
+                    SBATCH_FLAGS+=("$1")
+                    shift
                     ;;
                 *)
                     # First non-flag argument is the script
@@ -121,9 +122,9 @@ case "$MODE" in
                         # Remaining arguments are script arguments
                         SCRIPT_ARGS+=("$1")
                     fi
+                    shift
                     ;;
             esac
-            shift
         done
         
         if [[ -z "$SCRIPT" ]]; then
@@ -142,8 +143,17 @@ case "$MODE" in
         # Set job name to script basename if not provided by user
         if [[ "$USER_PROVIDED_JOB_NAME" == false ]]; then
             SCRIPT_BASENAME=$(basename "$SCRIPT" | sed 's/\.[^.]*$//')  # Remove extension
-            SBATCH_ARGS+=("--job-name" "$SCRIPT_BASENAME")
+            SBATCH_PARAMS["--job-name"]="$SCRIPT_BASENAME"
         fi
+        
+        # Build final sbatch arguments array
+        SBATCH_ARGS=()
+        for param in "${!SBATCH_PARAMS[@]}"; do
+            SBATCH_ARGS+=("$param" "${SBATCH_PARAMS[$param]}")
+        done
+        for flag in "${SBATCH_FLAGS[@]}"; do
+            SBATCH_ARGS+=("$flag")
+        done
         
         # Write sbatch script
         cat > "$TEMP_SBATCH" << EOF
