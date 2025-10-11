@@ -725,8 +725,9 @@ read_results_csv <- function(study_type, study_name = NULL, metric = NULL) {
   }
   
   return(read.csv(result_info$file))
-}# G
-MM Debugging Helper Functions
+}
+
+# GMM Debugging Helper Functions
 debug_gmm_data <- function(data, context = "") {
   if (nrow(data) > 0) {
     methods <- unique(data$Method)
