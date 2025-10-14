@@ -25,11 +25,21 @@ get_allocated_cores <- function() {
 
 
 ####  Parameters  ####
+# Check for debug mode command line argument
+command_args <- commandArgs(trailingOnly=TRUE)
+debug_mode <- length(command_args) > 0 && command_args[1] == "debug"
+
 norm_data <- TRUE  # whether to normalize datasets by features using z-score scaling
 use_ref_combat <- FALSE  # whether to use ref combat to adjust test set against training set
 
 n_highvar_genes <- 1000  # number of highly variable genes to use in feature reduction
-B <- 100  # bootstrap samples
+B <- if(debug_mode) 2 else 100  # bootstrap samples (2 for debug, 100 for full run)
+
+if(debug_mode) {
+  cat("=== DEBUG MODE ENABLED ===\n")
+  cat("Running with", B, "iterations instead of 100\n")
+  cat("==========================\n\n")
+}
 learner_types <- c("lasso", "rf", "svm")  
 perf_measures <- c("mxe", "auc", "rmse", "f", "err", "acc") 
 perf_measures_names <- c("Mean cross-entropy loss", "AUC", "Root-mean-squared error", 
@@ -250,7 +260,23 @@ for(s in study_names){
                             Reg_s=cm_onestep_res$cm_reg_s)
       perf_crossmod_df <- perf_wrapper(perf_measures, tst_cm_scores, group_test)
       
-      perf_df_lst[["crossmod"]] <- cbind(perf_df_lst$rf[,1:(2+length(unique(batch)))], perf_crossmod_df)
+      # Include preprocessing methods (Batch, ComBat, GMM) from RF model plus ensemble methods
+      # The original code took columns 1:(2+length(unique(batch))) which included Batch, ComBat, and batch-specific columns
+      # We need to also include GMM which comes after ComBat
+      rf_perf <- perf_df_lst$rf
+      
+      # Find the columns we need: Batch, ComBat, GMM, and any batch-specific columns
+      preprocessing_methods <- c("Batch", "ComBat", "GMM")
+      if (length(unique(batch)) > 0) {
+        batch_specific <- paste0("Batch", 1:length(unique(batch)))
+        preprocessing_methods <- c(preprocessing_methods, batch_specific)
+      }
+      
+      # Get the preprocessing columns from RF results
+      preprocessing_cols <- rf_perf[, colnames(rf_perf) %in% preprocessing_methods, drop=FALSE]
+      
+      # Combine preprocessing methods with ensemble methods
+      perf_df_lst[["crossmod"]] <- cbind(preprocessing_cols, perf_crossmod_df)
       tst_scores_modlst[["crossmod"]] <- tst_cm_scores
       
       for(i in 1:length(perf_measures)){

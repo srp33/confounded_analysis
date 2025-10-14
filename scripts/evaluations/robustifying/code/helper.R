@@ -702,12 +702,22 @@ load_results <- function(study_type = c("simulation", "real_4studies", "real_6st
   for (dir in possible_dirs) {
     if (dir.exists(dir)) {
       csv_files <- list.files(dir, pattern = "\\.csv$")
-      # For real data, we need a reasonable number of files (at least 10)
-      min_files <- if (study_type == "simulation") 1 else 10
-      if (length(csv_files) >= min_files) {
-        # Remove trailing slash to avoid double slashes in path construction
-        dir <- sub("/$", "", dir)
-        return(list(dir = dir, file = NULL))
+      
+      # Check if this directory contains the right type of files
+      if (study_type == "simulation") {
+        # Simulation files have patterns like "lasso_auc_batchN20_m0_v1.csv"
+        sim_pattern_files <- grep("_batchN[0-9]+_m[0-9]+_v[0-9]+\\.csv$", csv_files)
+        if (length(sim_pattern_files) >= 1) {
+          dir <- sub("/$", "", dir)
+          return(list(dir = dir, file = NULL))
+        }
+      } else {
+        # Real data files have patterns like "testGSE37250_SA_auc.csv"
+        real_pattern_files <- grep("^test[A-Za-z0-9_]+_[a-z]+\\.csv$", csv_files)
+        if (length(real_pattern_files) >= 10) {
+          dir <- sub("/$", "", dir)
+          return(list(dir = dir, file = NULL))
+        }
       }
     }
   }
