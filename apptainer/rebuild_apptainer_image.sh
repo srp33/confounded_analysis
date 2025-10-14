@@ -8,10 +8,10 @@ module load apptainer
 
 # Build the Apptainer image directly on the host system
 # (can't build Apptainer images from within Apptainer containers)
-apptainer build --force remove-batch-effects.sif apptainer.def
+apptainer build --force combatseq_image.sif ~/confounded_analysis/apptainer/apptainer_combatseq.def
 
 # Move the new image to overwrite the old one
 SHARED_DIR=~/groups/grp_batch_effects
-mv remove-batch-effects.sif "$SHARED_DIR/remove-batch-effects.sif"
+mv combatseq_image.sif "$SHARED_DIR/combatseq_image.sif"
 
-echo "Successfully built and deployed new Apptainer image to $SHARED_DIR/remove-batch-effects.sif"
+echo "Successfully built and deployed new Apptainer image to $SHARED_DIR/combatseq_image.sif"

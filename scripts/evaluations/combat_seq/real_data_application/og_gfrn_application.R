@@ -3,8 +3,8 @@ sapply(c("sva", "dplyr", "DESeq2", "ggplot2", "reshape2", "gridExtra", "scales",
          "RUVSeq", "ggpubr", "BatchQC"), require, character.only=TRUE)
 
 ## Parameters (change paths when necessary)
-data_dir <- "/scripts/evaluations/ComBat_seq/real_data_application"  # path to the signature data (.rds)
-source("/scripts/evaluations/combat_seq/real_data_application/gfrn_helpers.R")  # path to gfrn_helpers.R
+data_dir <- "/scripts/evaluations/ComBat-seq/real_data_application"  # path to the signature data (.rds)
+source("/scripts/evaluations/ComBat-seq/real_data_application/gfrn_helpers.R")  # path to gfrn_helpers.R
 #source("/scripts/evaluations/combat_seq/ComBat_seq.R"); source("/scripts/evaluations/combat_seq/helper_seq.R")   
 # path to the combat-seq scripts (or use the sva package on github, in which case comment out the above line)
 
@@ -97,9 +97,6 @@ plt_adjori <- ggplot(pca_obj_adjori$data, aes(x=PC1, y=PC2, color=Batch, shape=G
        y=sprintf("PC2: %s Variance", percent(pca_obj_adjori$plot_env$percentVar[2])),
        title="Original ComBat") 
 
-dir.create("/outputs/combat_seq_plots", showWarnings = FALSE)
-ggsave("/outputs/combat_seq_plots/pca_plots.pdf", plt_PCA_full, width=8, height=10)
-
 ## ruvseq
 seobj_ruvseq <- SummarizedExperiment(assays=cts_ruvseq_norm, colData=col_data)
 pca_obj_ruvseq <- plotPCA(DESeqTransform(seobj_ruvseq), intgroup=c("Batch", "Group"))
@@ -110,6 +107,9 @@ plt_ruvseq <- ggplot(pca_obj_ruvseq$data, aes(x=PC1, y=PC2, color=Batch, shape=G
        title="RUV-Seq")
 
 plt_PCA_full <- ggarrange(plt, plt_ruvseq, plt_adjori, plt_adj, ncol=1, nrow=4, common.legend=TRUE, legend="right")
+
+dir.create("/outputs/combat_seq_plots", showWarnings = FALSE)
+ggsave("/outputs/combat_seq_plots/pca_plots.pdf", plt_PCA_full, width=8, height=10)
 
 varexp_full <- list(
   unadjusted=batchqc_explained_variation(cpm(cts_sub, log=TRUE), condition=col_data$Group, batch=col_data$Batch)$explained_variation,

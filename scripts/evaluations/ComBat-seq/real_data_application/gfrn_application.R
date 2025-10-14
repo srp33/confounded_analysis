@@ -3,7 +3,7 @@ sapply(c("sva", "dplyr", "DESeq2", "ggplot2", "reshape2", "gridExtra", "scales",
          "RUVSeq", "ggpubr", "BatchQC"), require, character.only=TRUE)
 
 ## Parameters (change paths when necessary)
-data_dir <- "/data/raw_counts/rds_output"  # path to the signature data (.rds)
+data_dir <- "/scripts/evaluations/ComBat-seq/real_data_application"  # path to the signature data (.rds)
 source("/scripts/evaluations/ComBat-seq/real_data_application/gfrn_helpers.R")  # path to gfrn_helpers.R
 #source("/scripts/evaluations/ComBat-seq/ComBat_seq.R"); source("/scripts/evaluations/ComBat-seq/helper_seq.R")   
 # path to the combat-seq scripts (or use the sva package on github, in which case comment out the above line)
