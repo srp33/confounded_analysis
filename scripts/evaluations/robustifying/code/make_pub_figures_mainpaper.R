@@ -185,13 +185,23 @@ for(j in 1:length(study_names)){
   colnames(res) <- c("Method", "value", "Model", "Iteration")
   res$Study <- curr_testset
   
-  total_count <- rep(0, 6)
+  # Get unique methods and create frequency table
+  methods_of_interest <- c("Batch", "ComBat", "GMM", "n_Avg", "CS_Avg", "Reg_s")
+  total_count <- rep(0, length(methods_of_interest))
+  names(total_count) <- methods_of_interest
+  
   for(b in 1:100){
     curr_iter <- dplyr::filter(res, Iteration==b, Model=="crossmod", 
-                               Method %in% c("Batch", "ComBat", "GMM", "n_Avg", "CS_Avg", "Reg_s"))
-    total_count[which.min(curr_iter$value)] <- total_count[which.min(curr_iter$value)] + 1 
+                               Method %in% methods_of_interest)
+    
+    # Handle duplicates by taking the first occurrence of each method
+    curr_iter_unique <- curr_iter[!duplicated(curr_iter$Method), ]
+    
+    if(nrow(curr_iter_unique) == length(methods_of_interest)) {
+      best_method <- curr_iter_unique$Method[which.min(curr_iter_unique$value)]
+      total_count[best_method] <- total_count[best_method] + 1
+    }
   }
-  names(total_count) <- c("Batch", "ComBat", "GMM", "n_Avg", "CS_Avg", "Reg_s")
   freq_lst[[study_names[j]]] <- total_count / 100
 }
 annot_tb <- do.call(rbind, freq_lst)
@@ -277,13 +287,23 @@ for(j in 1:length(study_names)){
   colnames(res) <- c("Method", "value", "Model", "Iteration")
   res$Study <- curr_testset
     
-  total_count <- rep(0, 6)
-    for(b in 1:100){
-      curr_iter <- dplyr::filter(res, Iteration==b, Model=="crossmod", 
-                               Method %in% c("Batch", "ComBat", "GMM", "n_Avg", "CS_Avg", "Reg_s"))
-    total_count[which.min(curr_iter$value)] <- total_count[which.min(curr_iter$value)] + 1 
+  # Get unique methods and create frequency table
+  methods_of_interest <- c("Batch", "ComBat", "GMM", "n_Avg", "CS_Avg", "Reg_s")
+  total_count <- rep(0, length(methods_of_interest))
+  names(total_count) <- methods_of_interest
+  
+  for(b in 1:100){
+    curr_iter <- dplyr::filter(res, Iteration==b, Model=="crossmod", 
+                               Method %in% methods_of_interest)
+    
+    # Handle duplicates by taking the first occurrence of each method
+    curr_iter_unique <- curr_iter[!duplicated(curr_iter$Method), ]
+    
+    if(nrow(curr_iter_unique) == length(methods_of_interest)) {
+      best_method <- curr_iter_unique$Method[which.min(curr_iter_unique$value)]
+      total_count[best_method] <- total_count[best_method] + 1
     }
-  names(total_count) <- c("Batch", "ComBat", "GMM", "n_Avg", "CS_Avg", "Reg_s")
+  }
   freq_lst[[study_names[j]]] <- total_count / 100
 }
 annot_tb <- do.call(rbind, freq_lst)
@@ -299,8 +319,11 @@ for(i in 1:length(perf_measures)){
     res_lst[[curr_perf]][[curr_testset]] <- read.csv(paste0(results_dir, "/", file_prefix, "_", curr_perf, ".csv"))
     colnames(res_lst[[curr_perf]][[curr_testset]]) <- c("Method", "value", "Model", "Iteration")
     
-    sumstats <- res_lst[[curr_perf]][[curr_testset]] %>%
-      dplyr::filter(Method %in% c("Batch", "ComBat", "GMM", "n_Avg", "CS_Avg", "Reg_s")) %>%
+    filtered_data <- res_lst[[curr_perf]][[curr_testset]] %>%
+      dplyr::filter(Method %in% c("Batch", "ComBat", "GMM", "n_Avg", "CS_Avg", "Reg_s"))
+    cat("DEBUG: Methods after filtering for", curr_testset, curr_perf, ":", paste(unique(filtered_data$Method), collapse=", "), "\n")
+    
+    sumstats <- filtered_data %>%
       dplyr::group_by(Method, Model) %>%
       dplyr::summarise(Avg=mean(value), Up=quantile(value, 0.975), Down=quantile(value, 0.025), .groups = 'drop')
     

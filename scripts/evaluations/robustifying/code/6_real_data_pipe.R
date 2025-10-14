@@ -18,11 +18,21 @@ source("/scripts/adjust/gmm_adjust.R")
 set.seed(123)
 
 ####  Parameters  ####
+# Check for debug mode command line argument
+command_args <- commandArgs(trailingOnly=TRUE)
+debug_mode <- length(command_args) > 0 && command_args[1] == "debug"
+
 norm_data <- TRUE  # whether to normalize datasets by features using z-score scaling
 use_ref_combat <- FALSE  # whether to use ref combat to adjust test set against training set
 
 n_highvar_genes <- 1000  # number of highly variable genes to use in feature reduction
-B <- 100  # bootstrap samples
+B <- if(debug_mode) 3 else 100  # bootstrap samples (3 for debug, 100 for full run)
+
+if(debug_mode) {
+  cat("=== DEBUG MODE ENABLED ===\n")
+  cat("Running with", B, "iterations instead of 100\n")
+  cat("==========================\n\n")
+}
 learner_types <- c("lasso", "rf", "svm")  
 perf_measures <- c("mxe", "auc", "rmse", "f", "err", "acc") 
 perf_measures_names <- c("Mean cross-entropy loss", "AUC", "Root-mean-squared error", 
@@ -226,8 +236,19 @@ for(s in study_names){
                             Reg_s=cm_onestep_res$cm_reg_s)
       perf_crossmod_df <- perf_wrapper(perf_measures, tst_cm_scores, group_test)
       
-      perf_df_lst[["crossmod"]] <- cbind(perf_df_lst$rf[,1:(2+length(unique(batch)))], perf_crossmod_df)
-      tst_scores_modlst[["crossmod"]] <- tst_cm_scores
+      # Create crossmod results by combining preprocessing methods with ensemble methods
+      # Get preprocessing methods (Batch, ComBat, GMM) from individual model results
+      # Use RF as the source since all individual models should have the same preprocessing results
+      
+      # Create tst_scores for crossmod that includes preprocessing + ensemble methods
+      tst_cm_scores_full <- c(list(Batch=unadj_tst_prob, ComBat=combat_tst_prob, GMM=gmm_tst_prob),
+                              tst_cm_scores)  # tst_cm_scores contains Avg, n_Avg, CS_Avg, Reg_a, Reg_s
+      
+      # Generate performance metrics for the full crossmod scores
+      perf_crossmod_full_df <- perf_wrapper(perf_measures, tst_cm_scores_full, group_test)
+      
+      perf_df_lst[["crossmod"]] <- perf_crossmod_full_df
+      tst_scores_modlst[["crossmod"]] <- tst_cm_scores_full
       
       for(i in 1:length(perf_measures)){
         # Extract performance data more robustly
@@ -235,16 +256,22 @@ for(s in study_names){
         for(model_name in names(perf_df_lst)){
           perf_res <- perf_df_lst[[model_name]]
           if(perf_measures[i] %in% rownames(perf_res)){
-            # Get all columns except batch-specific ones (typically columns 2-4 for 3 batches)
-            # Keep columns: 1 (first method), and from (2+n_batches) onwards
-            n_batches <- length(unique(batch))
-            start_col <- 2 + n_batches
-            if(ncol(perf_res) >= start_col){
-              selected_cols <- c(1, start_col:ncol(perf_res))
-              perf_data[[model_name]] <- perf_res[perf_measures[i], selected_cols]
+            if(model_name == "crossmod"){
+              # For crossmod, include all methods (no column filtering needed)
+              perf_data[[model_name]] <- perf_res[perf_measures[i], , drop=FALSE]
             } else {
-              # Fallback: just take the first column if structure is unexpected
-              perf_data[[model_name]] <- perf_res[perf_measures[i], 1, drop=FALSE]
+              # For individual models, use the original column selection logic
+              # Get all columns except batch-specific ones (typically columns 2-4 for 3 batches)
+              # Keep columns: 1 (first method), and from (2+n_batches) onwards
+              n_batches <- length(unique(batch))
+              start_col <- 2 + n_batches
+              if(ncol(perf_res) >= start_col){
+                selected_cols <- c(1, start_col:ncol(perf_res))
+                perf_data[[model_name]] <- perf_res[perf_measures[i], selected_cols]
+              } else {
+                # Fallback: just take the first column if structure is unexpected
+                perf_data[[model_name]] <- perf_res[perf_measures[i], 1, drop=FALSE]
+              }
             }
           }
         }

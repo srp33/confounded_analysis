@@ -370,6 +370,37 @@ draw_heatmap <- function(data_matrix, metric_col, adjuster, train_combined, is_d
   return(ht)
 }
 
+# Function to calculate percentage of times each adjuster performs best
+calculate_best_performer_percentages <- function(all_diff_data) {
+  # Exclude diagonal entries (where Train == Test) for percentage calculation
+  off_diagonal_data <- all_diff_data %>%
+    filter(Train != Test)
+  
+  # For each dataset combination (Train, Test) and metric, find which adjuster performs best
+  best_performers <- off_diagonal_data %>%
+    group_by(Train, Test, Metric) %>%
+    filter(Mean_Metric == max(Mean_Metric, na.rm = TRUE)) %>%
+    ungroup()
+  
+  # Calculate percentage of times each adjuster is best (excluding diagonal)
+  total_combinations <- off_diagonal_data %>%
+    select(Train, Test, Metric) %>%
+    distinct() %>%
+    nrow()
+  
+  percentages <- best_performers %>%
+    count(Adjuster, Metric) %>%
+    group_by(Metric) %>%
+    mutate(
+      total_for_metric = sum(n),
+      percentage = round((n / total_for_metric) * 100, 1)
+    ) %>%
+    ungroup() %>%
+    select(Adjuster, Metric, percentage)
+  
+  return(percentages)
+}
+
 # Unified boxplot function (formerly jitter plot)
 generate_jitter_plot <- function(all_diff_data, fig_dir, cross, plot_type = "regular") {
   # Filter out rows with missing values
@@ -380,6 +411,9 @@ generate_jitter_plot <- function(all_diff_data, fig_dir, cross, plot_type = "reg
     cat("No valid data for", plot_type, "boxplot\n")
     return()
   }
+  
+  # Calculate percentages of best performance
+  percentages <- calculate_best_performer_percentages(all_diff_data)
   
   # Configure plot based on type
   if (plot_type == "diagonal") {
@@ -394,6 +428,7 @@ generate_jitter_plot <- function(all_diff_data, fig_dir, cross, plot_type = "reg
     filename_prefix <- "boxplot"
   }
   
+  # Create the main boxplot
   p <- ggplot(all_diff_data, aes(x = Adjuster, y = Mean_Metric, color = Metric)) +
     geom_boxplot(outlier.shape = 16, outlier.size = 2, outlier.alpha = 0.7, 
                  alpha = 0.7, width = 0.6) +
@@ -412,11 +447,38 @@ generate_jitter_plot <- function(all_diff_data, fig_dir, cross, plot_type = "reg
       text = element_text(size = 12)
     ) +
     facet_wrap(~ Metric, scales = "free_y")
+  
+  # Add percentage labels on top of boxplots
+  if (nrow(percentages) > 0) {
+    # Get y-axis limits for positioning labels
+    y_limits <- all_diff_data %>%
+      group_by(Metric) %>%
+      summarise(
+        max_y = max(Mean_Metric, na.rm = TRUE),
+        min_y = min(Mean_Metric, na.rm = TRUE),
+        .groups = "drop"
+      ) %>%
+      mutate(label_y = max_y + (max_y - min_y) * 0.1)
+    
+    # Merge percentages with y-axis positioning
+    label_data <- percentages %>%
+      left_join(y_limits, by = "Metric") %>%
+      mutate(label_text = paste0(percentage, "%"))
+    
+    p <- p + 
+      geom_text(data = label_data, 
+                aes(x = Adjuster, y = label_y, label = label_text, color = Metric),
+                size = 3, fontface = "bold", vjust = 0)
+  }
 
   cross_suffix = ifelse(cross, "_cross", "")
   file_path <- file.path(fig_dir, paste0(filename_prefix, cross_suffix, ".png"))
   ggsave(file_path, plot = p, width = 10, height = 6)
   cat(paste(plot_type, "boxplot saved to:"), file_path, "\n")
+  
+  # Print percentage summary
+  cat("\nPercentage of times each adjuster performed best (excluding diagonal Train==Test):\n")
+  print(percentages)
 }
 
 generate_all_heatmaps_to_pdf <- function(adjuster, train_combined, fig_dir = "/outputs/figures") {

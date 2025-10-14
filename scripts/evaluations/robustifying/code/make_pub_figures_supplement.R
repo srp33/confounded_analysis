@@ -812,7 +812,7 @@ for(i in 1:length(perf_measures)){
       dplyr::group_by(Method, Model) %>%
       dplyr::summarise(Avg=mean(value), Up=quantile(value, 0.975), Down=quantile(value, 0.025), .groups = "drop")
     sumstats$Type <- rep("Original Data", nrow(sumstats))
-    sumstats$Type[sumstats$Method=="ComBat"] <- "Merging"
+    sumstats$Type[sumstats$Method %in% c("ComBat", "GMM")] <- "Merging"
     sumstats$Type[sumstats$Method %in% c("n_Avg","CS_Avg","Reg_s")] <- "Ensemble"
     sumstats$Type <- factor(sumstats$Type, levels=c("Original Data", "Merging", "Ensemble"))
     sumstats$Method <- factor(sumstats$Method, levels=c("Batch", "ComBat", "GMM", "n_Avg", "CS_Avg", "Reg_s"))
@@ -824,6 +824,7 @@ for(i in 1:length(perf_measures)){
     sumstats_crossmod$Annot <- ""
     sumstats_crossmod$Annot[sumstats_crossmod$Method=="Original data"] <- scales::percent(annot_tb[study_label[curr_testset], "Batch"])
     sumstats_crossmod$Annot[sumstats_crossmod$Method=="Merge + ComBat"] <- scales::percent(annot_tb[study_label[curr_testset], "ComBat"])
+    sumstats_crossmod$Annot[sumstats_crossmod$Method=="GMM adjust"] <- scales::percent(annot_tb[study_label[curr_testset], "GMM"])
     sumstats_crossmod$Annot[sumstats_crossmod$Method=="Batch size weights"] <- scales::percent(annot_tb[study_label[curr_testset], "n_Avg"])
     sumstats_crossmod$Annot[sumstats_crossmod$Method=="Cross-study weights"] <- scales::percent(annot_tb[study_label[curr_testset], "CS_Avg"])
     sumstats_crossmod$Annot[sumstats_crossmod$Method=="Regression stacking"] <- scales::percent(annot_tb[study_label[curr_testset], "Reg_s"])
@@ -898,7 +899,7 @@ for(i in 1:length(perf_measures)){
       dplyr::group_by(Method, Model) %>%
       dplyr::summarise(Avg=mean(value), Up=quantile(value, 0.975), Down=quantile(value, 0.025), .groups = "drop")
     sumstats$Type <- rep("Original Data", nrow(sumstats))
-    sumstats$Type[sumstats$Method=="ComBat"] <- "Merging"
+    sumstats$Type[sumstats$Method %in% c("ComBat", "GMM")] <- "Merging"
     sumstats$Type[sumstats$Method %in% c("n_Avg","CS_Avg","Reg_s")] <- "Ensemble"
     sumstats$Type <- factor(sumstats$Type, levels=c("Original Data", "Merging", "Ensemble"))
     sumstats$Method <- factor(sumstats$Method, levels=c("Batch", "ComBat", "GMM", "n_Avg", "CS_Avg", "Reg_s"))
@@ -910,6 +911,7 @@ for(i in 1:length(perf_measures)){
     sumstats_crossmod$Annot <- ""
     sumstats_crossmod$Annot[sumstats_crossmod$Method=="Original data"] <- scales::percent(annot_tb[study_label[curr_testset], "Batch"])
     sumstats_crossmod$Annot[sumstats_crossmod$Method=="Merge + ComBat"] <- scales::percent(annot_tb[study_label[curr_testset], "ComBat"])
+    sumstats_crossmod$Annot[sumstats_crossmod$Method=="GMM adjust"] <- scales::percent(annot_tb[study_label[curr_testset], "GMM"])
     sumstats_crossmod$Annot[sumstats_crossmod$Method=="Batch size weights"] <- scales::percent(annot_tb[study_label[curr_testset], "n_Avg"])
     sumstats_crossmod$Annot[sumstats_crossmod$Method=="Cross-study weights"] <- scales::percent(annot_tb[study_label[curr_testset], "CS_Avg"])
     sumstats_crossmod$Annot[sumstats_crossmod$Method=="Regression stacking"] <- scales::percent(annot_tb[study_label[curr_testset], "Reg_s"])
@@ -1007,7 +1009,7 @@ for(i in 1:length(perf_measures)){
       dplyr::group_by(Method, Model) %>%
       dplyr::summarise(Avg=mean(value), Up=quantile(value, 0.975), Down=quantile(value, 0.025), .groups = "drop")
     sumstats$Type <- rep("Original Data", nrow(sumstats))
-    sumstats$Type[sumstats$Method=="ComBat"] <- "Merging"
+    sumstats$Type[sumstats$Method %in% c("ComBat", "GMM")] <- "Merging"
     sumstats$Type[sumstats$Method %in% c("n_Avg","CS_Avg","Reg_s")] <- "Ensemble"
     sumstats$Type <- factor(sumstats$Type, levels=c("Original Data", "Merging", "Ensemble"))
     sumstats$Method <- factor(sumstats$Method, levels=c("Batch", "ComBat", "GMM", "n_Avg", "CS_Avg", "Reg_s"))
@@ -1018,6 +1020,7 @@ for(i in 1:length(perf_measures)){
     sumstats_crossmod$Annot <- ""
     sumstats_crossmod$Annot[sumstats_crossmod$Method=="Original data"] <- scales::percent(annot_tb[study_label[curr_testset], "Batch"])
     sumstats_crossmod$Annot[sumstats_crossmod$Method=="Merge + ComBat"] <- scales::percent(annot_tb[study_label[curr_testset], "ComBat"])
+    sumstats_crossmod$Annot[sumstats_crossmod$Method=="GMM adjust"] <- scales::percent(annot_tb[study_label[curr_testset], "GMM"])
     sumstats_crossmod$Annot[sumstats_crossmod$Method=="Batch size"] <- scales::percent(annot_tb[study_label[curr_testset], "n_Avg"])
     sumstats_crossmod$Annot[sumstats_crossmod$Method=="Cross-study"] <- scales::percent(annot_tb[study_label[curr_testset], "CS_Avg"])
     sumstats_crossmod$Annot[sumstats_crossmod$Method=="Stacking regression"] <- scales::percent(annot_tb[study_label[curr_testset], "Reg_s"])
@@ -1086,7 +1089,7 @@ for(i in 1:length(perf_measures)){
       dplyr::group_by(Method, Model) %>%
       dplyr::summarise(Avg=mean(value), Up=quantile(value, 0.975), Down=quantile(value, 0.025), .groups = "drop")
     sumstats$Type <- rep("Original Data", nrow(sumstats))
-    sumstats$Type[sumstats$Method=="ComBat"] <- "Merging"
+    sumstats$Type[sumstats$Method %in% c("ComBat", "GMM")] <- "Merging"
     sumstats$Type[sumstats$Method %in% c("n_Avg","CS_Avg","Reg_s")] <- "Ensemble"
     sumstats$Type <- factor(sumstats$Type, levels=c("Original Data", "Merging", "Ensemble"))
     sumstats$Method <- factor(sumstats$Method, levels=c("Batch", "ComBat", "GMM", "n_Avg", "CS_Avg", "Reg_s"))
@@ -1097,6 +1100,7 @@ for(i in 1:length(perf_measures)){
     sumstats_crossmod$Annot <- ""
     sumstats_crossmod$Annot[sumstats_crossmod$Method=="Original data"] <- scales::percent(annot_tb[study_label[curr_testset], "Batch"])
     sumstats_crossmod$Annot[sumstats_crossmod$Method=="Merge + ComBat"] <- scales::percent(annot_tb[study_label[curr_testset], "ComBat"])
+    sumstats_crossmod$Annot[sumstats_crossmod$Method=="GMM adjust"] <- scales::percent(annot_tb[study_label[curr_testset], "GMM"])
     sumstats_crossmod$Annot[sumstats_crossmod$Method=="Batch size"] <- scales::percent(annot_tb[study_label[curr_testset], "n_Avg"])
     sumstats_crossmod$Annot[sumstats_crossmod$Method=="Cross-study"] <- scales::percent(annot_tb[study_label[curr_testset], "CS_Avg"])
     sumstats_crossmod$Annot[sumstats_crossmod$Method=="Stacking regression"] <- scales::percent(annot_tb[study_label[curr_testset], "Reg_s"])
@@ -1184,7 +1188,7 @@ for(i in 1:length(perf_measures)){
       dplyr::group_by(Method, Model) %>%
       dplyr::summarise(Avg=mean(value), Up=quantile(value, 0.975), Down=quantile(value, 0.025), .groups = "drop")
     sumstats$Type <- rep("Original Data", nrow(sumstats))
-    sumstats$Type[sumstats$Method=="ComBat"] <- "Merging"
+    sumstats$Type[sumstats$Method %in% c("ComBat", "GMM")] <- "Merging"
     sumstats$Type[sumstats$Method %in% c("n_Avg","CS_Avg","Reg_s")] <- "Ensemble"
     sumstats$Type <- factor(sumstats$Type, levels=c("Original Data", "Merging", "Ensemble"))
     sumstats$Method <- factor(sumstats$Method, levels=c("Batch", "ComBat", "GMM", "n_Avg", "CS_Avg", "Reg_s"))
@@ -1195,6 +1199,7 @@ for(i in 1:length(perf_measures)){
     sumstats_crossmod$Annot <- ""
     sumstats_crossmod$Annot[sumstats_crossmod$Method=="Original data"] <- scales::percent(annot_tb[study_label[curr_testset], "Batch"])
     sumstats_crossmod$Annot[sumstats_crossmod$Method=="Merge + ComBat"] <- scales::percent(annot_tb[study_label[curr_testset], "ComBat"])
+    sumstats_crossmod$Annot[sumstats_crossmod$Method=="GMM adjust"] <- scales::percent(annot_tb[study_label[curr_testset], "GMM"])
     sumstats_crossmod$Annot[sumstats_crossmod$Method=="Batch size"] <- scales::percent(annot_tb[study_label[curr_testset], "n_Avg"])
     sumstats_crossmod$Annot[sumstats_crossmod$Method=="Cross-study"] <- scales::percent(annot_tb[study_label[curr_testset], "CS_Avg"])
     sumstats_crossmod$Annot[sumstats_crossmod$Method=="Stacking regression"] <- scales::percent(annot_tb[study_label[curr_testset], "Reg_s"])
@@ -1262,7 +1267,7 @@ for(i in 1:length(perf_measures)){
       dplyr::group_by(Method, Model) %>%
       dplyr::summarise(Avg=mean(value), Up=quantile(value, 0.975), Down=quantile(value, 0.025), .groups = "drop")
     sumstats$Type <- rep("Original Data", nrow(sumstats))
-    sumstats$Type[sumstats$Method=="ComBat"] <- "Merging"
+    sumstats$Type[sumstats$Method %in% c("ComBat", "GMM")] <- "Merging"
     sumstats$Type[sumstats$Method %in% c("n_Avg","CS_Avg","Reg_s")] <- "Ensemble"
     sumstats$Type <- factor(sumstats$Type, levels=c("Original Data", "Merging", "Ensemble"))
     sumstats$Method <- factor(sumstats$Method, levels=c("Batch", "ComBat", "GMM", "n_Avg", "CS_Avg", "Reg_s"))
@@ -1273,6 +1278,7 @@ for(i in 1:length(perf_measures)){
     sumstats_crossmod$Annot <- ""
     sumstats_crossmod$Annot[sumstats_crossmod$Method=="Original data"] <- scales::percent(annot_tb[study_label[curr_testset], "Batch"])
     sumstats_crossmod$Annot[sumstats_crossmod$Method=="Merge + ComBat"] <- scales::percent(annot_tb[study_label[curr_testset], "ComBat"])
+    sumstats_crossmod$Annot[sumstats_crossmod$Method=="GMM adjust"] <- scales::percent(annot_tb[study_label[curr_testset], "GMM"])
     sumstats_crossmod$Annot[sumstats_crossmod$Method=="Batch size"] <- scales::percent(annot_tb[study_label[curr_testset], "n_Avg"])
     sumstats_crossmod$Annot[sumstats_crossmod$Method=="Cross-study"] <- scales::percent(annot_tb[study_label[curr_testset], "CS_Avg"])
     sumstats_crossmod$Annot[sumstats_crossmod$Method=="Stacking regression"] <- scales::percent(annot_tb[study_label[curr_testset], "Reg_s"])
@@ -1360,7 +1366,7 @@ for(i in 1:length(perf_measures)){
       dplyr::group_by(Method, Model) %>%
       dplyr::summarise(Avg=mean(value), Up=quantile(value, 0.975), Down=quantile(value, 0.025), .groups = "drop")
     sumstats$Type <- rep("Original Data", nrow(sumstats))
-    sumstats$Type[sumstats$Method=="ComBat"] <- "Merging"
+    sumstats$Type[sumstats$Method %in% c("ComBat", "GMM")] <- "Merging"
     sumstats$Type[sumstats$Method %in% c("n_Avg","CS_Avg","Reg_s")] <- "Ensemble"
     sumstats$Type <- factor(sumstats$Type, levels=c("Original Data", "Merging", "Ensemble"))
     sumstats$Method <- factor(sumstats$Method, levels=c("Batch", "ComBat", "GMM", "n_Avg", "CS_Avg", "Reg_s"))
@@ -1371,6 +1377,7 @@ for(i in 1:length(perf_measures)){
     sumstats_crossmod$Annot <- ""
     sumstats_crossmod$Annot[sumstats_crossmod$Method=="Original data"] <- scales::percent(annot_tb[study_label[curr_testset], "Batch"])
     sumstats_crossmod$Annot[sumstats_crossmod$Method=="Merge + ComBat"] <- scales::percent(annot_tb[study_label[curr_testset], "ComBat"])
+    sumstats_crossmod$Annot[sumstats_crossmod$Method=="GMM adjust"] <- scales::percent(annot_tb[study_label[curr_testset], "GMM"])
     sumstats_crossmod$Annot[sumstats_crossmod$Method=="Batch size"] <- scales::percent(annot_tb[study_label[curr_testset], "n_Avg"])
     sumstats_crossmod$Annot[sumstats_crossmod$Method=="Cross-study"] <- scales::percent(annot_tb[study_label[curr_testset], "CS_Avg"])
     sumstats_crossmod$Annot[sumstats_crossmod$Method=="Stacking regression"] <- scales::percent(annot_tb[study_label[curr_testset], "Reg_s"])
@@ -1438,7 +1445,7 @@ for(i in 1:length(perf_measures)){
       dplyr::group_by(Method, Model) %>%
       dplyr::summarise(Avg=mean(value), Up=quantile(value, 0.975), Down=quantile(value, 0.025), .groups = "drop")
     sumstats$Type <- rep("Original Data", nrow(sumstats))
-    sumstats$Type[sumstats$Method=="ComBat"] <- "Merging"
+    sumstats$Type[sumstats$Method %in% c("ComBat", "GMM")] <- "Merging"
     sumstats$Type[sumstats$Method %in% c("n_Avg","CS_Avg","Reg_s")] <- "Ensemble"
     sumstats$Type <- factor(sumstats$Type, levels=c("Original Data", "Merging", "Ensemble"))
     sumstats$Method <- factor(sumstats$Method, levels=c("Batch", "ComBat", "GMM", "n_Avg", "CS_Avg", "Reg_s"))
@@ -1448,6 +1455,7 @@ for(i in 1:length(perf_measures)){
     sumstats_crossmod <- dplyr::filter(sumstats, Model==MODEL)
     sumstats_crossmod$Annot <- ""
     sumstats_crossmod$Annot[sumstats_crossmod$Method=="Original data"] <- scales::percent(annot_tb[study_label[curr_testset], "Batch"])
+    sumstats_crossmod$Annot[sumstats_crossmod$Method=="GMM adjust"] <- scales::percent(annot_tb[study_label[curr_testset], "GMM"])
     sumstats_crossmod$Annot[sumstats_crossmod$Method=="Merge + ComBat"] <- scales::percent(annot_tb[study_label[curr_testset], "ComBat"])
     sumstats_crossmod$Annot[sumstats_crossmod$Method=="Batch size"] <- scales::percent(annot_tb[study_label[curr_testset], "n_Avg"])
     sumstats_crossmod$Annot[sumstats_crossmod$Method=="Cross-study"] <- scales::percent(annot_tb[study_label[curr_testset], "CS_Avg"])
