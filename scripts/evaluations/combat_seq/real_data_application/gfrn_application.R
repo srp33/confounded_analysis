@@ -13,7 +13,6 @@ set.seed(1)
 
 ## Load data
 sigdata <- readRDS(file.path(data_dir, "signature_data.rds"))
-
 cts_mat <- as.matrix(assay(sigdata, "counts"))   # count matrix (also have tpm and fpkm in there)
 rownames(cts_mat) <- paste0("gene", 1:nrow(cts_mat))
 batch <- colData(sigdata)$batch
@@ -162,3 +161,4 @@ dir.create("/outputs/combat_seq_plots", showWarnings = FALSE)
 ggsave("/outputs/combat_seq_plots/pca_plots.pdf", plt_PCA_full, width=8, height=10)
 
 ggsave("/outputs/combat_seq_plots/explained_variation.pdf", plt_varexp_full, width=8, height=6)
+

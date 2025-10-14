@@ -3,7 +3,7 @@ sapply(c("sva", "dplyr", "DESeq2", "ggplot2", "reshape2", "gridExtra", "scales",
          "RUVSeq", "ggpubr", "BatchQC"), require, character.only=TRUE)
 
 ## Parameters (change paths when necessary)
-data_dir <- "/scripts/evaluations/combat_seq/real_data_application"  # path to the signature data (.rds)
+data_dir <- "/scripts/evaluations/ComBat_seq/real_data_application"  # path to the signature data (.rds)
 source("/scripts/evaluations/combat_seq/real_data_application/gfrn_helpers.R")  # path to gfrn_helpers.R
 #source("/scripts/evaluations/combat_seq/ComBat_seq.R"); source("/scripts/evaluations/combat_seq/helper_seq.R")   
 # path to the combat-seq scripts (or use the sva package on github, in which case comment out the above line)
@@ -96,6 +96,9 @@ plt_adjori <- ggplot(pca_obj_adjori$data, aes(x=PC1, y=PC2, color=Batch, shape=G
   labs(x=sprintf("PC1: %s Variance", percent(pca_obj_adjori$plot_env$percentVar[1])),
        y=sprintf("PC2: %s Variance", percent(pca_obj_adjori$plot_env$percentVar[2])),
        title="Original ComBat") 
+
+dir.create("/outputs/combat_seq_plots", showWarnings = FALSE)
+ggsave("/outputs/combat_seq_plots/pca_plots.pdf", plt_PCA_full, width=8, height=10)
 
 ## ruvseq
 seobj_ruvseq <- SummarizedExperiment(assays=cts_ruvseq_norm, colData=col_data)
