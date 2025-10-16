@@ -1,66 +1,66 @@
-# install_packages.R
-# This script consolidates all R package installations into a single step.
+# install_combatseq_packages.R
 
-# Install pak if it's not already available.
-if (!requireNamespace("pak", quietly = TRUE)) {
-    install.packages("pak", repos = "https://cran.rstudio.com/")
-}
-
-# Use all available CPU cores for parallel installation.
+# Set number of parallel workers
 options(Ncpus = parallel::detectCores())
 
-# Define all packages that can be installed together.
-# Seurat and SeuratData are excluded here and will be installed sequentially
-# to resolve a dependency issue during the Docker build process.
-all_other_packages <- c(
-    # From install_main_packages.R
-    "pacman", "dplyr", "readr", "stringr", "tidyr", "tibble", "ggplot2", 
-    "gridExtra", "png", "magick", "colorspace", "pracma", "kableExtra", 
-    "Rtsne", "argparse", "docstring", "R.devices", "doParallel", "readxl", 
-    "sva", "SCAN.UPC", "SummarizedExperiment", "ExperimentHub", "limma", 
-    "vsn", "ggpubr", "itertools", "ComplexHeatmap", "ggtext",
+# Install BiocManager if not already installed
+if (!requireNamespace("BiocManager", quietly = TRUE)) {
+    install.packages("BiocManager", repos = "https://cloud.r-project.org")
+}
 
-    # From install_adjuster_specific_packages.R
-    "batchelor", "ranger", "fairadapt", "rliger", "huge",
-    "umap", "mclust", "future", "bigmemory",
-    
-    # BatchQC and dependencies
-    "BatchQC", "gplots", "RColorBrewer",
-    "corrplot", "DT", "plotly", "heatmaply", "moments", "matrixStats",
-    
-    # From install_annotation_packages.R
-    "GEOquery", "pd.hg.u133a", "pd.hg.u133.plus.2", "AnnotationDbi", "biomaRt",
+# Set Bioconductor version explicitly
+BiocManager::install(version = "3.11", ask = FALSE, update = FALSE)
 
-    # Other GitHub packages
-    "bmbolstad/preprocessCore",
-    "Seurat",
-    
-    # Additional packages for robustifying evaluation
-    "MCMCpack", "nnls", "glmnet", "e1071", "MLmetrics", "tidyverse", "data.table",
-    "caret", "illuminaHumanv4.db", "hugene11sttranscriptcluster.db", "annotate",
-    "DESeq2", "ROCR", "reshape2", "plyr", "rpart", "genefilter", "nnet",
-    "RcppArmadillo", "foreach", "parallel", "doParallel", "scales", "DelayedMatrixStats", "RUVSeq"
+# Optional: Set CRAN snapshot mirror for reproducibility (June 2020)
+options(repos = c(CRAN = "https://packagemanager.posit.co/cran/2020-06-01"))
+
+# ----- Install CRAN packages -----
+cran_pkgs <- c(
+  "pacman", "dplyr", "readr", "stringr", "tidyr", "tibble", "ggplot2",
+  "gridExtra", "png", "magick", "colorspace", "pracma", "kableExtra",
+  "Rtsne", "argparse", "docstring", "R.devices", "doParallel", "readxl",
+  "itertools", "ggpubr", "MCMCpack", "nnls", "glmnet", "e1071", "MLmetrics",
+  "tidyverse", "data.table", "caret", "annotate", "ROCR", "reshape2",
+  "plyr", "rpart", "nnet", "foreach", "parallel", "scales"
 )
 
-# Install the bulk of packages first.
-cat("--- Installing all CRAN, Bioconductor, and GitHub packages ---\n")
-pak::pkg_install(unique(all_other_packages))
+install.packages(cran_pkgs)
 
-# Handle the custom source packages from mbni.org.
-# Download first, then use pak to install from the local file.
-cat("--- Installing custom annotation packages from source ---\n")
+# ----- Install Bioconductor packages -----
+bioc_pkgs <- c(
+  "BatchQC", "sva", "SCAN.UPC", "SummarizedExperiment", "ExperimentHub",
+  "limma", "vsn", "ComplexHeatmap", "DelayedMatrixStats", "RUVSeq",
+  "GEOquery", "pd.hg.u133a", "pd.hg.u133.plus.2", "AnnotationDbi",
+  "biomaRt", "DESeq2", "illuminaHumanv4.db", "hugene11sttranscriptcluster.db"
+)
+
+BiocManager::install(bioc_pkgs, ask = FALSE, update = FALSE)
+
+# ----- GitHub packages -----
+if (!requireNamespace("remotes", quietly = TRUE)) {
+  install.packages("remotes")
+}
+
+# These may or may not be available for Bioc 3.11 – try with caution
+# Check if still needed
+remotes::install_github("bmbolstad/preprocessCore")
+
+# Note: rliger is not installable in R 4.0/Bioc 3.11 without custom handling.
+# You may want to skip or install manually if you need it.
+
+# ----- Custom MBNI CDF annotation packages -----
+message("--- Installing custom annotation packages from mbni.org ---")
 tmpDir <- tempdir()
 
-# Package 1: hgu133ahsentrezgprobe
-pkgUrl1 <- "http://mbni.org/customcdf/25.0.0/entrezg.download/hgu133ahsentrezgprobe_25.0.0.tar.gz"
-pkgFilePath1 <- file.path(tmpDir, basename(pkgUrl1))
-download.file(pkgUrl1, pkgFilePath1)
-pak::pkg_install(pkgFilePath1)
+cdf_urls <- c(
+  "http://mbni.org/customcdf/25.0.0/entrezg.download/hgu133ahsentrezgprobe_25.0.0.tar.gz",
+  "http://mbni.org/customcdf/25.0.0/entrezg.download/hgu133plus2hsentrezgprobe_25.0.0.tar.gz"
+)
 
-# Package 2: hgu133plus2hsentrezgprobe
-pkgUrl2 <- "http://mbni.org/customcdf/25.0.0/entrezg.download/hgu133plus2hsentrezgprobe_25.0.0.tar.gz"
-pkgFilePath2 <- file.path(tmpDir, basename(pkgUrl2))
-download.file(pkgUrl2, pkgFilePath2)
-pak::pkg_install(pkgFilePath2)
+for (url in cdf_urls) {
+  dest <- file.path(tmpDir, basename(url))
+  download.file(url, dest)
+  install.packages(dest, repos = NULL, type = "source")
+}
 
-cat("--- All R packages installed successfully. ---\n")
+message("--- All R packages installed successfully ---")
