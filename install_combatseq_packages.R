@@ -48,19 +48,5 @@ remotes::install_github("bmbolstad/preprocessCore")
 # Note: rliger is not installable in R 4.0/Bioc 3.11 without custom handling.
 # You may want to skip or install manually if you need it.
 
-# ----- Custom MBNI CDF annotation packages -----
-message("--- Installing custom annotation packages from mbni.org ---")
-tmpDir <- tempdir()
-
-cdf_urls <- c(
-  "http://mbni.org/customcdf/25.0.0/entrezg.download/hgu133ahsentrezgprobe_25.0.0.tar.gz",
-  "http://mbni.org/customcdf/25.0.0/entrezg.download/hgu133plus2hsentrezgprobe_25.0.0.tar.gz"
-)
-
-for (url in cdf_urls) {
-  dest <- file.path(tmpDir, basename(url))
-  download.file(url, dest)
-  install.packages(dest, repos = NULL, type = "source")
-}
 
 message("--- All R packages installed successfully ---")

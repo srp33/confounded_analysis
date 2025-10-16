@@ -11,9 +11,10 @@ source("/scripts/evaluations/combat_seq/real_data_application/gfrn_helpers.R")  
 pathway_regex <- c("her2", "^egfr", "kraswt")  
 set.seed(1)
 
+
 ## Load data
 sigdata <- readRDS(file.path(data_dir, "signature_data.rds"))
-cts_mat <- as.matrix(assay(sigdata, "counts"))   # count matrix (also have tpm and fpkm in there)
+cts_mat <- assay(sigdata, "counts")   # count matrix (also have tpm and fpkm in there)
 rownames(cts_mat) <- paste0("gene", 1:nrow(cts_mat))
 batch <- colData(sigdata)$batch
 group <- colData(sigdata)$group
@@ -23,21 +24,18 @@ pathway_condition_ind <- grep(paste(pathway_regex, collapse="|"), group)
 ctrl_ind <- which(group %in% c("gfp_for_egfr", "gfp18", "gfp30"))
 subset_ind <- sort(c(ctrl_ind, pathway_condition_ind))  
 cts_sub <- cts_mat[, subset_ind]
-batch_sub <- factor(batch[subset_ind])
-group_sub <- as.character(group[subset_ind])
-
+batch_sub <- batch[subset_ind]
+group_sub <- group[subset_ind]
 # remove genes with only 0 counts in the subset & in any batch
-keep1 <- apply(cts_sub[, batch_sub=="1"],1,function(x){!all(x==0)})
-keep2 <- apply(cts_sub[, batch_sub=="2"],1,function(x){!all(x==0)})
-keep3 <- apply(cts_sub[, batch_sub=="3"],1,function(x){!all(x==0)})
+keep1 <- apply(cts_sub[, batch_sub==1],1,function(x){!all(x==0)})
+keep2 <- apply(cts_sub[, batch_sub==2],1,function(x){!all(x==0)})
+keep3 <- apply(cts_sub[, batch_sub==3],1,function(x){!all(x==0)})
 cts_sub <- cts_sub[keep1 & keep2 & keep3, ]
 
 
 ## Use ComBatSeq to adjust data
 group_sub <- factor(as.character(group_sub), levels=c("gfp_for_egfr", "gfp18", "gfp30",  gsub("^", "", pathway_regex, fixed=T)))
 group_sub <- plyr::revalue(group_sub, c("gfp_for_egfr"="gfp", "gfp18"="gfp", "gfp30"="gfp"))
-
-group_sub <- factor(as.character(group_sub), levels = c("gfp", "her2", "egfr", "kraswt"))
 
 start_time <- Sys.time()
 combatseq_sub <- ComBat_seq(counts=cts_sub, batch=batch_sub, group=group_sub, shrink=FALSE)
@@ -47,6 +45,9 @@ print(end_time - start_time)
 
 ## Use original ComBat on logCPM
 combat_sub <- sva::ComBat(cpm(cts_sub, log=TRUE), batch=batch_sub, mod=model.matrix(~group_sub))
+
+# --- Preston's Adjuster ---
+# Example: myadjust_sub <- my_custom_adjuster(cts_sub, batch=batch_sub, group=group_sub)
 
 
 ## RUVseq
@@ -69,84 +70,71 @@ cts_norm <- apply(cts_sub, 2, function(x){x/sum(x)})
 cts_adj_norm <- apply(combatseq_sub, 2, function(x){x/sum(x)})
 cts_adjori_norm <- apply(combat_sub, 2, function(x){x/sum(x)})
 cts_ruvseq_norm <- apply(ruvseq_sub, 2, function(x){x/sum(x)})
+#cts_gmm_norm <- apply(gmm_sub, 2, function(x){x/sum(x)})
 
 
 ## PCA 
-col_data <- data.frame(batch=factor(batch_sub), group=group_sub) 
+col_data <- data.frame(Batch=factor(batch_sub), Group=group_sub) 
 rownames(col_data) <- colnames(cts_sub)
 
 seobj <- SummarizedExperiment(assays=cts_norm, colData=col_data)
-# DEBUG
-message("DEBUG: Batch column for seobj: ")
-str(colData(seobj)$batch)
-
-message("DEBUG: Group column for seobj: ")
-str(colData(seobj)$group)
-
-de_obj = DESeqTransform(seobj)
-
-# DEBUG
-message("DEBUG: Batch column for de_obj:")
-str(colData(de_obj)$batch)
-
-message("DEBUG: Group column for de_obj:")
-str(colData(de_obj)$group)
-
-pca_obj <- plotPCA(de_obj, intgroup=c("batch", "group"))
-
-#DEBUG
-message("DEBUG: Batch column for pca_obj:")
-str(pca_obj$data["batch"])
-
-message("DEBUG: Group column for pca_obj:")
-str(pca_obj$data["group"])
-
-plt <- ggplot(pca_obj$data, aes(x=PC1, y=PC2, color=batch, shape=group)) + 
+pca_obj <- plotPCA(DESeqTransform(seobj), intgroup=c("Batch", "Group"))
+plt <- ggplot(pca_obj$data, aes(x=PC1, y=PC2, color=Batch, shape=Group)) + 
   geom_point() + 
   labs(x=sprintf("PC1: %s Variance", percent(pca_obj$plot_env$percentVar[1])),
        y=sprintf("PC2: %s Variance", percent(pca_obj$plot_env$percentVar[2])),
        title="Unadjusted") 
 
 seobj_adj <- SummarizedExperiment(assays=cts_adj_norm, colData=col_data)
-pca_obj_adj <- plotPCA(DESeqTransform(seobj_adj), intgroup=c("batch", "group"))
-plt_adj <- ggplot(pca_obj_adj$data, aes(x=PC1, y=PC2, color=batch, shape=group)) + 
+pca_obj_adj <- plotPCA(DESeqTransform(seobj_adj), intgroup=c("Batch", "Group"))
+plt_adj <- ggplot(pca_obj_adj$data, aes(x=PC1, y=PC2, color=Batch, shape=Group)) + 
   geom_point() + 
   labs(x=sprintf("PC1: %s Variance", percent(pca_obj_adj$plot_env$percentVar[1])),
        y=sprintf("PC2: %s Variance", percent(pca_obj_adj$plot_env$percentVar[2])),
        title="ComBat-Seq") 
 
 seobj_adjori <- SummarizedExperiment(assays=cts_adjori_norm, colData=col_data)
-pca_obj_adjori <- plotPCA(DESeqTransform(seobj_adjori), intgroup=c("batch", "group"))
-plt_adjori <- ggplot(pca_obj_adjori$data, aes(x=PC1, y=PC2, color=batch, shape=group)) + 
+pca_obj_adjori <- plotPCA(DESeqTransform(seobj_adjori), intgroup=c("Batch", "Group"))
+plt_adjori <- ggplot(pca_obj_adjori$data, aes(x=PC1, y=PC2, color=Batch, shape=Group)) + 
   geom_point() + 
   labs(x=sprintf("PC1: %s Variance", percent(pca_obj_adjori$plot_env$percentVar[1])),
        y=sprintf("PC2: %s Variance", percent(pca_obj_adjori$plot_env$percentVar[2])),
        title="Original ComBat") 
 
+seobj_gmm <- SummarizedExperiment(assays=cts_gmm_norm, colData=col_data)
+pca_obj_gmm <- plotPCA(DESeqTransform(seobj_gmm), intgroup-c("Batch", "Group"))
+plt_gmm <- ggplot(pca_obj_gmm$data, aes(x=PC1, y=PC2, color=Batch, shape=Group)) +
+  geom_point() + 
+  labs(x=sprintf("PC1: %s Variance", percent(pca_obj_gmm$plot_env$percentVar[1])),
+       y=sprintf("PC2: %s Variance", percent(pca_obj_gmm$plot_env$percentVar[2])),
+       title="GMM Diff Exp Counts")
+
+
 ## ruvseq
 seobj_ruvseq <- SummarizedExperiment(assays=cts_ruvseq_norm, colData=col_data)
-pca_obj_ruvseq <- plotPCA(DESeqTransform(seobj_ruvseq), intgroup=c("batch", "group"))
-plt_ruvseq <- ggplot(pca_obj_ruvseq$data, aes(x=PC1, y=PC2, color=batch, shape=group)) +
+pca_obj_ruvseq <- plotPCA(DESeqTransform(seobj_ruvseq), intgroup=c("Batch", "Group"))
+plt_ruvseq <- ggplot(pca_obj_ruvseq$data, aes(x=PC1, y=PC2, color=Batch, shape=Group)) +
   geom_point() +
   labs(x=sprintf("PC1: %s Variance", percent(pca_obj_ruvseq$plot_env$percentVar[1])),
        y=sprintf("PC2: %s Variance", percent(pca_obj_ruvseq$plot_env$percentVar[2])),
        title="RUV-Seq")
 
-plt_PCA_full <- ggarrange(plt, plt_ruvseq, plt_adjori, plt_adj, ncol=1, nrow=4, common.legend=TRUE, legend="right")
+plt_PCA_full <- ggarrange(plt, plt_ruvseq, plt_adjori, plt_adj, plt_gmm, ncol=1, nrow=5, common.legend=TRUE, legend="right")
 
 # dir.create("/outputs/combat_seq_plots", showWarnings = FALSE)
 # ggsave("/outputs/combat_seq_plots/pca_plots.pdf", plt_PCA_full, width=8, height=10)
 
 varexp_full <- list(
-  unadjusted=batchqc_explained_variation(cpm(cts_sub, log=TRUE), condition="group", batch="batch")$explained_variation,
-  combatseq=batchqc_explained_variation(cpm(combatseq_sub, log=TRUE), condition="group", batch="batch")$explained_variation,
-  combat=batchqc_explained_variation(combat_sub, condition="group", batch="batch")$explained_variation,
-  ruvseq=batchqc_explained_variation(cpm(ruvseq_sub, log=TRUE), condition="group", batch="batch")$explained_variation
+  unadjusted=batchqc_explained_variation(cpm(cts_sub, log=TRUE), condition=col_data$Group, batch=col_data$Batch)$explained_variation,
+  combatseq=batchqc_explained_variation(cpm(combatseq_sub, log=TRUE), condition=col_data$Group, batch=col_data$Batch)$explained_variation,
+  combat=batchqc_explained_variation(combat_sub, condition=col_data$Group, batch=col_data$Batch)$explained_variation,
+  ruvseq=batchqc_explained_variation(cpm(ruvseq_sub, log=TRUE), condition=col_data$Group, batch=col_data$Batch)$explained_variation,
+  gmm=batchqc_explained_variation(cpm(gmm_sub, log=TRUE), condition=col_data$Group, batch=col_data$Batch)$explained_variation
 )
 varexp_full_df <- melt(varexp_full)
-varexp_full_df$L1 <- factor(varexp_full_df$L1, levels=c("unadjusted", "ruvseq", "combat","combatseq"))
+varexp_full_df$L1 <- factor(varexp_full_df$L1, levels=c("unadjusted", "ruvseq", "combat","combatseq", "gmm"))
 varexp_full_df$L1 <- plyr::revalue(varexp_full_df$L1, c("unadjusted"="Unadjusted", "combatseq"="ComBat-Seq",
-                                                        "ruvseq"="RUV-Seq", "combat"="Original ComBat"))
+                                                        "ruvseq"="RUV-Seq", "combat"="Original ComBat", "gmm"="GMM Diff Exp Counts"))
 varexp_full_df$Var2 <- plyr::revalue(varexp_full_df$Var2, c("Full (Condition+Batch)"="Condition+Batch"))
 
 plt_varexp_full <- ggplot(varexp_full_df, aes(x=Var2, y=value)) +
