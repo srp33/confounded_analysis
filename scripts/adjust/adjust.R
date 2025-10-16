@@ -1127,7 +1127,7 @@ options(future.globals.maxSize = 2000 * 1024^2)
 
 
 # Parse command line arguments ------------------------------------------------
-
+if (!interactive()){
 parser <- ArgumentParser(description = "A script to apply various batch correction methods to tidy data.")
 
 parser$add_argument("input_file", help = "Path to the input CSV file. Rows are samples, columns are features/metadata.")
@@ -1196,6 +1196,6 @@ message("Writing adjusted data to '", args$output_file, "'")
 adjusted_data %>%
   mutate(across(where(is.numeric), ~ sprintf("%.6f", .))) %>%
   fwrite(args$output_file)
-
+}
 elapsed_time = Sys.time() - start_time
 message("Successfully saved adjusted data to '", args$output_file, "'", " in ", elapsed_time, " seconds.")

@@ -4,21 +4,13 @@ sapply(c("sva", "DESeq2", "ggplot2", "reshape2", "gridExtra", "scales", "dendext
        require, character.only=TRUE)
 
 ## Parameters (change paths when necessary)
-data_dir <- "/data/raw_counts/rds_output"  # path to the signature data (.rds)
+data_dir <- "/scripts/evaluations/combat_seq/real_data_application"  # path to the signature data (.rds)
 source("/scripts/evaluations/combat_seq/real_data_application/gfrn_helpers.R")  # path to gfrn_helpers.R
 #source("~/Desktop/ComBat-seq/ComBat_seq.R"); source("~/Desktop/ComBat-seq/helper_seq.R")   
 output_dir <- "/outputs/combat_seq_plots"
 
-
-## Parameters (change paths when necessary)
-data_dir <- "/data/raw_counts/rds_output"  # path to the signature data (.rds)
-source("/scripts/evaluations/combat_seq/real_data_application/gfrn_helpers.R")  # path to gfrn_helpers.R
-#source("/scripts/evaluations/combat_seq/ComBat_seq.R"); source("/scripts/evaluations/combat_seq/helper_seq.R")   
-# path to the combat-seq scripts (or use the sva package on github, in which case comment out the above line)
-
 pathway_regex <- c("her2", "^egfr", "kraswt")  #"^egfr" 
 set.seed(1)
-
 
 
 ###########  Load data

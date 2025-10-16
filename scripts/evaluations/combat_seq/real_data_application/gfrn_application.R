@@ -5,6 +5,8 @@ sapply(c("sva", "dplyr", "DESeq2", "ggplot2", "reshape2", "gridExtra", "scales",
 ## Parameters (change paths when necessary)
 data_dir <- "/scripts/evaluations/combat_seq/real_data_application"  # path to the signature data (.rds)
 source("/scripts/evaluations/combat_seq/real_data_application/gfrn_helpers.R")  # path to gfrn_helpers.R
+source("/scripts/adjust/adjust.R")
+
 #source("/scripts/evaluations/combat_seq/ComBat_seq.R"); source("/scripts/evaluations/combat_seq/helper_seq.R")   
 # path to the combat-seq scripts (or use the sva package on github, in which case comment out the above line)
 
@@ -46,8 +48,8 @@ print(end_time - start_time)
 ## Use original ComBat on logCPM
 combat_sub <- sva::ComBat(cpm(cts_sub, log=TRUE), batch=batch_sub, mod=model.matrix(~group_sub))
 
-# --- Preston's Adjuster ---
-# Example: myadjust_sub <- my_custom_adjuster(cts_sub, batch=batch_sub, group=group_sub)
+# --- Preston's Adjuster (GMM Diff Exp Counts) ---
+gmm_sub <- adjust_gmm_diff_exp_counts(cts_sub, batch=batch_sub, group=group_sub)
 
 
 ## RUVseq
@@ -70,7 +72,7 @@ cts_norm <- apply(cts_sub, 2, function(x){x/sum(x)})
 cts_adj_norm <- apply(combatseq_sub, 2, function(x){x/sum(x)})
 cts_adjori_norm <- apply(combat_sub, 2, function(x){x/sum(x)})
 cts_ruvseq_norm <- apply(ruvseq_sub, 2, function(x){x/sum(x)})
-#cts_gmm_norm <- apply(gmm_sub, 2, function(x){x/sum(x)})
+cts_gmm_norm <- apply(gmm_sub, 2, function(x){x/sum(x)})
 
 
 ## PCA 
@@ -121,9 +123,6 @@ plt_ruvseq <- ggplot(pca_obj_ruvseq$data, aes(x=PC1, y=PC2, color=Batch, shape=G
 
 plt_PCA_full <- ggarrange(plt, plt_ruvseq, plt_adjori, plt_adj, plt_gmm, ncol=1, nrow=5, common.legend=TRUE, legend="right")
 
-# dir.create("/outputs/combat_seq_plots", showWarnings = FALSE)
-# ggsave("/outputs/combat_seq_plots/pca_plots.pdf", plt_PCA_full, width=8, height=10)
-
 varexp_full <- list(
   unadjusted=batchqc_explained_variation(cpm(cts_sub, log=TRUE), condition=col_data$Group, batch=col_data$Batch)$explained_variation,
   combatseq=batchqc_explained_variation(cpm(combatseq_sub, log=TRUE), condition=col_data$Group, batch=col_data$Batch)$explained_variation,
@@ -146,7 +145,7 @@ plt_varexp_full <- ggplot(varexp_full_df, aes(x=Var2, y=value)) +
 ggarrange(plt_PCA_full, plt_varexp_full, ncol=2, widths=c(0.55, 0.45))
 
 dir.create("/outputs/combat_seq_plots", showWarnings = FALSE)
-ggsave("/outputs/combat_seq_plots/pca_plots.pdf", plt_PCA_full, width=8, height=10)
+ggsave("/outputs/combat_seq_plots/pca_plots_combined.pdf", plt_PCA_full, width=8, height=10)
 
-ggsave("/outputs/combat_seq_plots/explained_variation.pdf", plt_varexp_full, width=8, height=6)
+ggsave("/outputs/combat_seq_plots/explained_variation_combined.pdf", plt_varexp_full, width=8, height=6)
 

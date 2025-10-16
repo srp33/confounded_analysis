@@ -21,7 +21,8 @@ cran_pkgs <- c(
   "Rtsne", "argparse", "docstring", "R.devices", "doParallel", "readxl",
   "itertools", "ggpubr", "MCMCpack", "nnls", "glmnet", "e1071", "MLmetrics",
   "tidyverse", "data.table", "caret", "annotate", "ROCR", "reshape2",
-  "plyr", "rpart", "nnet", "foreach", "parallel", "scales"
+  "plyr", "rpart", "nnet", "foreach", "parallel", "scales", "vroom", 
+  "future", "huge", "preprocessCore"
 )
 
 install.packages(cran_pkgs)
@@ -31,22 +32,39 @@ bioc_pkgs <- c(
   "BatchQC", "sva", "SCAN.UPC", "SummarizedExperiment", "ExperimentHub",
   "limma", "vsn", "ComplexHeatmap", "DelayedMatrixStats", "RUVSeq",
   "GEOquery", "pd.hg.u133a", "pd.hg.u133.plus.2", "AnnotationDbi",
-  "biomaRt", "DESeq2", "illuminaHumanv4.db", "hugene11sttranscriptcluster.db"
+  "biomaRt", "DESeq2", "illuminaHumanv4.db", "hugene11sttranscriptcluster.db", 
+  "batchelor"
 )
 
 BiocManager::install(bioc_pkgs, ask = FALSE, update = FALSE)
 
 # ----- GitHub packages -----
+i# Install remotes (for GitHub installs)
 if (!requireNamespace("remotes", quietly = TRUE)) {
   install.packages("remotes")
 }
 
-# These may or may not be available for Bioc 3.11 – try with caution
-# Check if still needed
-remotes::install_github("bmbolstad/preprocessCore")
+# Install preprocessCore (if not covered above)
+if (!requireNamespace("preprocessCore", quietly = TRUE)) {
+  remotes::install_github("bmbolstad/preprocessCore")
+}
 
-# Note: rliger is not installable in R 4.0/Bioc 3.11 without custom handling.
-# You may want to skip or install manually if you need it.
+# Install Seurat — specific version from ~2020 if possible
+# Use CRAN version from 2020 snapshot; no need for GitHub
+install.packages("Seurat")
 
+# Try to install fairadapt (no CRAN version)
+tryCatch({
+  remotes::install_github("YosefLab/fairadapt")
+}, error = function(e) {
+  message("WARNING: fairadapt failed to install. You may need to install it manually or skip it.")
+})
 
-message("--- All R packages installed successfully ---")
+# Try to install rliger (may fail in R 4.0)
+tryCatch({
+  remotes::install_github("MacoskoLab/liger")
+}, error = function(e) {
+  message("WARNING: rliger failed to install. You may need to install it manually or exclude methods using it.")
+})
+
+message("--- All R packages installation attempted ---")
