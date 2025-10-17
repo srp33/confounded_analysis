@@ -9,7 +9,7 @@ if (!requireNamespace("BiocManager", quietly = TRUE)) {
 }
 
 # Set Bioconductor version explicitly
-BiocManager::install(version = "3.11", ask = FALSE, update = FALSE)
+suppressMessages(BiocManager::install(version = "3.11", ask = FALSE, update = FALSE))
 
 # Optional: Set CRAN snapshot mirror for reproducibility (June 2020)
 options(repos = c(CRAN = "https://packagemanager.posit.co/cran/2020-06-01"))
@@ -39,7 +39,7 @@ bioc_pkgs <- c(
 BiocManager::install(bioc_pkgs, ask = FALSE, update = FALSE)
 
 # ----- GitHub packages -----
-i# Install remotes (for GitHub installs)
+# Install remotes (for GitHub installs)
 if (!requireNamespace("remotes", quietly = TRUE)) {
   install.packages("remotes")
 }

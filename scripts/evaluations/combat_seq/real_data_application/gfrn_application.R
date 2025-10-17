@@ -5,7 +5,7 @@ sapply(c("sva", "dplyr", "DESeq2", "ggplot2", "reshape2", "gridExtra", "scales",
 ## Parameters (change paths when necessary)
 data_dir <- "/scripts/evaluations/combat_seq/real_data_application"  # path to the signature data (.rds)
 source("/scripts/evaluations/combat_seq/real_data_application/gfrn_helpers.R")  # path to gfrn_helpers.R
-source("/scripts/adjust/adjust.R")
+source("/scripts/adjust/gmm_adjust.R")
 
 #source("/scripts/evaluations/combat_seq/ComBat_seq.R"); source("/scripts/evaluations/combat_seq/helper_seq.R")   
 # path to the combat-seq scripts (or use the sva package on github, in which case comment out the above line)
@@ -39,18 +39,34 @@ cts_sub <- cts_sub[keep1 & keep2 & keep3, ]
 group_sub <- factor(as.character(group_sub), levels=c("gfp_for_egfr", "gfp18", "gfp30",  gsub("^", "", pathway_regex, fixed=T)))
 group_sub <- plyr::revalue(group_sub, c("gfp_for_egfr"="gfp", "gfp18"="gfp", "gfp30"="gfp"))
 
-start_time <- Sys.time()
-combatseq_sub <- ComBat_seq(counts=cts_sub, batch=batch_sub, group=group_sub, shrink=FALSE)
-end_time <- Sys.time()
-print(end_time - start_time)
+# start_time <- Sys.time()
+# combatseq_sub <- ComBat_seq(counts=cts_sub, batch=batch_sub, group=group_sub, shrink=FALSE)
+# end_time <- Sys.time()
+# print(end_time - start_time)
 
 
 ## Use original ComBat on logCPM
-combat_sub <- sva::ComBat(cpm(cts_sub, log=TRUE), batch=batch_sub, mod=model.matrix(~group_sub))
+#combat_sub <- sva::ComBat(cpm(cts_sub, log=TRUE), batch=batch_sub, mod=model.matrix(~group_sub))
 
 # --- Preston's Adjuster (GMM Diff Exp Counts) ---
-gmm_sub <- adjust_gmm_diff_exp_counts(cts_sub, batch=batch_sub, group=group_sub)
+cts_sub_w_rownames <- cts_sub
+rownames(cts_sub_w_rownames) <- seq_len(nrow(cts_sub_w_rownames))
 
+message("DEBUG: 10x10 of CTS_SUB with rownames")
+print(cts_sub_w_rownames[1:10, 1:10])
+
+gmm_sub <- gmm_adjust(cts_sub_w_rownames, batch=batch_sub, 
+                       nonlinear=FALSE, preserve_counts=TRUE, mean_mean_zero=TRUE, diff_exp=TRUE, debug=TRUE)
+
+message("DEBUG: 10x10 of gmm_sub with rownames")
+print(gmm_sub[1:10, 1:10])
+
+# DEBUG
+message("DEBUG: Where are NA values in gmm_sub")
+head(which(is.na(gmm_sub), arr.ind = TRUE), 10)
+
+message("DEBUG: Where are infinite values in gmm_sub")
+head(which(!is.finite(gmm_sub), arr.ind = TRUE), 10)
 
 ## RUVseq
 group1 <- plyr::revalue(as.factor(as.character(group_sub[batch_sub==1])), c("gfp"="0", "her2"="1"))
@@ -103,6 +119,21 @@ plt_adjori <- ggplot(pca_obj_adjori$data, aes(x=PC1, y=PC2, color=Batch, shape=G
        y=sprintf("PC2: %s Variance", percent(pca_obj_adjori$plot_env$percentVar[2])),
        title="Original ComBat") 
 
+
+# DEBUG
+message("DEBUG: Any NA in cts_gmm_norm:")
+anyNA(cts_gmm_norm)
+
+message("DEBUG: Any infinite values:")
+any(!is.finite(cts_gmm_norm))
+
+# DEBUG
+message("DEBUG: Where are NA values")
+head(which(is.na(cts_gmm_norm), arr.ind = TRUE), 10)
+
+message("DEBUG: Where are infinite values")
+head(which(!is.finite(cts_gmm_norm), arr.ind = TRUE), 10)
+
 seobj_gmm <- SummarizedExperiment(assays=cts_gmm_norm, colData=col_data)
 pca_obj_gmm <- plotPCA(DESeqTransform(seobj_gmm), intgroup-c("Batch", "Group"))
 plt_gmm <- ggplot(pca_obj_gmm$data, aes(x=PC1, y=PC2, color=Batch, shape=Group)) +
@@ -145,7 +176,7 @@ plt_varexp_full <- ggplot(varexp_full_df, aes(x=Var2, y=value)) +
 ggarrange(plt_PCA_full, plt_varexp_full, ncol=2, widths=c(0.55, 0.45))
 
 dir.create("/outputs/combat_seq_plots", showWarnings = FALSE)
-ggsave("/outputs/combat_seq_plots/pca_plots_combined.pdf", plt_PCA_full, width=8, height=10)
+ggsave("/outputs/combat_seq_plots/pca_plots_gmm.pdf", plt_PCA_full, width=8, height=10)
 
-ggsave("/outputs/combat_seq_plots/explained_variation_combined.pdf", plt_varexp_full, width=8, height=6)
+ggsave("/outputs/combat_seq_plots/explained_variation_gmm.pdf", plt_varexp_full, width=8, height=6)
 
