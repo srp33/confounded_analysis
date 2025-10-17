@@ -1,4 +1,6 @@
-# gmm_adjust.R
+# ============================================================================
+# gmm_adjust.R - 1D Gaussian Mixture Model with posterior-mean priors
+# ============================================================================
 
 suppressPackageStartupMessages({
   library(tidyverse)
@@ -7,183 +9,206 @@ suppressPackageStartupMessages({
   library(doParallel)
 })
 
-# ============================================================================
-# GMM IMPLEMENTATION
-# ============================================================================
+# -----------------------------------------------------------------------------
+# GMM MODEL CONSTRUCTOR
+# -----------------------------------------------------------------------------
 
-#' 2-component Gaussian Mixture Model
-GaussianMixture2D <- function(max_iter = 100, tol = 1e-4, alpha0 = 10.0) {
+#' 1D 2-component Gaussian Mixture Model
+#'
+#' @param max_iter Maximum number of EM iterations
+#' @param tol Convergence tolerance for log-likelihood
+#' @param weight_alpha Dirichlet prior pseudo-count for mixture weights (>= 1.0)
+#' @param variance_alpha Inverse-Gamma prior shape parameter for variances (>1 for posterior mean to exist)
+GaussianMixture1D <- function(
+  max_iter = 100,
+  tol = 1e-4,
+  weight_alpha = NULL,
+  variance_alpha = NULL
+) {
   structure(list(
     max_iter = max_iter,
     tol = tol,
-    alpha0 = alpha0,
+    weight_alpha = weight_alpha,
+    variance_alpha = variance_alpha,
     means_ = NULL,
     variances_ = NULL,
     weights_ = NULL,
     resp_ = NULL
-  ), class = "GaussianMixture2D")
+  ), class = "GaussianMixture1D")
 }
 
-#' Normal PDF calculation
+# -----------------------------------------------------------------------------
+# NORMAL PDF
+# -----------------------------------------------------------------------------
+
 normal_pdf <- function(x, mean, sd) {
   exp(-0.5 * ((x - mean) / sd)^2) / (sd * sqrt(2 * pi))
 }
 
-#' Fit 2-component GMM model with prior on means and weights
-fit.GaussianMixture2D <- function(model, X, prior_alpha = 0.5) {
+# -----------------------------------------------------------------------------
+# FIT FUNCTION
+# -----------------------------------------------------------------------------
+
+fit.GaussianMixture1D <- function(model, X) {
   X <- as.vector(X)
   n <- length(X)
-  K <- 2  # Always 2 components
+  K <- 2
   eps <- 1e-12
 
-  # Initialize means using percentiles (25th and 75th percentiles)
-  percentiles <- c(25, 75)
-  means <- quantile(X, percentiles / 100, na.rm = TRUE)
+  # Initialize means at 25th and 75th percentiles
+  means <- quantile(X, c(0.25, 0.75), na.rm = TRUE)
+  variances <- rep(var(X, na.rm = TRUE) + 1e-6, K)
+  weights <- rep(0.5, K)
 
-  variances <- rep(var(X, na.rm = TRUE), K)
-  weights <- rep(0.5, K)  # Equal weights initially
+  if (is.null(model$weight_alpha)) {
+    model$weight_alpha <- 3.0 + n / 100.0
+  }
+  if (is.null(model$variance_alpha)) {
+    model$variance_alpha <- 6.0 + n / 50.0
+  }
 
   log_likelihood_old <- -Inf
 
-  # Prior centers c_k from percentiles
-  centers <- means
-  # Prior variance s_k^2 = prior_alpha * data variance
-  data_var <- var(X, na.rm = TRUE)
-  prior_var <- prior_alpha * data_var + eps
+  alpha_w <- model$weight_alpha
+  alpha_v <- max(model$variance_alpha, 1.01)  # ensure posterior mean exists
 
   for (iter in 1:model$max_iter) {
+    # -------------------------------
     # E-step: responsibilities
+    # -------------------------------
     pdfs <- matrix(0, nrow = n, ncol = K)
     for (k in 1:K) {
       pdfs[, k] <- weights[k] * normal_pdf(X, means[k], sqrt(variances[k]))
     }
-    responsibilities <- pdfs / (rowSums(pdfs) + eps)
+    resp <- pdfs / (rowSums(pdfs) + eps)
 
-    # M-step: update parameters
-    Nk <- colSums(responsibilities)
+    # -------------------------------
+    # M-step: posterior mean updates
+    # -------------------------------
+    Nk <- colSums(resp)
+    variances_old <- variances
 
-    # Update weights with Dirichlet prior (MAP estimate)
-    weights <- (Nk + model$alpha0 - 1) / (n + K * (model$alpha0 - 1))
+    # 1) Update weights: posterior mean of Dirichlet
+    weights <- (Nk + alpha_w) / (n + K * alpha_w)
 
-    # Update means with prior (MAP)
+    # 2) Update means (weighted ML, no prior)
     for (k in 1:K) {
-      shrink_factor <- variances[k] / prior_var
-      weighted_sum <- sum(responsibilities[, k] * X)
-      means[k] <- (weighted_sum + shrink_factor * centers[k]) / (Nk[k] + shrink_factor + eps)
+      means[k] <- sum(resp[, k] * X) / (Nk[k] + eps)
     }
 
-    # Update variances
+    # 3) Update variances: inverse-gamma prior, coupled across components
     for (k in 1:K) {
-      variances[k] <- sum(responsibilities[, k] * (X - means[k])^2) / (Nk[k] + eps)
-    }
-    variances <- pmax(variances, 1e-6)  # Variance floor
+      other_k <- 3 - k  # if k=1, other=2; if k=2, other=1
+      if (Nk[k] < 1e-8) {
+        variances[k] <- variances_old[k]
+        next
+      }
 
-    # Check convergence
+      S_k <- sum(resp[, k] * (X - means[k])^2)
+      v_other <- variances_old[other_k]
+      beta0 <- (alpha_v - 1) * v_other
+
+      alpha_post <- alpha_v + 0.5 * Nk[k]
+      beta_post <- beta0 + 0.5 * S_k
+
+      if (alpha_post <= 1 + 1e-12) {
+        variances[k] <- max(variances_old[k], 1e-6)
+      } else {
+        variances[k] <- beta_post / (alpha_post - 1)
+      }
+    }
+
+    variances <- pmax(variances, 1e-6)
+
+    # -------------------------------
+    # Convergence check
+    # -------------------------------
     log_likelihood <- sum(log(rowSums(pdfs) + eps))
-    if (abs(log_likelihood - log_likelihood_old) < model$tol) {
-      break
-    }
+    if (abs(log_likelihood - log_likelihood_old) < model$tol) break
     log_likelihood_old <- log_likelihood
   }
 
   model$means_ <- means
   model$variances_ <- variances
   model$weights_ <- weights
-  model$resp_ <- responsibilities
+  model$resp_ <- resp
 
   return(model)
 }
 
-#' Inverse CDF for GMM distribution with robust error handling
+# -----------------------------------------------------------------------------
+# INVERSE CDF / QUANTILE FUNCTION
+# -----------------------------------------------------------------------------
+
 inverse_cdf_gmm <- function(p, means, variances, weights) {
-  # Input validation
+  p <- as.numeric(p)
   if (any(is.na(means)) || any(is.na(variances)) || any(is.na(weights))) {
     return(rep(NA, length(p)))
   }
-  
-  # Check for degenerate cases
+
   if (length(unique(means)) == 1 || any(variances < 1e-12)) {
-    return(qnorm(p))
+    overall_mean <- sum(means * weights)
+    overall_var <- sum(variances * weights) + sum((means - overall_mean)^2 * weights)
+    return(qnorm(p, mean = overall_mean, sd = sqrt(max(overall_var, 1e-10))))
   }
 
-  overall_mean = sum(means * weights)
-  overall_variance = sum(variances * weights) + sum((means - overall_mean)^2 * weights)
-  overall_std = sqrt(pmax(overall_variance, 1e-10))
-  stds <- sqrt(pmax(variances, 1e-10))
-  
-  gmm_cdf <- function(x) {
-    sum(weights * pnorm(x, mean = means, sd = stds))
-  }
-  
-  # More robust search interval calculation
+  stds <- sqrt(pmax(variances, 1e-12))
+
+  gmm_cdf <- function(x) sum(weights * pnorm(x, mean = means, sd = stds))
+
   min_bound <- min(means - 15 * stds)
   max_bound <- max(means + 15 * stds)
-  
-  # Ensure minimum interval width
-  interval_width <- max_bound - min_bound
-  if (interval_width < 20) {
+  if ((max_bound - min_bound) < 20) {
     center <- (min_bound + max_bound) / 2
     min_bound <- center - 10
     max_bound <- center + 10
   }
-  
+
   solve_for_single_p <- function(p_val) {
     if (is.na(p_val)) return(NA)
-    if (p_val <= 1e-10) return(min_bound - 5)
-    if (p_val >= 1 - 1e-10) return(max_bound + 5)
-    
-    root_function <- function(x) gmm_cdf(x) - p_val
-    
-    # Try with initial search interval
-    search_interval <- c(min_bound, max_bound)
-    
-    # Check if root exists in interval by evaluating endpoints
-    f_left <- root_function(search_interval[1])
-    f_right <- root_function(search_interval[2])
-    
-    # If same sign, try expanding the interval
-    expansion_attempts <- 0
-    max_expansions <- 3
-    
-    while (sign(f_left) == sign(f_right) && expansion_attempts < max_expansions) {
-      expansion_factor <- 2^(expansion_attempts + 1)
-      search_interval[1] <- min_bound - 10 * expansion_factor
-      search_interval[2] <- max_bound + 10 * expansion_factor
-      
-      f_left <- root_function(search_interval[1])
-      f_right <- root_function(search_interval[2])
-      expansion_attempts <- expansion_attempts + 1
+    if (p_val <= 1e-12) return(min_bound - 5)
+    if (p_val >= 1 - 1e-12) return(max_bound + 5)
+    root_fun <- function(x) gmm_cdf(x) - p_val
+    left <- min_bound; right <- max_bound
+    f_left <- root_fun(left); f_right <- root_fun(right)
+
+    expansions <- 0
+    while (sign(f_left) == sign(f_right) && expansions < 4) {
+      factor <- 2^(expansions + 1)
+      left <- min_bound - 10 * factor
+      right <- max_bound + 10 * factor
+      f_left <- root_fun(left); f_right <- root_fun(right)
+      expansions <- expansions + 1
     }
-    
-    # Try uniroot with error handling
+
     tryCatch({
-      if (sign(f_left) != sign(f_right)) {
-        return(uniroot(root_function, interval = search_interval, tol = 1e-4)$root)
-      } else {
-        # Use overall characteristics
-        return(qnorm(p_val, mean = overall_mean, sd = overall_std))
+      if (sign(f_left) != sign(f_right)) uniroot(root_fun, interval = c(left, right), tol = 1e-5)$root
+      else {
+        overall_mean <- sum(means * weights)
+        overall_var <- sum(variances * weights) + sum((means - overall_mean)^2 * weights)
+        qnorm(p_val, mean = overall_mean, sd = sqrt(max(overall_var, 1e-10)))
       }
     }, error = function(e) {
-      return(qnorm(p_val, mean = overall_mean, sd = overall_std))
+      overall_mean <- sum(means * weights)
+      overall_var <- sum(variances * weights) + sum((means - overall_mean)^2 * weights)
+      qnorm(p_val, mean = overall_mean, sd = sqrt(max(overall_var, 1e-10)))
     })
   }
-  
+
   result <- sapply(p, solve_for_single_p)
-  
-  # Final cleanup for any remaining problematic values
-  if (any(is.infinite(result) | is.na(result))) {
-    bad_indices <- which(is.infinite(result) | is.na(result))
-    result[bad_indices] <- qnorm(p[bad_indices])
+  bad <- which(is.na(result) | is.infinite(result))
+  if (length(bad) > 0) {
+    overall_mean <- sum(means * weights)
+    overall_var <- sum(variances * weights) + sum((means - overall_mean)^2 * weights)
+    result[bad] <- qnorm(p[bad], mean = overall_mean, sd = sqrt(max(overall_var, 1e-10)))
   }
-  
   return(result)
 }
 
-# ============================================================================
-# ADJUSTMENT FUNCTIONS
-# ============================================================================
+# -----------------------------------------------------------------------------
+# SIMPLE FALLBACK
+# -----------------------------------------------------------------------------
 
-#' Simple fallback normalization
 simple_fallback <- function(gene_exp) {
   min_val <- min(gene_exp, na.rm = TRUE)
   x_transformed <- log(gene_exp - min_val + 1)
@@ -191,10 +216,13 @@ simple_fallback <- function(gene_exp) {
   if (n_valid > 1) {
     quantiles <- rank(x_transformed, na.last = "keep", ties.method = "average") / (n_valid + 1)
     qnorm(quantiles)
-  } else {
-    gene_exp
-  }
+  } else x_transformed
 }
+
+
+# -----------------------------------------------------------------------------
+# GENE TRANSFORM / BIMODAL NORMALIZE / BATCH ADJUST
+# -----------------------------------------------------------------------------
 
 get_gene_gmm_transform <- function(
     gene_exp,
