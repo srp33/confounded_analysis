@@ -135,8 +135,8 @@ plt_ruvseq <- ggplot(pca_obj_ruvseq$data, aes(x=PC1, y=PC2, color=batch, shape=g
 
 plt_PCA_full <- ggarrange(plt, plt_ruvseq, plt_adjori, plt_adj, ncol=1, nrow=4, common.legend=TRUE, legend="right")
 
-# dir.create("/outputs/combat_seq_plots", showWarnings = FALSE)
-# ggsave("/outputs/combat_seq_plots/pca_plots.pdf", plt_PCA_full, width=8, height=10)
+dir.create("/outputs/combat_seq_plots", showWarnings = FALSE)
+ggsave("/outputs/combat_seq_plots/pca_plots.pdf", plt_PCA_full, width=8, height=10)
 
 varexp_full <- list(
   unadjusted=batchqc_explained_variation(cpm(cts_sub, log=TRUE), condition="group", batch="batch")$explained_variation,
