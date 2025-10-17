@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH --job-name=build_container
+#SBATCH --job-name=build_combat_container
 #SBATCH --qos=login
 #SBATCH --partition=login
 #SBATCH --nodes=1
