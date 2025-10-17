@@ -5,30 +5,73 @@
 # under the grp_batch_effects group.
 #
 # Usage:
-#   ./run_in_apptainer.sh shell
-#   ./run_in_apptainer.sh <executable> [args...]
-#   ./run_in_apptainer.sh <script.R> [args...]
-#   ./run_in_apptainer.sh <script.py> [args...]
-#   ./run_in_apptainer.sh <script.sh> [args...]
-#   ./run_in_apptainer.sh --sbatch [sbatch-flags] <script> [script-args...]
+#   ./run_in_apptainer.sh [--image-path <path>] shell
+#   ./run_in_apptainer.sh [--image-path <path>] <executable> [args...]
+#   ./run_in_apptainer.sh [--image-path <path>] <script.R> [args...]
+#   ./run_in_apptainer.sh [--image-path <path>] <script.py> [args...]
+#   ./run_in_apptainer.sh [--image-path <path>] <script.sh> [args...]
+#   ./run_in_apptainer.sh [--image-path <path>] --sbatch [sbatch-flags] <script> [script-args...]
 
 set -euo pipefail
 
-if [ $# -lt 1 ]; then
+show_help() {
     echo "Usage:"
-    echo "  $0 shell"
-    echo "  $0 <executable> [args...]"
-    echo "  $0 <script.R> [args...]"
-    echo "  $0 <script.py> [args...]"
-    echo "  $0 <script.sh> [args...]"
-    echo "  $0 --sbatch [sbatch-flags] <script> [script-args...]"
+    echo "  $0 [--image-path <path>] shell"
+    echo "  $0 [--image-path <path>] <executable> [args...]"
+    echo "  $0 [--image-path <path>] <script.R> [args...]"
+    echo "  $0 [--image-path <path>] <script.py> [args...]"
+    echo "  $0 [--image-path <path>] <script.sh> [args...]"
+    echo "  $0 [--image-path <path>] --sbatch [sbatch-flags] <script> [script-args...]"
+    echo ""
+    echo "Options:"
+    echo "  -i, --image-path <path>  Override the default Apptainer image path"
+    echo "  -h, --help               Show this help message"
     echo ""
     echo "Examples:"
     echo "  $0 --sbatch /scripts/evaluations/robustifying/code/3_real_data_pipe.R"
     echo "  $0 --sbatch --time 00:10:00 --mem 1G script.R  # Override defaults"
     echo "  $0 --sbatch --time 02:00:00 --cpus-per-task 4 script.py arg1 arg2"
+    echo "  $0 --image-path /path/to/custom.sif shell"
+    echo "  $0 -i /path/to/custom.sif shell  # Short option"
     echo ""
     echo "Default sbatch settings: --time 1:00:00 --mem 32G --ntasks 4 --nodes 1"
+}
+
+# Parse global options using getopt (assumes --image-path comes first)
+PARSED=$(getopt -o +i:h --long image-path:,help -n "$0" -- "$@")
+if [[ $? -ne 0 ]]; then
+    echo "Error parsing arguments. Use --help for usage information." >&2
+    exit 1
+fi
+eval set -- "$PARSED"
+
+CUSTOM_IMAGE_PATH=""
+while true; do
+    case $1 in
+        -i|--image-path)
+            CUSTOM_IMAGE_PATH="$2"
+            shift 2
+            ;;
+        -h|--help)
+            show_help
+            exit 0
+            ;;
+        --)
+            shift
+            break
+            ;;
+        *)
+            echo "Programming error in argument parsing" >&2
+            exit 3
+            ;;
+    esac
+done
+
+# Check if we have at least one command argument
+if [ $# -lt 1 ]; then
+    echo "Error: No command specified." >&2
+    echo ""
+    show_help
     exit 1
 fi
 
@@ -37,6 +80,11 @@ shift
 
 # Load Apptainer environment (defines $APPTAINER_IMAGE)
 source ~/confounded_analysis/init_apptainer.sh
+
+# Override APPTAINER_IMAGE if custom path provided
+if [[ -n "$CUSTOM_IMAGE_PATH" ]]; then
+    export APPTAINER_IMAGE="$CUSTOM_IMAGE_PATH"
+fi
 
 # Helper function to detect script type and normalize path
 detect_script_type() {
@@ -156,16 +204,21 @@ case "$MODE" in
         done
         
         # Write sbatch script
-        cat > "$TEMP_SBATCH" << EOF
-#!/bin/bash
-#SBATCH --job-name=apptainer_job
-
-# Load Apptainer environment
-source ~/confounded_analysis/init_apptainer.sh
-
-# Build command
-cmd="exec apptainer exec --contain \"\$APPTAINER_IMAGE\" \"$EXECUTABLE\""
-EOF
+        {
+            echo '#!/bin/bash'
+            echo '#SBATCH --job-name=apptainer_job'
+            echo ''
+            echo '# Load Apptainer environment'
+            echo 'source ~/confounded_analysis/init_apptainer.sh'
+            echo ''
+            if [[ -n "$CUSTOM_IMAGE_PATH" ]]; then
+                echo "# Override APPTAINER_IMAGE with custom path"
+                echo "export APPTAINER_IMAGE=\"$CUSTOM_IMAGE_PATH\""
+                echo ''
+            fi
+            echo '# Build command'
+            echo "cmd=\"exec apptainer exec --contain \\\"\$APPTAINER_IMAGE\\\" \\\"$EXECUTABLE\\\"\""
+        } > "$TEMP_SBATCH"
         
         if [[ -n "$SCRIPT" ]]; then
             echo "cmd=\"\$cmd \\\"$SCRIPT\\\"\"" >> "$TEMP_SBATCH"
