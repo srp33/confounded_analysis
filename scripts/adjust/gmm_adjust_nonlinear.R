@@ -233,11 +233,11 @@ get_gene_gmm_transform <- function(
     unit_var = TRUE,
     means_at_1 = FALSE,
     diff_exp = FALSE,
-    preserve_counts = FALSE
+    output_counts = FALSE
 ) {
   if (all(is.na(gene_exp))) return(gene_exp)
   
-  if (preserve_counts && any(gene_exp %% 1 != 0)) {
+  if (output_counts && any(gene_exp %% 1 != 0)) {
     warning("Not preserving counts, expression is not integral")
   }
 
@@ -331,7 +331,7 @@ get_gene_gmm_transform <- function(
     x_transformed <- x_transformed / scale_factor
   }
 
-  if (preserve_counts) {
+  if (output_counts) {
     x_transformed = round(exp(x_transformed) * 1000)
   }
 
@@ -341,7 +341,7 @@ get_gene_gmm_transform <- function(
 #' Bimodal normalization using GMM with parallel processing
 bimodal_normalize <- function(data, alpha0 = 10, nonlinear = TRUE, mean_mean_zero = TRUE, 
                              mean1_zero = FALSE, unit_var = TRUE, diff_exp = FALSE, means_at_1 = FALSE, 
-                             preserve_counts = FALSE, debug = FALSE, num_workers = NULL) {
+                             output_counts = FALSE, debug = FALSE, num_workers = NULL) {
   gene_names <- colnames(data)
   if (is.null(gene_names)) gene_names <- paste0("Gene", 1:ncol(data))
   
@@ -375,7 +375,7 @@ bimodal_normalize <- function(data, alpha0 = 10, nonlinear = TRUE, mean_mean_zer
       
       tryCatch({
         get_gene_gmm_transform(gene_exp, alpha0, nonlinear, mean_mean_zero, mean1_zero, 
-                              unit_var, diff_exp, means_at_1, preserve_counts)
+                              unit_var, diff_exp, means_at_1, output_counts)
       }, error = function(e) {
         message("Doing simple fallback")
         simple_fallback(gene_exp)
@@ -397,7 +397,7 @@ bimodal_normalize <- function(data, alpha0 = 10, nonlinear = TRUE, mean_mean_zer
       
       tryCatch({
         bimodal_data[, i] <- get_gene_gmm_transform(gene_exp, alpha0, nonlinear, mean_mean_zero, 
-                                                   mean1_zero, unit_var, diff_exp, means_at_1, preserve_counts)
+                                                   mean1_zero, unit_var, diff_exp, means_at_1, output_counts)
       }, error = function(e) {
         message("Got Error, simple fallback")
         message(e)
@@ -421,14 +421,14 @@ bimodal_normalize <- function(data, alpha0 = 10, nonlinear = TRUE, mean_mean_zer
 #' @param unit_var If TRUE, scale to unit variance (default TRUE)
 #' @param diff_exp If TRUE, adjust first mean to zero for differential expression preservation (default FALSE)
 #' @param means_at_1 If TRUE, place means at ±1 (default FALSE)
-#' @param preserve_counts If TRUE, attempt to preserve count structure (default FALSE)
+#' @param output_counts If TRUE, attempt to preserve count structure (default FALSE)
 #' @param debug If TRUE, print progress messages
 #' 
 #' @details The function applies GMM-based bimodal normalization to each batch separately.
 #' Various transformation options allow control over the final distribution properties.
 gmm_adjust <- function(data, batch, alpha0 = 10, nonlinear = TRUE, mean_mean_zero = TRUE,
                       mean1_zero = FALSE, unit_var = TRUE, diff_exp = FALSE, means_at_1 = FALSE, 
-                      preserve_counts = FALSE, debug = FALSE, num_workers = NULL) {
+                      output_counts = FALSE, debug = FALSE, num_workers = NULL) {
   batch_factor <- as.factor(batch)
   batch_levels <- levels(batch_factor)
   adjusted_data <- matrix(NA, nrow = nrow(data), ncol = ncol(data))
@@ -442,7 +442,7 @@ gmm_adjust <- function(data, batch, alpha0 = 10, nonlinear = TRUE, mean_mean_zer
     
     batch_adjusted <- bimodal_normalize(
       batch_data, alpha0, nonlinear, mean_mean_zero, mean1_zero, 
-      unit_var, diff_exp, means_at_1, preserve_counts, debug, num_workers
+      unit_var, diff_exp, means_at_1, output_counts, debug, num_workers
     )
     
     adjusted_data[batch_indices, ] <- batch_adjusted

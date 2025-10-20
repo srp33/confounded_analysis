@@ -277,7 +277,7 @@ def get_gene_gmm_transform(
     unit_var=True,
     means_at_1=False,
     diff_exp=False,
-    preserve_counts=False
+    output_counts=False
 ):
     """
     Fit a 2-component GMM to a single gene's transformed expression values and map quantiles
@@ -289,7 +289,7 @@ def get_gene_gmm_transform(
     if np.all(np.isnan(gene_exp)):
         return gene_exp
 
-    if preserve_counts and not np.all(gene_exp % 1 == 0):
+    if output_counts and not np.all(gene_exp % 1 == 0):
         warnings.warn("Not preserving counts, expression is not integral")
 
     if diff_exp and unit_var:
@@ -362,7 +362,7 @@ def get_gene_gmm_transform(
             return mean_shift_fallback
         x_transformed = x_transformed / scale_factor
 
-    if preserve_counts:
+    if output_counts:
         # convert back to counts-like values (ad-hoc)
         x_transformed = np.round(np.exp(x_transformed) * 1000.0)
 
@@ -371,7 +371,7 @@ def get_gene_gmm_transform(
 def _process_gene(args):
     """Helper for parallel processing of a single gene column."""
     (i, gene_exp, weight_pseudo_count, nonlinear, mean_mean_zero, mean1_zero,
-     unit_var, diff_exp, means_at_1, preserve_counts) = args
+     unit_var, diff_exp, means_at_1, output_counts) = args
 
     if np.all(np.isnan(gene_exp)) or np.all(gene_exp == gene_exp[0]):
         return gene_exp
@@ -386,14 +386,14 @@ def _process_gene(args):
             unit_var=unit_var,
             means_at_1=means_at_1,
             diff_exp=diff_exp,
-            preserve_counts=preserve_counts
+            output_counts=output_counts
         )
     except Exception:
         return simple_fallback(gene_exp)
 
 def bimodal_normalize(data, weight_pseudo_count=3.0, nonlinear=True, mean_mean_zero=True,
                      mean1_zero=False, unit_var=True, diff_exp=False, means_at_1=False,
-                     preserve_counts=False, debug=False, num_workers=None):
+                     output_counts=False, debug=False, num_workers=None):
     """
     Apply bimodal (GMM-based) normalization column-wise to a 2D array or pandas DataFrame.
 
@@ -427,7 +427,7 @@ def bimodal_normalize(data, weight_pseudo_count=3.0, nonlinear=True, mean_mean_z
         for i in range(n_genes):
             gene_exp = data_array[:, i]
             args_list.append((i, gene_exp, weight_pseudo_count, nonlinear, mean_mean_zero,
-                              mean1_zero, unit_var, diff_exp, means_at_1, preserve_counts))
+                              mean1_zero, unit_var, diff_exp, means_at_1, output_counts))
         with Pool(num_cores) as pool:
             results = pool.map(_process_gene, args_list)
         output = np.column_stack(results)
@@ -448,7 +448,7 @@ def bimodal_normalize(data, weight_pseudo_count=3.0, nonlinear=True, mean_mean_z
                     unit_var=unit_var,
                     diff_exp=diff_exp,
                     means_at_1=means_at_1,
-                    preserve_counts=preserve_counts
+                    output_counts=output_counts
                 )
             except Exception:
                 output[:, i] = simple_fallback(gene_exp)
@@ -460,7 +460,7 @@ def bimodal_normalize(data, weight_pseudo_count=3.0, nonlinear=True, mean_mean_z
 
 def gmm_adjust(data, batch, weight_pseudo_count=3.0, nonlinear=True, mean_mean_zero=True,
               mean1_zero=False, unit_var=True, diff_exp=False, means_at_1=False,
-              preserve_counts=False, debug=False, num_workers=None):
+              output_counts=False, debug=False, num_workers=None):
     """
     Apply GMM-based adjustment per batch (batch is an array-like of batch labels).
     Returns adjusted data with same structure as input.
@@ -499,7 +499,7 @@ def gmm_adjust(data, batch, weight_pseudo_count=3.0, nonlinear=True, mean_mean_z
             unit_var=unit_var,
             diff_exp=diff_exp,
             means_at_1=means_at_1,
-            preserve_counts=preserve_counts,
+            output_counts=output_counts,
             debug=debug,
             num_workers=num_workers
         )
