@@ -259,7 +259,7 @@ bimodal_normalize <- function(data, weight_alpha=NULL, variance_alpha=NULL, mean
   
   if (debug) message("%%%%%%% Num workers: ", num_workers)
   # Use parallel processing if num_workers > 1
-  if (!is.null(num_workers) && num_workers > 1) {
+  if (!is.null(num_workers) && (num_workers != 1)) {
     num_cores <- if (num_workers == -1) detectCores() else min(num_workers, detectCores())
     if (debug) message("%%%%%%% Num cores: ", num_cores)
     if (.Platform$OS.type == "unix") {
@@ -341,11 +341,11 @@ gmm_adjust <- function(data, batch, genes_are_columns=TRUE, weight_alpha=NULL, v
                       output_counts = FALSE, debug = FALSE, num_workers = NULL) {
   batch_factor <- as.factor(batch)
   batch_levels <- levels(batch_factor)
-  adjusted_data <- matrix(NA, nrow = nrow(data), ncol = ncol(data))
   if (!genes_are_columns) {
     if (debug) message("Transposing data")
     data <- t(data)
   }
+  adjusted_data <- matrix(NA, nrow = nrow(data), ncol = ncol(data))
 
   if (debug) message("Batch: ",  batch)
   
