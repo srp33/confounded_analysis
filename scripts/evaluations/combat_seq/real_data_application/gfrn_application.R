@@ -57,7 +57,7 @@ print(dim(cts_sub))
 message("DEBUG: 60x20 of CTS_SUB")
 print(cts_sub[1:60, 1:20])
 
-gmm_sub <- gmm_adjust(cts_sub, batch=batch_sub, genes_are_columns=FALSE,
+gmm_sub <- gmm_adjust(cts_sub, batch=batch_sub, genes_are_columns=FALSE, num_workers=-1,
                        output_counts=TRUE, mean_mean_zero=TRUE, diff_exp=TRUE, unit_var=FALSE, debug=TRUE)
 
 # --- ADDED DEBUGGING ---
