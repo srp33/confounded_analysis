@@ -39,39 +39,18 @@ cts_sub <- cts_sub[keep1 & keep2 & keep3, ]
 group_sub <- factor(as.character(group_sub), levels=c("gfp_for_egfr", "gfp18", "gfp30",  gsub("^", "", pathway_regex, fixed=T)))
 group_sub <- plyr::revalue(group_sub, c("gfp_for_egfr"="gfp", "gfp18"="gfp", "gfp30"="gfp"))
 
-# start_time <- Sys.time()
-# combatseq_sub <- ComBat_seq(counts=cts_sub, batch=batch_sub, group=group_sub, shrink=FALSE)
-# end_time <- Sys.time()
-# print(end_time - start_time)
+start_time <- Sys.time()
+combatseq_sub <- ComBat_seq(counts=cts_sub, batch=batch_sub, group=group_sub, shrink=FALSE)
+end_time <- Sys.time()
+print(end_time - start_time)
 
 
-## Use original ComBat on logCPM
-#combat_sub <- sva::ComBat(cpm(cts_sub, log=TRUE), batch=batch_sub, mod=model.matrix(~group_sub))
+# Use original ComBat on logCPM
+combat_sub <- sva::ComBat(cpm(cts_sub, log=TRUE), batch=batch_sub, mod=model.matrix(~group_sub))
 
 # --- Preston's Adjuster (GMM Diff Exp Counts) ---
-
-# --- ADDED DEBUGGING ---
-message("DEBUG: Shape of cts_sub (initial matrix)")
-print(dim(cts_sub))
-
-message("DEBUG: 60x20 of CTS_SUB")
-print(cts_sub[1:60, 1:20])
-
 gmm_sub <- gmm_adjust(cts_sub, batch=batch_sub, genes_are_columns=FALSE, num_workers=-1,
                        output_counts=TRUE, mean_mean_zero=TRUE, diff_exp=TRUE, unit_var=FALSE, debug=TRUE)
-
-# --- ADDED DEBUGGING ---
-message("DEBUG: Shape of gmm_sub (final matrix)")
-print(dim(gmm_sub))
-
-message("DEBUG: 60x20 of gmm_sub")
-print(gmm_sub[1:60, 1:20])
-
-message("DEBUG: Where are NA values in gmm_sub")
-head(which(is.na(gmm_sub), arr.ind = TRUE), 10)
-
-message("DEBUG: Where are infinite values in gmm_sub")
-head(which(!is.finite(gmm_sub), arr.ind = TRUE), 10)
 
 ## RUVseq
 group1 <- plyr::revalue(as.factor(as.character(group_sub[batch_sub==1])), c("gfp"="0", "her2"="1"))
