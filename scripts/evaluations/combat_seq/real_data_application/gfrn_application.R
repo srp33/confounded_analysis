@@ -103,23 +103,8 @@ plt_adjori <- ggplot(pca_obj_adjori$data, aes(x=PC1, y=PC2, color=Batch, shape=G
        y=sprintf("PC2: %s Variance", percent(pca_obj_adjori$plot_env$percentVar[2])),
        title="Original ComBat") 
 
-
-# DEBUG
-message("DEBUG: Any NA in cts_gmm_norm:")
-anyNA(cts_gmm_norm)
-
-message("DEBUG: Any infinite values:")
-any(!is.finite(cts_gmm_norm))
-
-# DEBUG
-message("DEBUG: Where are NA values")
-head(which(is.na(cts_gmm_norm), arr.ind = TRUE), 10)
-
-message("DEBUG: Where are infinite values")
-head(which(!is.finite(cts_gmm_norm), arr.ind = TRUE), 10)
-
 seobj_gmm <- SummarizedExperiment(assays=cts_gmm_norm, colData=col_data)
-pca_obj_gmm <- plotPCA(DESeqTransform(seobj_gmm), intgroup-c("Batch", "Group"))
+pca_obj_gmm <- plotPCA(DESeqTransform(seobj_gmm), intgroup=c("Batch", "Group"))
 plt_gmm <- ggplot(pca_obj_gmm$data, aes(x=PC1, y=PC2, color=Batch, shape=Group)) +
   geom_point() + 
   labs(x=sprintf("PC1: %s Variance", percent(pca_obj_gmm$plot_env$percentVar[1])),
@@ -153,7 +138,7 @@ varexp_full_df$Var2 <- plyr::revalue(varexp_full_df$Var2, c("Full (Condition+Bat
 
 plt_varexp_full <- ggplot(varexp_full_df, aes(x=Var2, y=value)) +
   geom_boxplot() +
-  facet_wrap(~L1, nrow=4, ncol=1) +
+  facet_wrap(~L1, nrow=5, ncol=1) +
   labs(y="Explained variation") +
   theme(axis.title.x = element_blank())
 
