@@ -56,7 +56,7 @@ message("DEBUG: 10x10 of CTS_SUB with rownames")
 print(cts_sub_w_rownames[1:10, 1:10])
 
 gmm_sub <- gmm_adjust(cts_sub_w_rownames, batch=batch_sub, 
-                       output_counts=TRUE, mean_mean_zero=TRUE, diff_exp=TRUE, debug=TRUE)
+                       output_counts=TRUE, mean_mean_zero=TRUE, diff_exp=TRUE, unit_var=FALSE, debug=TRUE)
 
 message("DEBUG: 10x10 of gmm_sub with rownames")
 print(gmm_sub[1:10, 1:10])
