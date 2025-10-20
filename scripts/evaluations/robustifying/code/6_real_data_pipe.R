@@ -74,7 +74,7 @@ apply_batch_corrections <- function(dat, batch, group) {
   dat_combat <- ComBat(dat, batch=batch, mod=model.matrix(~group))
   
   dat_gmm_adj <- gmm_adjust(data=t(dat), batch=batch, 
-                            alpha0=10, nonlinear=FALSE, 
+                            alpha0=10, 
                             mean_mean_zero=TRUE, unit_var=TRUE, debug=FALSE)
   dat_gmm_adj <- t(dat_gmm_adj)
   

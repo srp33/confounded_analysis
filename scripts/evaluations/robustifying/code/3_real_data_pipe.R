@@ -82,13 +82,13 @@ for(s in study_names){
   dat_combat <- ComBat(dat, batch=batch, mod=model.matrix(~group))
   
   ## Apply gmm_adjust batch correction
-  # cat("Applying gmm_adjust with parameters: alpha0=10, nonlinear=FALSE, mean_mean_zero=TRUE, unit_var=TRUE\n")  # Suppressed for cleaner output
+  # cat("Applying gmm_adjust with parameters: alpha0=10, mean_mean_zero=TRUE, unit_var=TRUE\n")  # Suppressed for cleaner output
   # cat("Data dimensions:", nrow(dat), "genes x", ncol(dat), "samples\n")
   # cat("Batch distribution:", table(batch), "\n")
   # cat("Data range:", range(dat, na.rm=TRUE), "\n")
   
   dat_gmm_adj <- gmm_adjust(data=t(dat), batch=batch, 
-                           alpha0=10, nonlinear=FALSE, 
+                           alpha0=10,
                            mean_mean_zero=TRUE, unit_var=TRUE, debug=FALSE,
                            num_workers=get_allocated_cores())
   

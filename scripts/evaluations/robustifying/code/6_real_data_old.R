@@ -75,7 +75,7 @@ for(s in study_names){
   
   ## Apply gmm_adjust batch correction
   dat_gmm_adj <- gmm_adjust(data=t(dat), batch=batch, 
-                           alpha0=10, nonlinear=FALSE, 
+                           alpha0=10,
                            mean_mean_zero=TRUE, unit_var=TRUE, debug=FALSE)
   
   dat_gmm_adj <- t(dat_gmm_adj)

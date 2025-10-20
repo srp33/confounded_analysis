@@ -571,34 +571,6 @@ adjust_mnn <- function(df_, batch, data_are_counts, debug = FALSE) {
 }
 
 
-adjust_gmm_common <- function(matrix_, batch, adjustment_strategy, strategy_name, debug = FALSE) {
-  #' Common implementation for all GMM-based adjustment methods.
-  #' Uses gmm_adjust for all processing.
-  #' @param matrix_ The matrix to adjust (features x samples).
-  #' @param batch The batch variable vector.
-  #' @param adjustment_strategy The strategy to pass to the underlying GMM functions (currently ignored in this version).
-  #' @param strategy_name Human-readable name for the strategy (for logging).
-  #' @param debug Logical flag for debug output.
-  #' @return The adjusted matrix (features x samples).
-
-  message("Adjusting with GMM-based ", strategy_name, ").")
-
-  # Convert to the format expected by gmm_adjust (samples x genes)
-  genes_df <- as.data.frame(t(matrix_))
-  
-  if (is.null(batch)) {
-    # Single batch - create dummy batch
-    batch <- rep("batch1", nrow(genes_df))
-  }
-  
-  # Use GMM adjustment (always bimodal with inverse CDF)
-  adjusted_genes_df <- gmm_adjust(genes_df, batch, alpha0 = 10, nonlinear = TRUE, debug = debug, num_workers = get_allocated_cores())
-
-  # Convert bactrix format (features x samples)
-  return(t(as.matrix(adjusted_genes_df)))
-}
-
-
 adjust_gmm_global_simple <- function(matrix_, batch = NULL, debug = FALSE) {
   #' Simple gene-global GMM adjustment strategy with scaling.
   #' Computes global distribution by averaging across genes, fits 2-component GMM,
@@ -637,27 +609,21 @@ adjust_gmm_global_npn <- function(matrix_, batch = NULL, debug = FALSE) {
   return(t(adjusted_data))
 }
 
-adjust_gmm <- function(matrix_, batch, debug = FALSE, 
-                      nonlinear = TRUE, mean_mean_zero = TRUE, mean1_zero = FALSE, unit_var = TRUE, 
-                      diff_exp = FALSE, means_at_1 = FALSE, preserve_counts = FALSE) {
+adjust_gmm <- function(matrix_, batch, debug = FALSE, mean_mean_zero = TRUE, unit_var = TRUE, 
+                      mean1_zero = FALSE, diff_exp = FALSE, means_at_1 = FALSE, output_counts = FALSE) {
   #' GMM adjustment using the fast implementation.
   #' Applies bimodal GMM transformation to all genes.
   #' @param matrix_ The matrix to adjust (features x samples).
   #' @param batch The batch variable vector.
   #' @param debug Logical flag for debug output.
-  #' @param nonlinear If TRUE, apply inverse CDF transformation (default TRUE)
   #' @param mean_mean_zero If TRUE, center means around zero (default TRUE)
   #' @param unit_var If TRUE, scale to unit variance (default TRUE)
   #' @param diff_exp If TRUE, adjust first mean to zero for differential expression preservation (default FALSE)
   #' @param means_at_1 If TRUE, place means at ±1 (default FALSE)
-  #' @param preserve_counts If TRUE, attempt to preserve count structure (default FALSE)
+  #' @param output_counts If TRUE, attempt to preserve count structure (default FALSE)
   #' @return The adjusted matrix (features x samples).
   
-  if (!nonlinear) {
-    message("Adjusting with GMM (mean-only adjustment, no inverse CDF).")
-  } else {
-    message("Adjusting with GMM (bimodal for all genes with inverse CDF).")
-  }
+  message("Adjusting with GMM (bimodal for all genes)")
   
   # Convert to the format expected by gmm_adjust (samples x genes)
   genes_df <- as.data.frame(t(matrix_))
@@ -672,13 +638,12 @@ adjust_gmm <- function(matrix_, batch, debug = FALSE,
     genes_df, 
     batch, 
     alpha0 = 10, 
-    nonlinear = nonlinear,
     mean_mean_zero = mean_mean_zero,
     mean1_zero = mean1_zero,
     unit_var = unit_var,
     diff_exp = diff_exp,
     means_at_1 = means_at_1,
-    preserve_counts = preserve_counts,
+    output_counts = output_counts,
     debug = debug,
     num_workers = get_allocated_cores()
   )
@@ -688,33 +653,24 @@ adjust_gmm <- function(matrix_, batch, debug = FALSE,
 }
 
 
-adjust_gmm_nonlinear_unit_var <- function(matrix_, batch, debug = FALSE) {
-  #' GMM nonlinear adjustment with unit variance (full inverse CDF transformation).
-  return(adjust_gmm(matrix_, batch, debug = debug, 
-                   nonlinear = TRUE, mean_mean_zero = TRUE, unit_var = TRUE))
-}
-
 adjust_gmm_mean_ones <- function(matrix_, batch, debug = FALSE) {
   #' Applies bimodal GMM transformation to all genes with means centered at ±1.
-  return(adjust_gmm(matrix_, batch, debug = debug, 
-                   nonlinear = FALSE, mean_mean_zero = TRUE, unit_var = FALSE, means_at_1 = TRUE))
+  return(adjust_gmm(matrix_, batch, debug = debug, mean_mean_zero = TRUE, unit_var = FALSE, means_at_1 = TRUE))
 }
 
 adjust_gmm_affine <- function(matrix_, batch, debug = FALSE) {
   #' Applies bimodal GMM transformation to all genes but only adjusts means without inverse CDF.
-  return(adjust_gmm(matrix_, batch, debug = debug, nonlinear = FALSE, mean_mean_zero = TRUE, unit_var = TRUE))
+  return(adjust_gmm(matrix_, batch, debug = debug, mean_mean_zero = TRUE, unit_var = TRUE))
 }
 
 adjust_gmm_diff_exp <- function(matrix_, batch, debug = FALSE) {
   #' Don't scale to preserve differential expression.
-  return(adjust_gmm(matrix_, batch, debug = debug, 
-                   nonlinear = TRUE, mean_mean_zero = TRUE, unit_var = FALSE, diff_exp = TRUE))
+  return(adjust_gmm(matrix_, batch, debug = debug, mean_mean_zero = TRUE, unit_var = FALSE, diff_exp = TRUE))
 }
 
 adjust_gmm_diff_exp_counts <- function(matrix_, batch, debug = FALSE) {
   #' GMM adjustment attempting to preserve count structure and differential expression.
-  return(adjust_gmm(matrix_, batch, debug = debug, 
-                   nonlinear = TRUE, preserve_counts = TRUE, mean_mean_zero = TRUE, diff_exp = TRUE))
+  return(adjust_gmm(matrix_, batch, debug = debug, output_counts = TRUE, mean_mean_zero = TRUE, diff_exp = TRUE))
 }
 
 
@@ -1046,8 +1002,6 @@ apply_adjustment_method <- function(mat_genes, batch, design, genes, adjuster, d
   
   message("--- Applying '", adjuster, "' adjustment method. ---")
   adjusted_matrix <- switch(adjuster,
-    "gmm_nonlinear_unit_var" = adjust_gmm_nonlinear_unit_var(mat_genes, batch, debug=debug),
-    "gmm_nonlinear_mean_ones" = adjust_gmm_mean_ones(mat_genes, batch, debug=debug),
     "gmm_affine" = adjust_gmm_affine(mat_genes, batch, debug=debug),
     "gmm_diff_exp" = adjust_gmm_diff_exp(mat_genes, batch, debug=debug),
     "gmm_diff_exp_counts" = adjust_gmm_diff_exp_counts(mat_genes, batch, debug=debug),

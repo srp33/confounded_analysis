@@ -272,7 +272,6 @@ def simple_fallback(gene_exp):
 def get_gene_gmm_transform(
     gene_exp,
     weight_pseudo_count=3.0,
-    nonlinear=True,
     mean_mean_zero=True,
     mean1_zero=False,
     unit_var=True,
@@ -341,17 +340,6 @@ def get_gene_gmm_transform(
 
     if np.any(variances < 1e-9):
         return qnorm_fallback
-
-    # --- Nonlinear mapping to original GMM distribution ---
-    if nonlinear:
-        try:
-            mapped = inverse_cdf_gmm(quantiles, means=means, variances=variances, weights=weights)
-            if np.any(np.isnan(mapped) | np.isinf(mapped)):
-                x_transformed = mean_shift_fallback
-            else:
-                x_transformed = mapped
-        except Exception:
-            x_transformed = mean_shift_fallback
 
     # --- Affine corrections ---
     if mean1_zero:

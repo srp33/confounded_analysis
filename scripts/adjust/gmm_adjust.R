@@ -286,7 +286,7 @@ bimodal_normalize <- function(data, weight_alpha=NULL, variance_alpha=NULL, mean
       
       tryCatch({
         get_gene_gmm_transform(gene_exp, weight_alpha, variance_alpha, mean_mean_zero, mean1_zero, 
-                              unit_var, diff_exp, means_at_1, output_counts)
+                              unit_var, means_at_1, diff_exp, output_counts)
       }, error = function(e) {
         if (debug) message("Doing simple fallback")
         simple_fallback(gene_exp)
@@ -306,8 +306,8 @@ bimodal_normalize <- function(data, weight_alpha=NULL, variance_alpha=NULL, mean
       }
       
       tryCatch({
-        bimodal_data[, i] <- get_gene_gmm_transform(gene_exp, alpha0, mean_mean_zero, 
-                                                   mean1_zero, unit_var, diff_exp, means_at_1, output_counts)
+        bimodal_data[, i] <- get_gene_gmm_transform(gene_exp, weight_alpha, variance_alpha, mean_mean_zero, mean1_zero, 
+                                                   unit_var, means_at_1, diff_exp, output_counts)
       }, error = function(e) {
         if (debug) message("Got Error, simple fallback")
         if (debug) message(e)
@@ -331,14 +331,14 @@ bimodal_normalize <- function(data, weight_alpha=NULL, variance_alpha=NULL, mean
 #' @param unit_var If TRUE, scale to unit variance (default TRUE)
 #' @param diff_exp If TRUE, adjust first mean to zero for differential expression preservation (default FALSE)
 #' @param means_at_1 If TRUE, place means at ±1 (default FALSE)
-#' @param preserve_counts If TRUE, attempt to preserve count structure (default FALSE)
+#' @param output_counts If TRUE, attempt to preserve count structure (default FALSE)
 #' @param debug If TRUE, print progress messages
 #' 
 #' @details The function applies GMM-based bimodal normalization to each batch separately.
 #' Various transformation options allow control over the final distribution properties.
-gmm_adjust <- function(data, batch, alpha0 = 10, mean_mean_zero = TRUE,
+gmm_adjust <- function(data, batch, weight_alpha=NULL, variance_alpha=NULL, mean_mean_zero = TRUE,
                       mean1_zero = FALSE, unit_var = TRUE, diff_exp = FALSE, means_at_1 = FALSE, 
-                      preserve_counts = FALSE, debug = FALSE, num_workers = NULL) {
+                      output_counts = FALSE, debug = FALSE, num_workers = NULL) {
   batch_factor <- as.factor(batch)
   batch_levels <- levels(batch_factor)
   adjusted_data <- matrix(NA, nrow = nrow(data), ncol = ncol(data))
@@ -351,8 +351,12 @@ gmm_adjust <- function(data, batch, alpha0 = 10, mean_mean_zero = TRUE,
     batch_data <- data[batch_indices, , drop = FALSE]
     
     batch_adjusted <- bimodal_normalize(
-      batch_data, alpha0, mean_mean_zero, mean1_zero, 
-      unit_var, diff_exp, means_at_1, preserve_counts, debug, num_workers
+      batch_data, 
+      weight_alpha=weight_alpha, variance_alpha=variance_alpha,
+      mean_mean_zero=mean_mean_zero, unit_var=unit_var,
+      mean1_zero=mean1_zero, diff_exp=diff_exp, means_at_1=means_at_1, 
+      output_counts=output_counts, 
+      debug=debug, num_workers=num_workers
     )
     
     adjusted_data[batch_indices, ] <- batch_adjusted
