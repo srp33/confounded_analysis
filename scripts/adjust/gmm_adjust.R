@@ -336,12 +336,16 @@ bimodal_normalize <- function(data, weight_alpha=NULL, variance_alpha=NULL, mean
 #' 
 #' @details The function applies GMM-based bimodal normalization to each batch separately.
 #' Various transformation options allow control over the final distribution properties.
-gmm_adjust <- function(data, batch, weight_alpha=NULL, variance_alpha=NULL, mean_mean_zero = TRUE,
+gmm_adjust <- function(data, batch, genes_are_columns=TRUE, weight_alpha=NULL, variance_alpha=NULL, mean_mean_zero = TRUE,
                       mean1_zero = FALSE, unit_var = TRUE, diff_exp = FALSE, means_at_1 = FALSE, 
                       output_counts = FALSE, debug = FALSE, num_workers = NULL) {
   batch_factor <- as.factor(batch)
   batch_levels <- levels(batch_factor)
   adjusted_data <- matrix(NA, nrow = nrow(data), ncol = ncol(data))
+  if (!genes_are_columns) {
+    if (debug) message("Transposing data")
+    data <- t(data)
+  }
 
   if (debug) message("Batch: ",  batch)
   
@@ -364,5 +368,10 @@ gmm_adjust <- function(data, batch, weight_alpha=NULL, variance_alpha=NULL, mean
   
   colnames(adjusted_data) <- colnames(data)
   rownames(adjusted_data) <- rownames(data)
+
+  if (!genes_are_columns) {
+    if (debug) message("Transposing data back")
+    adjusted_data <- t(adjusted_data)
+  }
   return(adjusted_data)
 }
