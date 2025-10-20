@@ -6,6 +6,7 @@ sapply(c("sva", "DESeq2", "ggplot2", "reshape2", "gridExtra", "scales", "dendext
 ## Parameters (change paths when necessary)
 data_dir <- "/scripts/evaluations/combat_seq/real_data_application"  # path to the signature data (.rds)
 source("/scripts/evaluations/combat_seq/real_data_application/gfrn_helpers.R")  # path to gfrn_helpers.R
+source("/scripts/adjust/gmm_adjust.R")
 #source("~/Desktop/ComBat-seq/ComBat_seq.R"); source("~/Desktop/ComBat-seq/helper_seq.R")   
 output_dir <- "/outputs/combat_seq_plots"
 
@@ -47,6 +48,10 @@ combatseq_sub <- ComBat_seq(counts=cts_sub, batch=batch_sub, group=group_sub,
 
 ## Use original ComBat on logCPM
 combat_sub <- ComBat(cpm(cts_sub, log=TRUE), batch=batch_sub, mod=model.matrix(~group_sub))
+
+## Preston's adjuster
+gmm_sub <- gmm_adjust(cts_sub, batch=batch_sub, genes_are_columns=FALSE, num_workers=-1,
+                       output_counts=TRUE, mean_mean_zero=TRUE, diff_exp=TRUE, unit_var=FALSE, debug=TRUE)
 
 ## RUVseq
 group1 <- plyr::revalue(as.factor(as.character(group_sub[batch_sub==1])), c("gfp"="0", "her2"="1"))
@@ -125,6 +130,7 @@ for(curr_path in path_mapping){
   curr_combat <- combat_sub[, curr_sample_ind]
   curr_ruvseq <- ruvseq_sub[, curr_sample_ind]
   curr_sv <- matrix(svseq$sv, ncol=1)[curr_sample_ind, ]
+  curr_gmm <- gmm_sub[, curr_sample_ind]
   
   ##  DE
   res_unadjusted <- edgeR_DEpipe(cts=curr_cts, batch=curr_batch, group=curr_group, 
@@ -141,13 +147,17 @@ for(curr_path in path_mapping){
   fit <- eBayes(fit)
   res_combat <- list(de_res=topTable(fit, n=nrow(curr_combat)), 
                      design=model.matrix(~curr_group))
+
+  res_gmm <- edgeR_DEpipe(cts=curr_gmm, batch=curr_batch, group=curr_group,
+                                  include.batch=FALSE, alpha.unadj=0.05, alpha.fdr=0.05)
   
   DE_objs <- list(Unadjusted=res_unadjusted, 
                   OneStep=res_onestep,
                   ComBat=res_combat, 
                   RUVseq=res_ruvseq,
                   SVAseq=res_svaseq,
-                  ComBatseq=res_combatseq)
+                  ComBatseq=res_combatseq, 
+                  Gmm=res_gmm)
   DE_tables <- lapply(DE_objs, function(de_obj){de_obj$de_res})
   #tb_nm=names(DE_tables)[1]
   DEgene_list <- lapply(names(DE_tables), function(tb_nm){
@@ -245,7 +255,7 @@ for(curr_path in seq_along(out_allgenes)){
   names(pcnt_lst) <- names(curr_res)
   pcnt_dt <- melt(pcnt_lst)
   colnames(pcnt_dt)[2] <- c("Method")
-  pcnt_dt$Method <- factor(pcnt_dt$Method, levels=c("Unadjusted", "OneStep", "ComBat", "SVAseq", "RUVseq", "ComBatseq"))
+  pcnt_dt$Method <- factor(pcnt_dt$Method, levels=c("Unadjusted", "OneStep", "ComBat", "SVAseq", "RUVseq", "ComBatseq", "Gmm"))
   pcnt_cmp[[curr_path]] <- do.call(rbind, pcnt_lst)
 }
 
