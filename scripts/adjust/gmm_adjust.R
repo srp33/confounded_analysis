@@ -210,8 +210,6 @@ get_gene_gmm_transform <- function(
   # --- Affine corrections ---
   if (mean1_zero) {
     # Adjusts the first mean to be 0
-    if (mean_mean_zero) stop("Cannot have both mean1_zero and mean_mean_zero")
-    if (means_at_1) stop("Cannot have both mean1_zero and means_at_1")
     x_transformed <- x_transformed - means[1]
   }
 
@@ -239,7 +237,7 @@ get_gene_gmm_transform <- function(
 
   if (output_counts) {
     # Output integral data
-    x_transformed = round(exp(x_transformed) * 1000)
+    x_transformed = round(exp(x_transformed) * 250)
   }
 
   return(x_transformed)
@@ -313,6 +311,12 @@ bimodal_normalize <- function(data, weight_alpha=NULL, variance_alpha=NULL, mean
         if (debug) message(e)
         bimodal_data[, i] <- simple_fallback(gene_exp)
       })
+
+      if (debug) {
+        message("Min: ", min(bimodal_data[, i], na.rm = TRUE))
+        message("Max: ", max(bimodal_data[, i], na.rm = TRUE))
+        message("Num non-finite: ", sum(!is.finite(bimodal_data[, i])))
+      }
     }
   }
   
