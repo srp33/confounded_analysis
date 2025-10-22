@@ -18,7 +18,7 @@ get_allocated_cores <- function() {
   slurm_cpus <- as.integer(Sys.getenv("SLURM_CPUS_PER_TASK", unset = NA))
   if (!is.na(slurm_cpus) && slurm_cpus > 0) {
     return(slurm_cpus)
-  }
+  }sif
   return(-1)
 }
 
