@@ -637,7 +637,6 @@ adjust_gmm <- function(matrix_, batch, debug = FALSE, mean_mean_zero = TRUE, uni
   adjusted_genes_df <- gmm_adjust(
     genes_df, 
     batch, 
-    alpha0 = 10, 
     mean_mean_zero = mean_mean_zero,
     mean1_zero = mean1_zero,
     unit_var = unit_var,

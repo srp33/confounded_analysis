@@ -49,8 +49,8 @@ print(end_time - start_time)
 combat_sub <- sva::ComBat(cpm(cts_sub, log=TRUE), batch=batch_sub, mod=model.matrix(~group_sub))
 
 # --- Preston's Adjuster (GMM Diff Exp Counts) ---
-gmm_sub <- gmm_adjust(cts_sub, batch=batch_sub, genes_are_columns=FALSE, num_workers=-1,
-                       output_counts=TRUE, mean_mean_zero=TRUE, diff_exp=TRUE, unit_var=FALSE, debug=TRUE)
+gmm_sub <- gmm_adjust(cpm(cts_sub), batch=batch_sub, genes_are_columns=FALSE, num_workers=-1,
+                       output_counts=TRUE, mean_mean_zero=TRUE, unit_var=FALSE, debug=TRUE)
 
 ## RUVseq
 group1 <- plyr::revalue(as.factor(as.character(group_sub[batch_sub==1])), c("gfp"="0", "her2"="1"))
@@ -128,7 +128,7 @@ varexp_full <- list(
   combatseq=batchqc_explained_variation(cpm(combatseq_sub, log=TRUE), condition=col_data$Group, batch=col_data$Batch)$explained_variation,
   combat=batchqc_explained_variation(combat_sub, condition=col_data$Group, batch=col_data$Batch)$explained_variation,
   ruvseq=batchqc_explained_variation(cpm(ruvseq_sub, log=TRUE), condition=col_data$Group, batch=col_data$Batch)$explained_variation,
-  gmm=batchqc_explained_variation(cpm(gmm_sub, log=TRUE), condition=col_data$Group, batch=col_data$Batch)$explained_variation
+  gmm=batchqc_explained_variation(gmm_sub, condition=col_data$Group, batch=col_data$Batch)$explained_variation
 )
 varexp_full_df <- melt(varexp_full)
 varexp_full_df$L1 <- factor(varexp_full_df$L1, levels=c("unadjusted", "ruvseq", "combat","combatseq", "gmm"))
@@ -145,7 +145,7 @@ plt_varexp_full <- ggplot(varexp_full_df, aes(x=Var2, y=value)) +
 ggarrange(plt_PCA_full, plt_varexp_full, ncol=2, widths=c(0.55, 0.45))
 
 dir.create("/outputs/combat_seq_plots", showWarnings = FALSE)
-ggsave("/outputs/combat_seq_plots/pca_plots_gmm.pdf", plt_PCA_full, width=8, height=10)
+ggsave("/outputs/combat_seq_plots/pca_plots_gmm_mean_mean_0.pdf", plt_PCA_full, width=8, height=10)
 
-ggsave("/outputs/combat_seq_plots/explained_variation_gmm.pdf", plt_varexp_full, width=8, height=6)
+ggsave("/outputs/combat_seq_plots/explained_variation_gmm_mean_mean_0.pdf", plt_varexp_full, width=8, height=6)
 
