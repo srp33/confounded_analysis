@@ -1,5 +1,5 @@
 Bootstrap: docker
-From: bioconductor/bioconductor:RELEASE_3_21
+From: ubuntu:22.04
 
 # Set base environment variables
 %environment
@@ -31,44 +31,35 @@ export CCACHE_DIR="/cache/ccache"
     # Enable debugging: Print all commands (set -x) and exit on first error (set -e).
     set -ex
 
-    # Stage 1: Install system-level dependencies and ccache
-
-    # Changed: Forcing apt to use http instead of https.
-    # The logs repeatedly show a fatal OpenSSL error ("could not load the shared library"),
-    # meaning all SSL (https) calls will fail. We must use insecure http.
-    # Pending, might fix FATAL: OpenSSL errors.
-    echo "Forcing apt sources from https to http..."
-    sed -i 's/https:/http:/g' /etc/apt/sources.list
-
+    # Stage 1: Install system-level dependencies
+    echo "Setting up Ubuntu 22.04 environment..."
+    
+    # Set timezone to avoid interactive prompts
+    export DEBIAN_FRONTEND=noninteractive
+    ln -fs /usr/share/zoneinfo/America/Denver /etc/localtime
+    
     apt-get clean
     apt-get update
-    # Added 'openssl' to the list just in case it helps fix the broken state.
-    apt-get install -y --no-install-recommends wget gnupg software-properties-common git ccache curl ca-certificates openssl
+    apt-get install -y --no-install-recommends \
+        wget curl ca-certificates gnupg software-properties-common \
+        git ccache build-essential cmake \
+        r-base r-base-dev \
+        python3 python3-pip python3-dev \
+        libssl-dev libcurl4-openssl-dev libxml2-dev \
+        libfontconfig1-dev libharfbuzz-dev libfribidi-dev \
+        libfreetype6-dev libpng-dev libtiff5-dev libjpeg-dev
 
-    # Network Command Failures (FATAL: exit status 35):
-    # The OpenSSL library is broken in this container. We'll skip Kitware repo entirely
-    # and install cmake from Ubuntu's default repos instead.
-    echo "Skipping Kitware repository due to SSL issues, using Ubuntu's cmake..."
-    
-    # Install cmake from Ubuntu repos (might be older version but should work)
-    apt-get install -y --no-install-recommends cmake
     apt-get clean
     rm -rf /var/lib/apt/lists/*
+    
+    # Verify tools are working
     cmake --version
+    R --version
+    python3 --version
 
     # Stage 2: Build the Python environment
-    # Miniforge3 installation
-    # Use wget with --no-check-certificate to bypass SSL issues
     echo "Downloading Miniforge3 installer..."
-    wget --no-check-certificate --progress=bar:force:noscroll \
-        https://github.com/conda-forge/miniforge/releases/latest/download/Miniforge3-Linux-x86_64.sh \
-        -O /tmp/miniforge.sh || {
-        echo "Direct download failed, trying alternative method..."
-        # Fallback: try a specific version that we know works
-        wget --no-check-certificate --progress=bar:force:noscroll \
-            https://github.com/conda-forge/miniforge/releases/download/24.3.0-0/Miniforge3-24.3.0-0-Linux-x86_64.sh \
-            -O /tmp/miniforge.sh
-    }
+    wget https://github.com/conda-forge/miniforge/releases/latest/download/Miniforge3-Linux-x86_64.sh -O /tmp/miniforge.sh
     /bin/bash /tmp/miniforge.sh -b -p /opt/conda
     rm /tmp/miniforge.sh
 
@@ -76,9 +67,9 @@ export CCACHE_DIR="/cache/ccache"
     # Fix solver issue after conda update
     /opt/conda/bin/conda config --set solver classic
     /opt/conda/bin/conda install -y -c conda-forge mamba
-    /opt/conda/bin/mamba install -y -c conda-forge numpy 'scikit-learn>=1.4' pandas pytorch matplotlib
-    /opt/conda/bin/mamba install -y aif360 tabulate jaxtyping beartype pytables opentsne umap-learn geoparse seaborn
-    /opt/conda/bin/mamba install -y -c conda-forge psutil tqdm rich memory_profiler py-cpuinfo
+    /opt/conda/bin/mamba install -y -c conda-forge numpy 'scikit-learn>=1.4' pandas pytorch matplotlib \
+                                        aif360 tabulate jaxtyping beartype pytables opentsne umap-learn geoparse seaborn \
+                                        psutil tqdm rich memory_profiler py-cpuinfo
     /opt/conda/bin/pip install gdown osfclient pybiomart
     /opt/conda/bin/conda clean --all -y
 
@@ -91,8 +82,6 @@ export CCACHE_DIR="/cache/ccache"
     Rscript /install_packages.R
 
     # Final Stage: Assemble
-    # The final environment variables are set in the %environment section.
-
     # Create final directories and clone repositories
     mkdir -p /tmp/numba_cache
     chmod -R 777 /tmp/numba_cache
