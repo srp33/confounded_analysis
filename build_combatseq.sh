@@ -8,9 +8,14 @@
 #SBATCH --mem=32G
 #SBATCH --time=02:00:00
 #SBATCH --output=build_combat_apptainer.out
-#SBATCH --error=build_combat_apptainer.err
 
 module load apptainer
+
+echo "Checking internet connection..."
+if ! wget -q --spider http://google.com; then
+    echo "ERROR: No internet connection. Apptainer build requires internet access." >&2
+    exit 1
+fi
 
 echo "Starting Apptainer build at $(date)"
 apptainer build \
