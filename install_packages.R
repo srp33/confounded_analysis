@@ -42,7 +42,7 @@ all_other_packages <- c(
     "RcppArmadillo", "foreach", "parallel", "doParallel", "scales", "DelayedMatrixStats", "RUVSeq",
 
     # Additional for Combat Seq
-    "polyester",
+    "polyester"
 )
 
 # Install the bulk of packages first.
