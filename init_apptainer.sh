@@ -15,4 +15,4 @@ module load apptainer
 
 # Export creates global variables that are useful later on
 export APPTAINER_BINDPATH="$SHARED_DIR/data:/data,$ANALYSIS_DIR/apptainer:/apptainer,$SHARED_DIR/outputs:/outputs,$SCRIPTS_DIR:/scripts,$SHARED_DIR:$ANALYSIS_DIR/grp_batch_effects_folders_in_apptainer_are_located_at_root"
-export APPTAINER_IMAGE="$SHARED_DIR/combatseq_image.sif"
+export APPTAINER_IMAGE="$SHARED_DIR/remove-batch-effects.sif"
