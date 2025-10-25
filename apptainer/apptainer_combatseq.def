@@ -1,0 +1,52 @@
+Bootstrap: docker
+From: bioconductor/bioconductor_docker:RELEASE_3_11
+####################################################################################
+# Set base environment variables
+####################################################################################
+%environment
+    export LANG="C.UTF-8"
+    export LC_ALL="C.UTF-8"
+    export TZ="America/Denver"
+
+    # R environment variables
+    export R_LIBS_USER="/home/r_libs"
+
+    # Configure ccache
+    export PATH="/usr/lib/ccache:$PATH"
+    export CC="ccache gcc"
+    export CXX="ccache g++"
+    export CCACHE_DIR="/cache/ccache"
+    
+####################################################################################
+# Copy the R installation script into the container before the build
+####################################################################################
+%files
+    install_combatseq_packages.R /install_combatseq_packages.R
+    
+####################################################################################
+# Execute all installation steps
+# This section combines all 'RUN' commands from the Dockerfile's stages.
+####################################################################################
+%post
+    echo "Starting build process..."
+
+    # Stage 1: Install system-level dependencies and ccache
+    apt-get update
+    apt-get install -y --no-install-recommends wget gnupg software-properties-common git ccache
+    wget -O - https://apt.kitware.com/keys/kitware-archive-latest.asc 2>/dev/null | gpg --dearmor - | tee /etc/apt/trusted.gpg.d/kitware.gpg >/dev/null
+    echo "deb https://apt.kitware.com/ubuntu/ bionic main" > /etc/apt/sources.list.d/kitware.list
+    apt-get update
+    apt-get install -y --no-install-recommends cmake
+    apt-get clean
+    rm -rf /var/lib/apt/lists/*
+    cmake --version
+    
+    # Stage 2: Build the R environment
+    # R library setup
+    mkdir -p /home/r_libs
+    chmod -R 777 /home/r_libs
+    
+    # R package installation
+    Rscript /install_combatseq_packages.R
+    
+    echo "Build completed."

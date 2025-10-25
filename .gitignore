@@ -13,4 +13,10 @@ core.*
 .kiro
 scripts/evaluations/robustifying/results*
 scripts/evaluations/robustifying/results
+scripts/evaluations/robustifying/figures
+scripts/evaluations/robustifying/Rplots.pdf
+slurm_outputs
+scripts/evaluations/combat_seq_preston/real_data_application/sample_metadata.tsv
+.nfsae4ecd6a6f0374b800009abc
+*.err
 .idea

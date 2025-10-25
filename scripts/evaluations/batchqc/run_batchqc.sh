@@ -47,7 +47,7 @@ for dataset_dir in "$DATA_DIR"/*/; do
         run_batchqc "$dataset" "$unadjusted_file" "unadjusted"
         
         # Run on adjusted data (common adjustment methods)
-        for adjuster in "gmm_affine" "gmm_nonlinear_unit_var" "combat" "limma"; do
+        for adjuster in "gmm_affine" "combat" "limma"; do
             adjusted_file="$dataset_dir/${adjuster}.csv"
             if [[ -f "$adjusted_file" ]]; then
                 run_batchqc "$dataset" "$adjusted_file" "$adjuster"

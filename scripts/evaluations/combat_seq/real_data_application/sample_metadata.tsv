@@ -1,0 +1,84 @@
+geo_accession	title	source_name_ch1	batch	group
+GSM2192648	GFP control, overexpressed in HMEC cells GFP18_control_1	Breast	1	gfp18
+GSM2192649	GFP control, overexpressed in HMEC cells GFP18_control_2	Breast	1	gfp18
+GSM2192650	GFP control, overexpressed in HMEC cells GFP18_control_3	Breast	1	gfp18
+GSM2192651	GFP control, overexpressed in HMEC cells GFP18_control_4	Breast	1	gfp18
+GSM2192652	GFP control, overexpressed in HMEC cells GFP18_control_5	Breast	1	gfp18
+GSM2192653	GFP control, overexpressed in HMEC cells GFP18_control_6	Breast	1	gfp18
+GSM2192654	GFP control, overexpressed in HMEC cells GFP18_control_7	Breast	1	gfp18
+GSM2192655	GFP control, overexpressed in HMEC cells GFP18_control_8	Breast	1	gfp18
+GSM2192656	GFP control, overexpressed in HMEC cells GFP18_control_9	Breast	1	gfp18
+GSM2192657	GFP control, overexpressed in HMEC cells GFP18_control_10	Breast	1	gfp18
+GSM2192658	GFP control, overexpressed in HMEC cells GFP18_control_11	Breast	1	gfp18
+GSM2192659	GFP control, overexpressed in HMEC cells GFP18_control_12	Breast	1	gfp18
+GSM2192660	humanIGF1R, overexpressed in HMEC cells IGF1R_overexpressed_1	Breast	NA	NA
+GSM2192661	humanIGF1R, overexpressed in HMEC cells IGF1R_overexpressed_2	Breast	NA	NA
+GSM2192662	humanIGF1R, overexpressed in HMEC cells IGF1R_overexpressed_3	Breast	NA	NA
+GSM2192663	humanIGF1R, overexpressed in HMEC cells IGF1R_overexpressed_4	Breast	NA	NA
+GSM2192664	humanIGF1R, overexpressed in HMEC cells IGF1R_overexpressed_5	Breast	NA	NA
+GSM2192665	humanIGF1R, overexpressed in HMEC cells IGF1R_overexpressed_6	Breast	NA	NA
+GSM2192666	human HER2/ERBB2, overexpressed in HMEC cells HER2_overexpressed_1	Breast	1	her2
+GSM2192667	human HER2/ERBB2, overexpressed in HMEC cells HER2_overexpressed_2	Breast	1	her2
+GSM2192668	human HER2/ERBB2, overexpressed in HMEC cells HER2_overexpressed_3	Breast	1	her2
+GSM2192669	human HER2/ERBB2, overexpressed in HMEC cells HER2_overexpressed_4	Breast	1	her2
+GSM2192670	human HER2/ERBB2, overexpressed in HMEC cells HER2_overexpressed_5	Breast	1	her2
+GSM2192671	human RAF1, overexpressed in HMEC cells RAF1_overexpressed_1	Breast	NA	NA
+GSM2192672	human RAF1, overexpressed in HMEC cells RAF1_overexpressed_2	Breast	NA	NA
+GSM2192673	human RAF1, overexpressed in HMEC cells RAF1_overexpressed_3	Breast	NA	NA
+GSM2192674	human RAF1, overexpressed in HMEC cells RAF1_overexpressed_4	Breast	NA	NA
+GSM2192675	human RAF1, overexpressed in HMEC cells RAF1_overexpressed_5	Breast	NA	NA
+GSM2192676	human RAF1, overexpressed in HMEC cells RAF1_overexpressed_6	Breast	NA	NA
+GSM2192677	human BAD, overexpressed in HMEC cells BAD_overexprewssed_1	Breast	NA	NA
+GSM2192678	human BAD, overexpressed in HMEC cells BAD_overexprewssed_2	Breast	NA	NA
+GSM2192679	human BAD, overexpressed in HMEC cells BAD_overexprewssed_3	Breast	NA	NA
+GSM2192680	human BAD, overexpressed in HMEC cells BAD_overexprewssed_4	Breast	NA	NA
+GSM2192681	human BAD, overexpressed in HMEC cells BAD_overexprewssed_5	Breast	NA	NA
+GSM2192682	human BAD, overexpressed in HMEC cells BAD_overexprewssed_6	Breast	NA	NA
+GSM2192683	human AKT1, overexpressed in HMEC cells AKT1_overexpressed_1	Breast	NA	NA
+GSM2192684	human AKT1, overexpressed in HMEC cells AKT1_overexpressed_2	Breast	NA	NA
+GSM2192685	human AKT1, overexpressed in HMEC cells AKT1_overexpressed_3	Breast	NA	NA
+GSM2192686	human AKT1, overexpressed in HMEC cells AKT1_overexpressed_4	Breast	NA	NA
+GSM2192687	human AKT1, overexpressed in HMEC cells AKT1_overexpressed_5	Breast	NA	NA
+GSM2192688	human AKT1, overexpressed in HMEC cells AKT1_overexpressed_6	Breast	NA	NA
+GSM2192689	GFP control, overexpressed in HMEC cells GFP30_control_1	Breast	3	gfp30
+GSM2192690	GFP control, overexpressed in HMEC cells GFP30_control_2	Breast	3	gfp30
+GSM2192691	GFP control, overexpressed in HMEC cells GFP30_control_3	Breast	3	gfp30
+GSM2192692	GFP control, overexpressed in HMEC cells GFP30_control_4	Breast	3	gfp30
+GSM2192693	GFP control, overexpressed in HMEC cells GFP30_control_5	Breast	3	gfp30
+GSM2192694	GFP control, overexpressed in HMEC cells GFP30_control_6	Breast	3	gfp30
+GSM2192695	GFP control, overexpressed in HMEC cells GFP30_control_7	Breast	3	gfp30
+GSM2192696	GFP control, overexpressed in HMEC cells GFP30_control_8	Breast	3	gfp30
+GSM2192697	GFP control, overexpressed in HMEC cells GFP30_control_9	Breast	3	gfp30
+GSM2192698	human KRAS G12V mutant form overexpressed in HMEC cells KRAS_G12V_overexpressed_1	Breast	3	kraswt
+GSM2192699	human KRAS G12V mutant form overexpressed in HMEC cells KRAS_G12V_overexpressed_2	Breast	3	kraswt
+GSM2192700	human KRAS G12V mutant form overexpressed in HMEC cells KRAS_G12V_overexpressed_3	Breast	3	kraswt
+GSM2192701	human KRAS G12V mutant form overexpressed in HMEC cells KRAS_G12V_overexpressed_4	Breast	3	kraswt
+GSM2192702	human KRAS G12V mutant form overexpressed in HMEC cells KRAS_G12V_overexpressed_5	Breast	3	kraswt
+GSM2192703	human KRAS G12V mutant form overexpressed in HMEC cells KRAS_G12V_overexpressed_6	Breast	3	kraswt
+GSM2192704	human KRAS G12V mutant form overexpressed in HMEC cells KRAS_G12V_overexpressed_7	Breast	3	kraswt
+GSM2192705	human KRAS G12V mutant form overexpressed in HMEC cells KRAS_G12V_overexpressed_8	Breast	3	kraswt
+GSM2192706	human KRAS G12V mutant form overexpressed in HMEC cells KRAS_G12V_overexpressed_9	Breast	3	kraswt
+GSM1446195	Control1	MCF10A Cell Line	2	gfp_for_egfr
+GSM1446196	MEK1	MCF10A Cell Line	NA	NA
+GSM1446197	EGFR1	MCF10A Cell Line	2	egfr
+GSM1446198	MEK_EGFR1	MCF10A Cell Line	2	egfr
+GSM1446199	Control2	MCF10A Cell Line	2	gfp_for_egfr
+GSM1446200	MEK2	MCF10A Cell Line	NA	NA
+GSM1446201	EGFR2	MCF10A Cell Line	2	egfr
+GSM1446202	MEK_EGFR2	MCF10A Cell Line	2	egfr
+GSM1446203	Control3	MCF10A Cell Line	2	gfp_for_egfr
+GSM1446204	MEK3	MCF10A Cell Line	NA	NA
+GSM1446205	EGFR3	MCF10A Cell Line	2	egfr
+GSM1446206	MEK_EGFR3	MCF10A Cell Line	2	egfr
+GSM1446207	Control4	MCF10A Cell Line	2	gfp_for_egfr
+GSM1446208	MEK4	MCF10A Cell Line	NA	NA
+GSM1446209	EGFR4	MCF10A Cell Line	2	egfr
+GSM1446210	MEK_EGFR4	MCF10A Cell Line	2	egfr
+GSM1446211	EGFR5	MCF10A Cell Line	2	egfr
+GSM1446212	MEK_EGFR5	MCF10A Cell Line	2	egfr
+GSM1446213	MEK5	MCF10A Cell Line	NA	NA
+GSM1446214	Control5	MCF10A Cell Line	2	gfp_for_egfr
+GSM1446215	Control6	MCF10A Cell Line	2	gfp_for_egfr
+GSM1446216	MEK6	MCF10A Cell Line	NA	NA
+GSM1446217	EGFR6	MCF10A Cell Line	2	egfr
+GSM1446218	MEK_EGFR6	MCF10A Cell Line	2	egfr

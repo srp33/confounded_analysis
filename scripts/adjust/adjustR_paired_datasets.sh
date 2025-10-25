@@ -30,8 +30,6 @@ ADJUSTERS_SEQUENTIAL=(
     "gmm"
     "gmm_global_simple"
     "gmm_global_npn"
-    "gmm_nonlinear_unit_var"
-    "gmm_nonlinear_mean_ones"
     "gmm_affine"
 )
 

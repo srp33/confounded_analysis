@@ -11,7 +11,7 @@ export PYTHONPATH="/scripts:$PYTHONPATH"
 
 # --- Configuration ---
 SCRIPT_PATH="$(dirname "$0")/classify.py"
-BASE_DATA_DIR="/data/gold"
+BASE_DATA_DIR="/data/single_with_batches"
 OUTPUT_DIR="/outputs/metrics"
 # Directory to store the cache files with MD5 hashes
 HASH_DIR="/data/.cache"
@@ -24,7 +24,7 @@ mkdir -p "$HASH_DIR"
 
 # Define datasets and their corresponding true columns for global prediction
 declare -A TASKS
-# TASKS["gse20194"]="meta_er_status meta_her2_status meta_pr_status"
+TASKS["gse20194"]="meta_er_status meta_her2_status meta_pr_status"
 TASKS["gse24080"]="meta_cytogenetic_abnormality"
 TASKS["gse49711"]="meta_INSS_Stage_Split_3_4"
 

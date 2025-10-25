@@ -148,13 +148,12 @@ for(ID in 1:iterations){
     if(inherits(pred_combat_res, "try-error")){ID <- ID - 1; break; next}
     
     ##  Prediction from training after GMM adjustment
-    # cat("Applying gmm_adjust with parameters: alpha0=10, nonlinear=FALSE, mean_mean_zero=TRUE, unit_var=TRUE\n")  # Suppressed for cleaner output
+    # cat("Applying gmm_adjust with parameters: mean_mean_zero=TRUE, unit_var=TRUE\n")  # Suppressed for cleaner output
     # cat("Data dimensions:", nrow(train_expr_batch), "genes x", ncol(train_expr_batch), "samples\n")
     # cat("Batch distribution:", table(batch), "\n")  # Suppressed for cleaner output
     # cat("Data range:", range(train_expr_batch, na.rm=TRUE), "\n")
     
     train_expr_gmm_adj <- try(gmm_adjust(data=t(train_expr_batch), batch=batch, 
-                                         alpha0=10, nonlinear=FALSE, 
                                          mean_mean_zero=TRUE, unit_var=TRUE, debug=FALSE,
                                          num_workers=get_allocated_cores()))
     if(inherits(train_expr_gmm_adj, "try-error")){
