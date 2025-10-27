@@ -1,0 +1,49 @@
+Bootstrap: localimage
+From: /home/phr23/confounded_analysis/grp_batch_effects/remove-batch-effects-base.sif
+
+# Fast-building main image that uses the pre-built base
+# This should build much faster since system deps and core R packages are already installed
+
+%environment
+# Inherit base environment and add Python-specific variables
+export CONDA_DIR="/opt/conda"
+export PATH="$CONDA_DIR/bin:$PATH"
+export CONDA_PREFIX="$CONDA_DIR"
+export RETICULATE_PYTHON="$CONDA_DIR/bin/python"
+export TORCHINDUCTOR_CACHE_DIR="/tmp/torch_cache"
+export NUMBA_CACHE_DIR="/tmp/numba_cache"
+
+%files
+    install_specialized_packages.R /install_specialized_packages.R
+
+%post
+    echo "Building fast image from base..."
+    set -ex
+
+    # Install remaining R packages (should be much faster)
+    # Note: polyester package not available in Bioconductor 3.21, installing from GitHub source
+    echo "Installing specialized R packages..."
+    Rscript /install_specialized_packages.R
+
+    # Build Python environment
+    echo "Setting up Python environment..."
+    wget https://github.com/conda-forge/miniforge/releases/latest/download/Miniforge3-Linux-x86_64.sh -O /tmp/miniforge.sh
+    /bin/bash /tmp/miniforge.sh -b -p /opt/conda
+    rm /tmp/miniforge.sh
+
+    /opt/conda/bin/conda update -y -n base -c conda-forge conda
+    # Fix solver issue after conda update
+    /opt/conda/bin/conda config --set solver classic
+    /opt/conda/bin/conda install -y -c conda-forge mamba
+    /opt/conda/bin/mamba install -y -c conda-forge numpy 'scikit-learn>=1.4' pandas pytorch matplotlib \
+                                        aif360 tabulate jaxtyping beartype pytables opentsne umap-learn geoparse seaborn \
+                                        psutil tqdm rich memory_profiler py-cpuinfo
+    /opt/conda/bin/pip install gdown osfclient pybiomart
+    /opt/conda/bin/conda clean --all -y
+
+    # Final setup
+    mkdir -p /tmp/numba_cache
+    chmod -R 777 /tmp/numba_cache
+    git clone https://github.com/datapplab/AutoClass.git /opt/AutoClass
+
+    echo "Fast build completed."
