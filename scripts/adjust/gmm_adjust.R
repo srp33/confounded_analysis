@@ -261,15 +261,46 @@ bimodal_normalize <- function(data, weight_alpha=NULL, variance_alpha=NULL, mean
     num_cores <- if (num_workers == -1) detectCores() else min(num_workers, detectCores())
     if (debug) message("%%%%%%% Num cores: ", num_cores)
     if (.Platform$OS.type == "unix") {
+      # Prefer fork clusters on Unix systems (no port conflicts)
       cl <- tryCatch({
         parallel::makeForkCluster(num_cores)
+        if (debug) cat("Fork cluster created successfully\n")
+        parallel::makeForkCluster(num_cores)
       }, error = function(e) {
-        if (debug) cat("Fork cluster failed, using PSOCK:", e$message, "\n")
-        parallel::makePSOCKcluster(num_cores)
+        if (debug) cat("Fork cluster failed, using PSOCK with retry:", e$message, "\n")
+        # Fallback to PSOCK with retry logic
+        cl_temp <- NULL
+        max_attempts <- 5
+        for (attempt in 1:max_attempts) {
+          tryCatch({
+            cl_temp <- parallel::makePSOCKcluster(num_cores)
+            return(cl_temp)
+          }, error = function(e2) {
+            if (debug) cat("PSOCK cluster attempt", attempt, "failed:", e2$message, "\n")
+            if (attempt == max_attempts) {
+              stop("Failed to create cluster after ", max_attempts, " attempts: ", e2$message)
+            }
+            Sys.sleep(runif(1, 0.5, 2))  # Random delay before retry
+          })
+        }
       })
     } else {
       if (debug) cat("Fork cluster successful")
-      cl <- parallel::makePSOCKcluster(num_cores)
+      # Try to create PSOCK cluster with port retry logic
+      cl <- NULL
+      max_attempts <- 5
+      for (attempt in 1:max_attempts) {
+        tryCatch({
+          cl <- parallel::makePSOCKcluster(num_cores)
+          break
+        }, error = function(e) {
+          if (debug) cat("Cluster creation attempt", attempt, "failed:", e$message, "\n")
+          if (attempt == max_attempts) {
+            stop("Failed to create cluster after ", max_attempts, " attempts: ", e$message)
+          }
+          Sys.sleep(runif(1, 0.5, 2))  # Random delay before retry
+        })
+      }
     }
     registerDoParallel(cl)
     on.exit(stopCluster(cl), add = TRUE)
