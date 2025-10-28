@@ -1,0 +1,27 @@
+Bootstrap: localimage
+From: /home/phr23/confounded_analysis/grp_batch_effects/remove-batch-effects.sif
+
+# Annotation stage - adds custom annotation packages from external sources
+# This stage is separate to allow better debugging and isolation of annotation issues
+
+%environment
+# Inherit all environment variables from previous stages
+export CONDA_DIR="/opt/conda"
+export PATH="$CONDA_DIR/bin:$PATH"
+export CONDA_PREFIX="$CONDA_DIR"
+export RETICULATE_PYTHON="$CONDA_DIR/bin/python"
+export TORCHINDUCTOR_CACHE_DIR="/tmp/torch_cache"
+export NUMBA_CACHE_DIR="/tmp/numba_cache"
+
+%files
+    apptainer/install_annotation_packages.R /install_annotation_packages.R
+
+%post
+    echo "Building annotation stage from fast image..."
+    set -ex
+
+    # Install custom annotation packages
+    echo "Installing custom annotation packages..."
+    Rscript /install_annotation_packages.R
+
+    echo "Annotation stage completed."

@@ -55,28 +55,12 @@ all_bioc_base <- c(
     "bioc::ComplexHeatmap", "bmbolstad/preprocessCore",
     # Polyester dependencies (moved to base for better performance)
     "bioc::Biostrings", "bioc::IRanges", "bioc::S4Vectors", "bioc::zlibbioc",
-    "logspline",  # CRAN package, but polyester dependency
-    # Annotation packages (moved here for better performance)
-    "bioc::pd.hg.u133a", "bioc::pd.hg.u133.plus.2", "bioc::annotate",
-    "bioc::illuminaHumanv4.db", "bioc::hugene11sttranscriptcluster.db"
+    "logspline"
 )
 pak::pkg_install(all_bioc_base)
 
-# Install custom source packages from mbni.org (also in base for performance)
-cat("--- Installing custom annotation packages from source ---\n")
-tmpDir <- tempdir()
-
-# Package 1: hgu133ahsentrezgprobe
-pkgUrl1 <- "http://mbni.org/customcdf/25.0.0/entrezg.download/hgu133ahsentrezgprobe_25.0.0.tar.gz"
-pkgFilePath1 <- file.path(tmpDir, basename(pkgUrl1))
-download.file(pkgUrl1, pkgFilePath1)
-pak::pkg_install(pkgFilePath1)
-
-# Package 2: hgu133plus2hsentrezgprobe
-pkgUrl2 <- "http://mbni.org/customcdf/25.0.0/entrezg.download/hgu133plus2hsentrezgprobe_25.0.0.tar.gz"
-pkgFilePath2 <- file.path(tmpDir, basename(pkgUrl2))
-download.file(pkgUrl2, pkgFilePath2)
-pak::pkg_install(pkgFilePath2)
+# Note: Custom annotation packages from mbni.org moved to separate build stage
+# due to server reliability issues. They will be installed in the fast build stage.
 
 cat("--- Base R packages installed successfully ---\n")
 cat("Installed packages can be seen with: installed.packages()[,1]\n")

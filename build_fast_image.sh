@@ -42,7 +42,7 @@ mkdir -p ~/confounded_analysis/grp_batch_effects
 # Build the final image from base (run from apptainer directory for relative paths)
 cd ~/confounded_analysis/apptainer
 apptainer build --force \
-    ~/confounded_analysis/grp_batch_effects/remove-batch-effects.sif \
+    ~/confounded_analysis/grp_batch_effects/remove-batch-effects-fast.sif \
     apptainer_fast.def
 
 BUILD_EXIT_CODE=$?
@@ -63,4 +63,4 @@ if [ $BUILD_EXIT_CODE -ne 0 ]; then
 fi
 
 echo "Fast build successful!"
-echo "Your container is ready at: ~/confounded_analysis/apptainer/remove-batch-effects.sif"
+echo "Your container is ready at: ~/confounded_analysis/apptainer/remove-batch-effects-fast.sif"

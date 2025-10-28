@@ -14,7 +14,7 @@ export TORCHINDUCTOR_CACHE_DIR="/tmp/torch_cache"
 export NUMBA_CACHE_DIR="/tmp/numba_cache"
 
 %files
-    install_specialized_packages.R /install_specialized_packages.R
+    apptainer/install_specialized_packages.R /install_specialized_packages.R
 
 %post
     echo "Building fast image from base..."

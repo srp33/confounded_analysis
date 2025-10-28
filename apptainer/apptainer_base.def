@@ -20,7 +20,7 @@ export CCACHE_COMPRESS="true"
 export CCACHE_COMPRESSLEVEL="6"
 
 %files
-    install_base_packages.R /install_base_packages.R
+    apptainer/install_base_packages.R /install_base_packages.R
 
 %post
     echo "Building base image with system dependencies and core R packages..."
