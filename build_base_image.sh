@@ -94,4 +94,8 @@ fi
 
 echo "Base image build successful!"
 echo "Logs written to $DIAG_LOG"
-echo "You can now use build_fast_image.sh for quick rebuilds."
+echo "Now running build_fast_image.sh."
+
+sbatch build_fast_image.sh
+
+
