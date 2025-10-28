@@ -61,15 +61,15 @@ cat("Installing packages:", paste(heavy_cran_batch, collapse = ", "), "\n")
 pak::pkg_install(heavy_cran_batch)
 cat("Batch 2 completed at:", as.character(Sys.time()), "\n")
 
-# Batch 3: All Bioconductor packages together (including annotation packages)
-cat("--- Batch 3: All Bioconductor packages + annotation packages ---\n")
+# Batch 3: Bioconductor packages
+cat("--- Batch 3: Bioconductor packages ---\n")
 cat("Batch 3 started at:", as.character(Sys.time()), "\n")
 all_bioc_base <- c(
     # Core Bioconductor packages
     "bioc::SummarizedExperiment", "bioc::limma", "bioc::vsn", 
     "bioc::AnnotationDbi", "bioc::biomaRt", "bioc::ExperimentHub", 
     "bioc::ComplexHeatmap", "bmbolstad/preprocessCore",
-    # Polyester dependencies (moved to base for better performance)
+
     "bioc::Biostrings", "bioc::IRanges", "bioc::S4Vectors", "bioc::zlibbioc",
     "logspline"
 )
@@ -77,8 +77,6 @@ cat("Installing packages:", paste(all_bioc_base, collapse = ", "), "\n")
 pak::pkg_install(all_bioc_base)
 cat("Batch 3 completed at:", as.character(Sys.time()), "\n")
 
-# Note: Custom annotation packages from mbni.org moved to separate build stage
-# due to server reliability issues. They will be installed in the fast build stage.
 
 cat("=== BASE R PACKAGES INSTALLED SUCCESSFULLY ===\n")
 cat("Installation completed at:", as.character(Sys.time()), "\n")

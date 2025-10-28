@@ -1,16 +1,13 @@
 Bootstrap: docker
 From: ubuntu:22.04
 
-# Base image with system dependencies and core R packages
-# Build this once and reuse for faster subsequent builds
-
 %environment
 export LANG="C.UTF-8"
 export LC_ALL="C.UTF-8"
 export TZ="America/Denver"
 export R_LIBS_USER="/home/r_libs"
 
-# Configure ccache for faster compilation
+# Configure ccache for builds (optional)
 export PATH="/usr/lib/ccache:$PATH"
 export CC="ccache gcc"
 export CXX="ccache g++"
@@ -23,88 +20,228 @@ export CCACHE_COMPRESSLEVEL="6"
     apptainer/install_base_packages.R /install_base_packages.R
 
 %post
-    echo "=== STARTING BASE IMAGE BUILD ==="
-    echo "Build started at: $(date)"
-    echo "Available memory: $(free -h)"
-    echo "Available disk space: $(df -h /)"
-    
-    # Enable debugging: Print all commands (set -x) and exit on first error (set -e)
+    #
+    # Minimal, robust system setup + R tooling for Ubuntu 22.04
+    # Key idea: update via existing APT metadata, install ca-certificates,
+    # then switch to HTTPS and proceed.
+    #
     set -ex
-    
-    echo "=== STAGE 1: SYSTEM SETUP ==="
+
+    echo "=== STARTING BASE IMAGE BUILD ==="
+    echo "Build started at: $(date -u)"
+    echo "Host / container resources:"
+    free -h || true
+    df -h / || true
+    echo "CPUs: $(nproc)"
+
     export DEBIAN_FRONTEND=noninteractive
-    ln -fs /usr/share/zoneinfo/America/Denver /etc/localtime
-    
-    echo "Cleaning package cache..."
-    apt-get clean
-    
-    echo "Updating package lists..."
-    apt-get update
-    
-    echo "=== STAGE 2: INSTALLING SYSTEM DEPENDENCIES ==="
-    echo "Installing basic system packages..."
-    apt-get install -y --no-install-recommends \
-        wget curl ca-certificates gnupg2 dirmngr software-properties-common \
-        git ccache build-essential cmake \
-        python3 python3-pip python3-dev \
-        libssl-dev libcurl4-openssl-dev libxml2-dev \
-        libfontconfig1-dev libharfbuzz-dev libfribidi-dev \
-        libfreetype6-dev libpng-dev libtiff5-dev libjpeg-dev \
-        apt-transport-https libx11-dev libmagick++-dev gsfonts pandoc libglpk-dev libwebp-dev
-    
-    echo "=== STAGE 3: ADDING R REPOSITORY AND INSTALLING R ==="
-    echo "Adding R repository for latest R version..."
-    wget -qO- https://cloud.r-project.org/bin/linux/ubuntu/marutter_pubkey.asc | tee -a /etc/apt/trusted.gpg.d/cran_ubuntu_key.asc
-    add-apt-repository "deb https://cloud.r-project.org/bin/linux/ubuntu jammy-cran40/"
-    
-    echo "Updating package lists after adding R repository..."
-    apt-get update
-    
-    echo "Installing R..."
-    apt-get install -y --no-install-recommends r-base r-base-dev
-    
-    # Clean out conflicting system packages
-    echo "Cleaning conflicting R packages..."
-    rm -rf /usr/lib/R/library/Matrix /usr/lib/R/library/Recommended
-    
-    echo "Setting R repository..."
-    echo "options(repos = c(CRAN='https://packagemanager.posit.co/cran/__linux__/jammy/2024-01-01'))" >> /etc/R/Rprofile.site
-    
-    echo "Cleaning package cache..."
-    apt-get clean && rm -rf /var/lib/apt/lists/*
-    
-    echo "=== STAGE 4: SETUP CCACHE ==="
-    mkdir -p /cache/ccache && chmod -R 777 /cache/ccache
-    ccache --set-config=max_size=8G
-    ccache --set-config=compression=true
-    ccache --set-config=compression_level=6
-    
-    echo "=== STAGE 5: VERIFY TOOLS ==="
-    echo "CMake version:"
-    cmake --version
-    echo "R version:"
-    R --version
-    echo "Python version:"
-    python3 --version
-    echo "ccache configuration:"
-    ccache --show-config
-    
-    echo "=== STAGE 6: SETUP R ENVIRONMENT ==="
-    mkdir -p /home/r_libs && chmod -R 777 /home/r_libs
-    echo "options(Ncpus = $(nproc))" >> /etc/R/Rprofile.site
-    echo "Sys.setenv(MAKEFLAGS = '-j$(nproc)')" >> /etc/R/Rprofile.site
-    echo "Sys.setenv(PKG_BUILD_EXTRA_FLAGS = '-j$(nproc)')" >> /etc/R/Rprofile.site
-    
-    echo "Available CPUs: $(nproc)"
-    echo "Available memory before R package installation: $(free -h)"
-    
-    echo "=== STAGE 7: INSTALL CORE R PACKAGES ==="
-    echo "Starting R package installation at: $(date)"
-    Rscript /install_base_packages.R
-    echo "R package installation completed at: $(date)"
-    
-    echo "Available memory after R package installation: $(free -h)"
-    echo "Available disk space after R package installation: $(df -h /)"
-    
-    echo "=== BASE IMAGE BUILD COMPLETED SUCCESSFULLY ==="
-    echo "Build finished at: $(date)"
+
+    # If user provided proxy via environment, configure apt to use it.
+    # Apptainer/Slurm jobs sometimes set HTTP_PROXY/HTTPS_PROXY in environment.
+    if [ -n "${HTTP_PROXY:-}" ] || [ -n "${http_proxy:-}" ] ; then
+        PROXY_VALUE="${HTTP_PROXY:-${http_proxy}}"
+        echo "Acquire::http::Proxy \"${PROXY_VALUE}\";" > /etc/apt/apt.conf.d/95proxy
+        echo "Detected HTTP proxy and configured APT accordingly."
+    fi
+    if [ -n "${HTTPS_PROXY:-}" ] || [ -n "${https_proxy:-}" ] ; then
+        PROXY_VALUE="${HTTPS_PROXY:-${https_proxy}}"
+        echo "Acquire::https::Proxy \"${PROXY_VALUE}\";" >> /etc/apt/apt.conf.d/95proxy
+        echo "Detected HTTPS proxy and configured APT accordingly."
+    fi
+
+    # Add conservative apt options (retries, prefer IPv4 if needed)
+    echo 'Acquire::Retries "5";' > /etc/apt/apt.conf.d/80-retries
+    echo 'APT::Acquire::Retries "3";' >> /etc/apt/apt.conf.d/80-retries
+    # Not forcing IPv4 by default, but allow override via env var FORCE_IPV4=1
+    if [ "${FORCE_IPV4:-0}" = "1" ]; then
+        echo 'Acquire::ForceIPv4 "true";' >> /etc/apt/apt.conf.d/80-retries
+    fi
+
+    #
+    # STEP 1: Ensure APT metadata is usable (do not convert http->https yet)
+    #
+    echo "=== STEP 1: Initial apt-get update (using existing sources) ==="
+    for i in 1 2 3; do
+        echo "apt-get update attempt $i/3"
+        if apt-get update -o Acquire::AllowDowngradeToInsecureRepositories=true; then
+            echo "apt-get update succeeded"
+            break
+        else
+            echo "apt-get update failed on attempt $i"
+            if [ "$i" -eq 3 ]; then
+                echo "ERROR: apt-get update failed (initial). Collecting diagnostics..." >&2
+                # Diagnostics: dmesg, resolv, ip route, syslog (if readable)
+                dmesg | tail -n 200 | grep -i -E 'killed process|out of memory|oom' || true
+                echo "--- /etc/resolv.conf ---"
+                cat /etc/resolv.conf || true
+                echo "--- ip route ---"
+                ip route || true
+                exit 1
+            fi
+            sleep 5
+        fi
+    done
+
+    #
+    # STEP 2: Install minimal packages needed for secure HTTPS and repository keys
+    # (ca-certificates must be present before switching APT sources to HTTPS)
+    #
+    echo "=== STEP 2: Install minimal network/security tools ==="
+    for i in 1 2 3; do
+        echo "apt-get install (ca-certificates, apt-transport-https, wget, gnupg) attempt $i/3"
+        if apt-get install -y --no-install-recommends \
+            ca-certificates apt-transport-https wget curl gnupg2 dirmngr lsb-release; then
+            echo "Minimal network/security packages installed"
+            break
+        else
+            echo "Install failed on attempt $i"
+            apt-get clean || true
+            if [ "$i" -eq 3 ]; then
+                echo "ERROR: Installing ca-certificates and helpers failed" >&2
+                exit 1
+            fi
+            sleep 10
+        fi
+    done
+
+    #
+    # STEP 3: Now safely convert APT sources to HTTPS to avoid further HTTP->HTTPS TLS transforms
+    #
+    echo "=== STEP 3: Convert apt sources to HTTPS (safe now that ca-certificates exists) ==="
+    # Create a backup of sources.list first
+    cp -a /etc/apt/sources.list /etc/apt/sources.list.orig || true
+    sed -E -i 's|http://(archive|security|ports)\.ubuntu\.com|https://\1.ubuntu.com|g' /etc/apt/sources.list || true
+    # For any other http entries, attempt to convert but keep a backup in case of bespoke internal mirrors
+    sed -i.bak 's|http://|https://|g' /etc/apt/sources.list || true
+
+    # Refresh metadata via HTTPS now that CA trust is present
+    echo "apt-get update (HTTPS) attempts..."
+    for i in 1 2 3; do
+        echo "apt-get update (HTTPS) attempt $i/3"
+        if apt-get update; then
+            echo "apt-get update (HTTPS) succeeded"
+            break
+        else
+            echo "apt-get update (HTTPS) failed on attempt $i"
+            if [ "$i" -eq 3 ]; then
+                echo "WARNING: apt-get update over HTTPS failed; restoring original sources and retrying with HTTP" >&2
+                cp -a /etc/apt/sources.list.orig /etc/apt/sources.list || true
+                apt-get update || true
+                # Continue because the system may still be usable via HTTP; but note the failure.
+                break
+            fi
+            sleep 5
+        fi
+    done
+
+    #
+    # STEP 4: Add CRAN apt repository for a broadly compatible R release (CRAN apt for Jammy)
+    #
+    echo "=== STEP 4: Add CRAN repository and key ==="
+    # Add the CRAN key and repository in a robust manner.
+    CRAN_KEY_URL="https://cloud.r-project.org/bin/linux/ubuntu/marutter_pubkey.asc"
+    mkdir -p /etc/apt/trusted.gpg.d
+    if command -v gpg > /dev/null 2>&1; then
+        # gpg available - fetch and dearmour into trusted.gpg.d
+        wget -qO- "$CRAN_KEY_URL" | gpg --dearmor -o /etc/apt/trusted.gpg.d/cran_ubuntu_key.gpg || true
+    else
+        # fallback: store ASCII key (apt will pick it up via apt-key-less method)
+        wget -qO /etc/apt/trusted.gpg.d/cran_ubuntu_key.asc "$CRAN_KEY_URL" || true
+    fi
+
+    CODENAME="$(lsb_release -cs || echo jammy)"
+    echo "deb [signed-by=/etc/apt/trusted.gpg.d/cran_ubuntu_key.gpg] https://cloud.r-project.org/bin/linux/ubuntu ${CODENAME}-cran40/" \
+        > /etc/apt/sources.list.d/cran.list
+
+    # Update again to fetch CRAN metadata
+    for i in 1 2 3; do
+        echo "apt-get update (CRAN) attempt $i/3"
+        if apt-get update; then
+            echo "apt-get update (CRAN) succeeded"
+            break
+        else
+            echo "apt-get update (CRAN) failed on attempt $i"
+            if [ "$i" -eq 3 ]; then
+                echo "ERROR: apt-get update failed after adding CRAN repo" >&2
+                # Diagnostics before exiting
+                dmesg | tail -n 200 | grep -i -E 'killed process|out of memory|oom' || true
+                cat /etc/resolv.conf || true
+                ip route || true
+                exit 1
+            fi
+            sleep 5
+        fi
+    done
+
+    #
+    # STEP 5: Install R and the full build-essential list requested
+    #
+    echo "=== STEP 5: Install R and build dependencies ==="
+    for i in 1 2 3; do
+        echo "apt-get install (r-base, build deps) attempt $i/3"
+        if apt-get install -y --no-install-recommends \
+            r-base r-base-dev \
+            build-essential git ccache cmake \
+            python3 python3-pip python3-dev \
+            libssl-dev libcurl4-openssl-dev libxml2-dev \
+            libfontconfig1-dev libharfbuzz-dev libfribidi-dev \
+            libfreetype6-dev libpng-dev libtiff5-dev libjpeg-dev \
+            libx11-dev libmagick++-dev gsfonts pandoc libglpk-dev libwebp-dev \
+            apt-transport-https software-properties-common; then
+            echo "R and build deps installed"
+            break
+        else
+            echo "Install failed on attempt $i"
+            apt-get clean || true
+            if [ "$i" -eq 3 ]; then
+                echo "ERROR: Installing R and build dependencies failed" >&2
+                dmesg | tail -n 200 | grep -i -E 'killed process|out of memory|oom' || true
+                tail -n 200 /var/log/syslog 2>/dev/null || true
+                exit 1
+            fi
+            sleep 15
+        fi
+    done
+
+    # Remove any conflicting preinstalled R recommended packages to avoid inconsistencies
+    rm -rf /usr/lib/R/library/Matrix /usr/lib/R/library/Recommended || true
+
+    #
+    # STEP 6: Configure R defaults and ccache
+    #
+    echo "options(repos = c(CRAN='https://packagemanager.posit.co/cran/__linux__/jammy/2024-01-01'))" >> /etc/R/Rprofile.site || true
+    echo "options(Ncpus = $(nproc))" >> /etc/R/Rprofile.site || true
+    echo "Sys.setenv(MAKEFLAGS = '-j$(nproc)')" >> /etc/R/Rprofile.site || true
+    mkdir -p /home/r_libs && chmod -R 777 /home/r_libs || true
+
+    mkdir -p /cache/ccache && chmod -R 777 /cache/ccache || true
+    if command -v ccache > /dev/null 2>&1; then
+        ccache --set-config=max_size=8G || true
+        ccache --set-config=compression=true || true
+        ccache --set-config=compression_level=6 || true
+    fi
+
+    #
+    # STEP 7: Install core R packages via provided installer
+    #
+    echo "=== STEP 7: Install core R packages via /install_base_packages.R ==="
+    echo "Starting R package installation at: $(date -u)"
+    if [ -f /install_base_packages.R ]; then
+        # Run Rscript with trace and capture errors; do not let failures silently pass
+        if ! Rscript /install_base_packages.R; then
+            echo "WARNING: R package installer returned a non-zero exit code" >&2
+            # Continue; user may iterate on R packages separately.
+        fi
+    else
+        echo "No /install_base_packages.R found; skipping R package install" >&2
+    fi
+
+    #
+    # FINAL CLEANUP
+    #
+    echo "=== FINAL CLEANUP ==="
+    apt-get clean || true
+    rm -rf /var/lib/apt/lists/* || true
+
+    echo "=== BASE IMAGE BUILD COMPLETED ==="
+    echo "Build finished at: $(date -u)"

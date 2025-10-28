@@ -33,12 +33,12 @@ cat("These packages provide custom CDF environments for Affymetrix arrays\n")
 custom_packages <- list(
     list(
         name = "hgu133ahsentrezgprobe", 
-        url = "http://mbni.org/customcdf/25.0.0/entrezg.download/hgu133ahsentrezgprobe_25.0.0.tar.gz",
+        url = "http://brainarray.mbni.med.umich.edu/bioc/src/contrib/hgu133ahsentrezgprobe_25.0.0.tar.gz",
         description = "Custom CDF for HG-U133A arrays with Entrez Gene mappings"
     ),
     list(
         name = "hgu133plus2hsentrezgprobe", 
-        url = "http://mbni.org/customcdf/25.0.0/entrezg.download/hgu133plus2hsentrezgprobe_25.0.0.tar.gz",
+        url = "http://brainarray.mbni.med.umich.edu/bioc/src/contrib/hgu133plus2hsentrezgprobe_25.0.0.tar.gz",
         description = "Custom CDF for HG-U133 Plus 2.0 arrays with Entrez Gene mappings"
     )
 )
