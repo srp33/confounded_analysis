@@ -49,14 +49,6 @@ BUILD_EXIT_CODE=$?
 
 echo "Annotation image build finished at $(date) with exit code $BUILD_EXIT_CODE"
 
-# Get memory usage
-echo "----------------------------------"
-echo "--- PEAK MEMORY USAGE (sacct) ---"
-echo "Waiting 10s for accounting database to update..."
-sleep 10 
-sacct -j $SLURM_JOB_ID.batch -o JobID,JobName,MaxRSS,State
-echo "----------------------------------"
-
 if [ $BUILD_EXIT_CODE -ne 0 ]; then
     echo "ERROR: Annotation image build failed with exit code $BUILD_EXIT_CODE." >&2
     echo "Check build_annotations_image.out for details." >&2

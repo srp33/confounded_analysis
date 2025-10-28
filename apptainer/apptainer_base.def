@@ -36,19 +36,6 @@ export CCACHE_COMPRESSLEVEL="6"
 
     export DEBIAN_FRONTEND=noninteractive
 
-    # If user provided proxy via environment, configure apt to use it.
-    # Apptainer/Slurm jobs sometimes set HTTP_PROXY/HTTPS_PROXY in environment.
-    if [ -n "${HTTP_PROXY:-}" ] || [ -n "${http_proxy:-}" ] ; then
-        PROXY_VALUE="${HTTP_PROXY:-${http_proxy}}"
-        echo "Acquire::http::Proxy \"${PROXY_VALUE}\";" > /etc/apt/apt.conf.d/95proxy
-        echo "Detected HTTP proxy and configured APT accordingly."
-    fi
-    if [ -n "${HTTPS_PROXY:-}" ] || [ -n "${https_proxy:-}" ] ; then
-        PROXY_VALUE="${HTTPS_PROXY:-${https_proxy}}"
-        echo "Acquire::https::Proxy \"${PROXY_VALUE}\";" >> /etc/apt/apt.conf.d/95proxy
-        echo "Detected HTTPS proxy and configured APT accordingly."
-    fi
-
     # Add conservative apt options (retries, prefer IPv4 if needed)
     echo 'Acquire::Retries "5";' > /etc/apt/apt.conf.d/80-retries
     echo 'APT::Acquire::Retries "3";' >> /etc/apt/apt.conf.d/80-retries
@@ -57,87 +44,29 @@ export CCACHE_COMPRESSLEVEL="6"
         echo 'Acquire::ForceIPv4 "true";' >> /etc/apt/apt.conf.d/80-retries
     fi
 
-    #
-    # STEP 1: Ensure APT metadata is usable (do not convert http->https yet)
-    #
-    echo "=== STEP 1: Initial apt-get update (using existing sources) ==="
-    for i in 1 2 3; do
-        echo "apt-get update attempt $i/3"
-        if apt-get update -o Acquire::AllowDowngradeToInsecureRepositories=true; then
-            echo "apt-get update succeeded"
-            break
-        else
-            echo "apt-get update failed on attempt $i"
-            if [ "$i" -eq 3 ]; then
-                echo "ERROR: apt-get update failed (initial). Collecting diagnostics..." >&2
-                # Diagnostics: dmesg, resolv, ip route, syslog (if readable)
-                dmesg | tail -n 200 | grep -i -E 'killed process|out of memory|oom' || true
-                echo "--- /etc/resolv.conf ---"
-                cat /etc/resolv.conf || true
-                echo "--- ip route ---"
-                ip route || true
-                exit 1
-            fi
-            sleep 5
-        fi
-    done
+    
+    echo "=== Initial apt-get update (using existing sources). Ensure APT metadata is usable (do not convert http->https yet)==="
+    apt-get update -o Acquire::AllowDowngradeToInsecureRepositories=true
 
-    #
-    # STEP 2: Install minimal packages needed for secure HTTPS and repository keys
-    # (ca-certificates must be present before switching APT sources to HTTPS)
-    #
-    echo "=== STEP 2: Install minimal network/security tools ==="
-    for i in 1 2 3; do
-        echo "apt-get install (ca-certificates, apt-transport-https, wget, gnupg) attempt $i/3"
-        if apt-get install -y --no-install-recommends \
-            ca-certificates apt-transport-https wget curl gnupg2 dirmngr lsb-release; then
-            echo "Minimal network/security packages installed"
-            break
-        else
-            echo "Install failed on attempt $i"
-            apt-get clean || true
-            if [ "$i" -eq 3 ]; then
-                echo "ERROR: Installing ca-certificates and helpers failed" >&2
-                exit 1
-            fi
-            sleep 10
-        fi
-    done
+    
+    echo "=== Install minimal packages needed for secure HTTPS and repository keys (ca-certificates must be present before switching APT sources to HTTPS) ==="
+    if apt-get install -y --no-install-recommends \
+        ca-certificates apt-transport-https wget curl gnupg2 dirmngr lsb-release
 
-    #
-    # STEP 3: Now safely convert APT sources to HTTPS to avoid further HTTP->HTTPS TLS transforms
-    #
-    echo "=== STEP 3: Convert apt sources to HTTPS (safe now that ca-certificates exists) ==="
+    
+    echo "=== Convert apt sources to HTTPS (safe now that ca-certificates exists) to avoid further HTTP->HTTPS TLS transforms==="
     # Create a backup of sources.list first
     cp -a /etc/apt/sources.list /etc/apt/sources.list.orig || true
     sed -E -i 's|http://(archive|security|ports)\.ubuntu\.com|https://\1.ubuntu.com|g' /etc/apt/sources.list || true
     # For any other http entries, attempt to convert but keep a backup in case of bespoke internal mirrors
     sed -i.bak 's|http://|https://|g' /etc/apt/sources.list || true
 
-    # Refresh metadata via HTTPS now that CA trust is present
-    echo "apt-get update (HTTPS) attempts..."
-    for i in 1 2 3; do
-        echo "apt-get update (HTTPS) attempt $i/3"
-        if apt-get update; then
-            echo "apt-get update (HTTPS) succeeded"
-            break
-        else
-            echo "apt-get update (HTTPS) failed on attempt $i"
-            if [ "$i" -eq 3 ]; then
-                echo "WARNING: apt-get update over HTTPS failed; restoring original sources and retrying with HTTP" >&2
-                cp -a /etc/apt/sources.list.orig /etc/apt/sources.list || true
-                apt-get update || true
-                # Continue because the system may still be usable via HTTP; but note the failure.
-                break
-            fi
-            sleep 5
-        fi
-    done
 
-    #
-    # STEP 4: Add CRAN apt repository for a broadly compatible R release (CRAN apt for Jammy)
-    #
-    echo "=== STEP 4: Add CRAN repository and key ==="
+    echo "apt-get update (HTTPS) attempt. Refresh metadata via HTTPS now that CA trust is present..."
+    apt-get update
+
+
+    echo "=== Add CRAN apt repository and key for a broadly compatible R release (CRAN apt for Jammy) ==="
     # Add the CRAN key and repository in a robust manner.
     CRAN_KEY_URL="https://cloud.r-project.org/bin/linux/ubuntu/marutter_pubkey.asc"
     mkdir -p /etc/apt/trusted.gpg.d
@@ -153,62 +82,26 @@ export CCACHE_COMPRESSLEVEL="6"
     echo "deb [signed-by=/etc/apt/trusted.gpg.d/cran_ubuntu_key.gpg] https://cloud.r-project.org/bin/linux/ubuntu ${CODENAME}-cran40/" \
         > /etc/apt/sources.list.d/cran.list
 
-    # Update again to fetch CRAN metadata
-    for i in 1 2 3; do
-        echo "apt-get update (CRAN) attempt $i/3"
-        if apt-get update; then
-            echo "apt-get update (CRAN) succeeded"
-            break
-        else
-            echo "apt-get update (CRAN) failed on attempt $i"
-            if [ "$i" -eq 3 ]; then
-                echo "ERROR: apt-get update failed after adding CRAN repo" >&2
-                # Diagnostics before exiting
-                dmesg | tail -n 200 | grep -i -E 'killed process|out of memory|oom' || true
-                cat /etc/resolv.conf || true
-                ip route || true
-                exit 1
-            fi
-            sleep 5
-        fi
-    done
+    "apt-get update (w/ CRAN metadata) attempt"
+    apt-get update
 
-    #
-    # STEP 5: Install R and the full build-essential list requested
-    #
-    echo "=== STEP 5: Install R and build dependencies ==="
-    for i in 1 2 3; do
-        echo "apt-get install (r-base, build deps) attempt $i/3"
-        if apt-get install -y --no-install-recommends \
-            r-base r-base-dev \
-            build-essential git ccache cmake \
-            python3 python3-pip python3-dev \
-            libssl-dev libcurl4-openssl-dev libxml2-dev \
-            libfontconfig1-dev libharfbuzz-dev libfribidi-dev \
-            libfreetype6-dev libpng-dev libtiff5-dev libjpeg-dev \
-            libx11-dev libmagick++-dev gsfonts pandoc libglpk-dev libwebp-dev \
-            apt-transport-https software-properties-common; then
-            echo "R and build deps installed"
-            break
-        else
-            echo "Install failed on attempt $i"
-            apt-get clean || true
-            if [ "$i" -eq 3 ]; then
-                echo "ERROR: Installing R and build dependencies failed" >&2
-                dmesg | tail -n 200 | grep -i -E 'killed process|out of memory|oom' || true
-                tail -n 200 /var/log/syslog 2>/dev/null || true
-                exit 1
-            fi
-            sleep 15
-        fi
-    done
+    
+    echo "=== Install R and build dependencies ==="
+    apt-get install -y --no-install-recommends \
+        r-base r-base-dev \
+        build-essential git ccache cmake \
+        python3 python3-pip python3-dev \
+        libssl-dev libcurl4-openssl-dev libxml2-dev \
+        libfontconfig1-dev libharfbuzz-dev libfribidi-dev \
+        libfreetype6-dev libpng-dev libtiff5-dev libjpeg-dev \
+        libx11-dev libmagick++-dev gsfonts pandoc libglpk-dev libwebp-dev \
+        apt-transport-https software-properties-common
 
     # Remove any conflicting preinstalled R recommended packages to avoid inconsistencies
     rm -rf /usr/lib/R/library/Matrix /usr/lib/R/library/Recommended || true
 
-    #
-    # STEP 6: Configure R defaults and ccache
-    #
+
+    # Configure R defaults and ccache
     echo "options(repos = c(CRAN='https://packagemanager.posit.co/cran/__linux__/jammy/2024-01-01'))" >> /etc/R/Rprofile.site || true
     echo "options(Ncpus = $(nproc))" >> /etc/R/Rprofile.site || true
     echo "Sys.setenv(MAKEFLAGS = '-j$(nproc)')" >> /etc/R/Rprofile.site || true
@@ -221,10 +114,8 @@ export CCACHE_COMPRESSLEVEL="6"
         ccache --set-config=compression_level=6 || true
     fi
 
-    #
-    # STEP 7: Install core R packages via provided installer
-    #
-    echo "=== STEP 7: Install core R packages via /install_base_packages.R ==="
+    
+    echo "=== Install core R packages via /install_base_packages.R ==="
     echo "Starting R package installation at: $(date -u)"
     if [ -f /install_base_packages.R ]; then
         # Run Rscript with trace and capture errors; do not let failures silently pass
