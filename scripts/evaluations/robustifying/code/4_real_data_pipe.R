@@ -3,14 +3,14 @@ options(warn = -1)
 suppressMessages(suppressWarnings({
 
 rm(list=ls())
-if(!dir.exists("/scripts/evaluations/robustifying/results_real_4studies")){dir.create("/scripts/evaluations/robustifying/results_real_4studies")}
+if(!dir.exists("~/confounded_analysis/scripts/evaluations/robustifying/results_real_4studies")){dir.create("~/confounded_analysis/scripts/evaluations/robustifying/results_real_4studies")}
 sapply(c("glmnet", "SummarizedExperiment", "sva", "DESeq2", "ROCR", "ggplot2", 
          "gridExtra", "reshape2", "dplyr", "nnls"), require, character.only=TRUE, quietly=TRUE)
 
 }))
-load("/scripts/evaluations/robustifying/data/TB_real_data.RData")
-source("/scripts/evaluations/robustifying/code/helper.R")
-source("/scripts/adjust/gmm_adjust.R")
+load("~/confounded_analysis/scripts/evaluations/robustifying/data/TB_real_data.RData")
+source("~/confounded_analysis/scripts/evaluations/robustifying/code/helper.R")
+source("~/confounded_analysis/scripts/adjust/gmm_adjust.R")
 set.seed(123)
 
 # Get allocated cores from SLURM or default to -1
@@ -194,7 +194,7 @@ for(s in study_names){
   
   save(navg_weights, cs_zmat_lst, cs_weights_seq, reg_ssl_res, reg_a_beta, reg_s_beta, 
        cm_navg_weights, cm_cs_weights_seq, cm_reg_ssl_res, cm_reg_a_beta, cm_reg_s_beta,
-       file=sprintf('/scripts/evaluations/robustifying/results_real_4studies/test%s_weights.RData', test_name))
+       file=sprintf('~/confounded_analysis/scripts/evaluations/robustifying/results_real_4studies/test%s_weights.RData', test_name))
   rm(pred_unadj_res, pred_combat_res, pred_gmm_res, pred_sgbatch_res)
   
   
@@ -308,8 +308,8 @@ for(s in study_names){
         }
         
         ## write out performances
-        first_file <- !file.exists(sprintf('/scripts/evaluations/robustifying/results_real_4studies/test%s_%s.csv', test_name, perf_measures[i]))
-        write.table(summary_df, sprintf('/scripts/evaluations/robustifying/results_real_4studies/test%s_%s.csv', test_name, perf_measures[i]),
+        first_file <- !file.exists(sprintf('~/confounded_analysis/scripts/evaluations/robustifying/results_real_4studies/test%s_%s.csv', test_name, perf_measures[i]))
+        write.table(summary_df, sprintf('~/confounded_analysis/scripts/evaluations/robustifying/results_real_4studies/test%s_%s.csv', test_name, perf_measures[i]),
                     append=!first_file, col.names=first_file, row.names=FALSE, sep=",")
       }
       
