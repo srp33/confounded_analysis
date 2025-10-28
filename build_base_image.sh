@@ -4,9 +4,9 @@
 #SBATCH --partition=login
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
-#SBATCH --cpus-per-task=4
-#SBATCH --mem=64G
-#SBATCH --time=04:00:00
+#SBATCH --cpus-per-task=2
+#SBATCH --mem=32G
+#SBATCH --time=02:00:00
 #SBATCH --output=build_base_image.out
 
 module load apptainer
