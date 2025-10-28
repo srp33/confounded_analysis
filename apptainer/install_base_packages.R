@@ -2,16 +2,25 @@
 # This script installs the core R packages that take the longest to compile
 # These will be baked into the base image for faster subsequent builds
 
+cat("=== STARTING R PACKAGE INSTALLATION ===\n")
+cat("R version:", R.version.string, "\n")
+cat("Platform:", R.version$platform, "\n")
+cat("Installation started at:", as.character(Sys.time()), "\n")
+
 # Configure repositories to prefer binary packages
+cat("Configuring repositories...\n")
 options(repos = c(
     CRAN = "https://packagemanager.posit.co/cran/__linux__/jammy/latest",
     CRAN_source = "https://cran.rstudio.com/"
 ))
+cat("Repositories configured:", getOption("repos"), "\n")
 
 # Install pak first
+cat("Installing pak package manager...\n")
 if (!requireNamespace("pak", quietly = TRUE)) {
     install.packages("pak", repos = getOption("repos"))
 }
+cat("pak installation completed\n")
 
 # Use all available CPU cores for parallel installation
 num_cores <- parallel::detectCores()
@@ -27,14 +36,18 @@ Sys.setenv(MAKEFLAGS = paste0("-j", num_cores))
 
 # Batch 1: Core infrastructure (install first as many packages depend on these)
 cat("--- Batch 1: Core infrastructure packages ---\n")
+cat("Batch 1 started at:", as.character(Sys.time()), "\n")
 core_infrastructure <- c(
     "Rcpp", "RcppArmadillo", "BH", "data.table", "Matrix", "foreach", "parallel", 
     "doParallel", "future", "matrixStats", "remotes"  # remotes for GitHub installations
 )
+cat("Installing packages:", paste(core_infrastructure, collapse = ", "), "\n")
 pak::pkg_install(core_infrastructure)
+cat("Batch 1 completed at:", as.character(Sys.time()), "\n")
 
 # Batch 2: Tidyverse + heavy CRAN packages (can be installed together efficiently)
 cat("--- Batch 2: Tidyverse + heavy CRAN packages ---\n")
+cat("Batch 2 started at:", as.character(Sys.time()), "\n")
 heavy_cran_batch <- c(
     "tidyverse",  # This installs the whole ecosystem
     # Heavy statistical packages
@@ -44,10 +57,13 @@ heavy_cran_batch <- c(
     "gridExtra", "gplots", "RColorBrewer", "plotly", "heatmaply", 
     "png", "colorspace", "scales", "R.devices", "readxl"
 )
+cat("Installing packages:", paste(heavy_cran_batch, collapse = ", "), "\n")
 pak::pkg_install(heavy_cran_batch)
+cat("Batch 2 completed at:", as.character(Sys.time()), "\n")
 
 # Batch 3: All Bioconductor packages together (including annotation packages)
 cat("--- Batch 3: All Bioconductor packages + annotation packages ---\n")
+cat("Batch 3 started at:", as.character(Sys.time()), "\n")
 all_bioc_base <- c(
     # Core Bioconductor packages
     "bioc::SummarizedExperiment", "bioc::limma", "bioc::vsn", 
@@ -57,10 +73,14 @@ all_bioc_base <- c(
     "bioc::Biostrings", "bioc::IRanges", "bioc::S4Vectors", "bioc::zlibbioc",
     "logspline"
 )
+cat("Installing packages:", paste(all_bioc_base, collapse = ", "), "\n")
 pak::pkg_install(all_bioc_base)
+cat("Batch 3 completed at:", as.character(Sys.time()), "\n")
 
 # Note: Custom annotation packages from mbni.org moved to separate build stage
 # due to server reliability issues. They will be installed in the fast build stage.
 
-cat("--- Base R packages installed successfully ---\n")
+cat("=== BASE R PACKAGES INSTALLED SUCCESSFULLY ===\n")
+cat("Installation completed at:", as.character(Sys.time()), "\n")
+cat("Total packages installed:", length(installed.packages()[,1]), "\n")
 cat("Installed packages can be seen with: installed.packages()[,1]\n")

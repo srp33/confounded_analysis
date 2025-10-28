@@ -223,7 +223,7 @@ simBatch <- function(dat, condition, batches_ind, batch, hyper_pars){
   gamma <- delta2 <- list()
   for(i in 1:length(n_batches)){
     gamma[[i]] <- rnorm(n_genes, mean=batch_par[[i]]["hyper_mu"], sd=batch_par[[i]]["hyper_sd"])
-    delta2[[i]] <- rinvgamma(n_genes, shape=batch_par[[i]]["hyper_alpha"], scale=batch_par[[i]]["hyper_beta"])
+            delta2[[i]] <- MCMCpack::rinvgamma(n_genes, shape=batch_par[[i]]["hyper_alpha"], scale=batch_par[[i]]["hyper_beta"])
   }
     
   ## Simulate batch effect

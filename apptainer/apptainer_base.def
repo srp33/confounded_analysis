@@ -23,52 +23,88 @@ export CCACHE_COMPRESSLEVEL="6"
     apptainer/install_base_packages.R /install_base_packages.R
 
 %post
-    echo "Building base image with system dependencies and core R packages..."
+    echo "=== STARTING BASE IMAGE BUILD ==="
+    echo "Build started at: $(date)"
+    echo "Available memory: $(free -h)"
+    echo "Available disk space: $(df -h /)"
+    
+    # Enable debugging: Print all commands (set -x) and exit on first error (set -e)
     set -ex
+    
+    echo "=== STAGE 1: SYSTEM SETUP ==="
     export DEBIAN_FRONTEND=noninteractive
     ln -fs /usr/share/zoneinfo/America/Denver /etc/localtime
     
-    apt-get clean && apt-get update
+    echo "Cleaning package cache..."
+    apt-get clean
     
-    # Install system dependencies
+    echo "Updating package lists..."
+    apt-get update
+    
+    echo "=== STAGE 2: INSTALLING SYSTEM DEPENDENCIES ==="
+    echo "Installing basic system packages..."
     apt-get install -y --no-install-recommends \
-        wget curl ca-certificates gnupg software-properties-common \
+        wget curl ca-certificates gnupg2 dirmngr software-properties-common \
         git ccache build-essential cmake \
         python3 python3-pip python3-dev \
         libssl-dev libcurl4-openssl-dev libxml2-dev \
         libfontconfig1-dev libharfbuzz-dev libfribidi-dev \
         libfreetype6-dev libpng-dev libtiff5-dev libjpeg-dev \
-        dirmngr apt-transport-https libx11-dev libmagick++-dev gsfonts pandoc libglpk-dev libwebp-dev
+        apt-transport-https libx11-dev libmagick++-dev gsfonts pandoc libglpk-dev libwebp-dev
     
-    # Add repositories
-    wget -O - https://apt.kitware.com/keys/kitware-archive-latest.asc 2>/dev/null | gpg --dearmor - | tee /etc/apt/trusted.gpg.d/kitware.gpg >/dev/null
-    add-apt-repository "deb https://apt.kitware.com/ubuntu/ $(lsb_release -cs) main"
+    echo "=== STAGE 3: ADDING R REPOSITORY AND INSTALLING R ==="
+    echo "Adding R repository for latest R version..."
     wget -qO- https://cloud.r-project.org/bin/linux/ubuntu/marutter_pubkey.asc | tee -a /etc/apt/trusted.gpg.d/cran_ubuntu_key.asc
-    add-apt-repository "deb https://cloud.r-project.org/bin/linux/ubuntu $(lsb_release -cs)-cran40/"
+    add-apt-repository "deb https://cloud.r-project.org/bin/linux/ubuntu jammy-cran40/"
     
+    echo "Updating package lists after adding R repository..."
     apt-get update
-    apt-get install -y --no-install-recommends r-base r-base-dev cmake
+    
+    echo "Installing R..."
+    apt-get install -y --no-install-recommends r-base r-base-dev
+    
+    # Clean out conflicting system packages
+    echo "Cleaning conflicting R packages..."
+    rm -rf /usr/lib/R/library/Matrix /usr/lib/R/library/Recommended
+    
+    echo "Setting R repository..."
+    echo "options(repos = c(CRAN='https://packagemanager.posit.co/cran/__linux__/jammy/2024-01-01'))" >> /etc/R/Rprofile.site
+    
+    echo "Cleaning package cache..."
     apt-get clean && rm -rf /var/lib/apt/lists/*
     
-    # Setup ccache
+    echo "=== STAGE 4: SETUP CCACHE ==="
     mkdir -p /cache/ccache && chmod -R 777 /cache/ccache
     ccache --set-config=max_size=8G
     ccache --set-config=compression=true
     ccache --set-config=compression_level=6
     
-    # Verify tools are working
+    echo "=== STAGE 5: VERIFY TOOLS ==="
+    echo "CMake version:"
     cmake --version
+    echo "R version:"
     R --version
+    echo "Python version:"
     python3 --version
+    echo "ccache configuration:"
     ccache --show-config
     
-    # Setup R
+    echo "=== STAGE 6: SETUP R ENVIRONMENT ==="
     mkdir -p /home/r_libs && chmod -R 777 /home/r_libs
     echo "options(Ncpus = $(nproc))" >> /etc/R/Rprofile.site
     echo "Sys.setenv(MAKEFLAGS = '-j$(nproc)')" >> /etc/R/Rprofile.site
     echo "Sys.setenv(PKG_BUILD_EXTRA_FLAGS = '-j$(nproc)')" >> /etc/R/Rprofile.site
     
-    # Install core R packages (the time-consuming ones)
-    Rscript /install_base_packages.R
+    echo "Available CPUs: $(nproc)"
+    echo "Available memory before R package installation: $(free -h)"
     
-    echo "Base image build completed."
+    echo "=== STAGE 7: INSTALL CORE R PACKAGES ==="
+    echo "Starting R package installation at: $(date)"
+    Rscript /install_base_packages.R
+    echo "R package installation completed at: $(date)"
+    
+    echo "Available memory after R package installation: $(free -h)"
+    echo "Available disk space after R package installation: $(df -h /)"
+    
+    echo "=== BASE IMAGE BUILD COMPLETED SUCCESSFULLY ==="
+    echo "Build finished at: $(date)"
