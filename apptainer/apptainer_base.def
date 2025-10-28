@@ -1,0 +1,138 @@
+Bootstrap: docker
+From: ubuntu:22.04
+
+%environment
+export LANG="C.UTF-8"
+export LC_ALL="C.UTF-8"
+export TZ="America/Denver"
+export R_LIBS_USER="/home/r_libs"
+
+# Configure ccache for builds (optional)
+export PATH="/usr/lib/ccache:$PATH"
+export CC="ccache gcc"
+export CXX="ccache g++"
+export CCACHE_DIR="/cache/ccache"
+export CCACHE_MAXSIZE="8G"
+export CCACHE_COMPRESS="true"
+export CCACHE_COMPRESSLEVEL="6"
+
+%files
+    apptainer/install_base_packages.R /install_base_packages.R
+
+%post
+    #
+    # Minimal, robust system setup + R tooling for Ubuntu 22.04
+    # Key idea: update via existing APT metadata, install ca-certificates,
+    # then switch to HTTPS and proceed.
+    #
+    set -ex
+
+    echo "=== STARTING BASE IMAGE BUILD ==="
+    echo "Build started at: $(date -u)"
+    echo "Host / container resources:"
+    free -h || true
+    df -h / || true
+    echo "CPUs: $(nproc)"
+
+    export DEBIAN_FRONTEND=noninteractive
+
+    # Add conservative apt options (retries, prefer IPv4 if needed)
+    echo 'Acquire::Retries "5";' > /etc/apt/apt.conf.d/80-retries
+    echo 'APT::Acquire::Retries "3";' >> /etc/apt/apt.conf.d/80-retries
+    # Not forcing IPv4 by default, but allow override via env var FORCE_IPV4=1
+    if [ "${FORCE_IPV4:-0}" = "1" ]; then
+        echo 'Acquire::ForceIPv4 "true";' >> /etc/apt/apt.conf.d/80-retries
+    fi
+
+    
+    echo "=== Initial apt-get update (using existing sources). Ensure APT metadata is usable (do not convert http->https yet)==="
+    apt-get update -o Acquire::AllowDowngradeToInsecureRepositories=true
+
+    
+    echo "=== Install minimal packages needed for secure HTTPS and repository keys (ca-certificates must be present before switching APT sources to HTTPS) ==="
+    if apt-get install -y --no-install-recommends \
+        ca-certificates apt-transport-https wget curl gnupg2 dirmngr lsb-release
+
+    
+    echo "=== Convert apt sources to HTTPS (safe now that ca-certificates exists) to avoid further HTTP->HTTPS TLS transforms==="
+    # Create a backup of sources.list first
+    cp -a /etc/apt/sources.list /etc/apt/sources.list.orig || true
+    sed -E -i 's|http://(archive|security|ports)\.ubuntu\.com|https://\1.ubuntu.com|g' /etc/apt/sources.list || true
+    # For any other http entries, attempt to convert but keep a backup in case of bespoke internal mirrors
+    sed -i.bak 's|http://|https://|g' /etc/apt/sources.list || true
+
+
+    echo "apt-get update (HTTPS) attempt. Refresh metadata via HTTPS now that CA trust is present..."
+    apt-get update
+
+
+    echo "=== Add CRAN apt repository and key for a broadly compatible R release (CRAN apt for Jammy) ==="
+    # Add the CRAN key and repository in a robust manner.
+    CRAN_KEY_URL="https://cloud.r-project.org/bin/linux/ubuntu/marutter_pubkey.asc"
+    mkdir -p /etc/apt/trusted.gpg.d
+    if command -v gpg > /dev/null 2>&1; then
+        # gpg available - fetch and dearmour into trusted.gpg.d
+        wget -qO- "$CRAN_KEY_URL" | gpg --dearmor -o /etc/apt/trusted.gpg.d/cran_ubuntu_key.gpg || true
+    else
+        # fallback: store ASCII key (apt will pick it up via apt-key-less method)
+        wget -qO /etc/apt/trusted.gpg.d/cran_ubuntu_key.asc "$CRAN_KEY_URL" || true
+    fi
+
+    CODENAME="$(lsb_release -cs || echo jammy)"
+    echo "deb [signed-by=/etc/apt/trusted.gpg.d/cran_ubuntu_key.gpg] https://cloud.r-project.org/bin/linux/ubuntu ${CODENAME}-cran40/" \
+        > /etc/apt/sources.list.d/cran.list
+
+    "apt-get update (w/ CRAN metadata) attempt"
+    apt-get update
+
+    
+    echo "=== Install R and build dependencies ==="
+    apt-get install -y --no-install-recommends \
+        r-base r-base-dev \
+        build-essential git ccache cmake \
+        python3 python3-pip python3-dev \
+        libssl-dev libcurl4-openssl-dev libxml2-dev \
+        libfontconfig1-dev libharfbuzz-dev libfribidi-dev \
+        libfreetype6-dev libpng-dev libtiff5-dev libjpeg-dev \
+        libx11-dev libmagick++-dev gsfonts pandoc libglpk-dev libwebp-dev \
+        apt-transport-https software-properties-common
+
+    # Remove any conflicting preinstalled R recommended packages to avoid inconsistencies
+    rm -rf /usr/lib/R/library/Matrix /usr/lib/R/library/Recommended || true
+
+
+    # Configure R defaults and ccache
+    echo "options(repos = c(CRAN='https://packagemanager.posit.co/cran/__linux__/jammy/2024-01-01'))" >> /etc/R/Rprofile.site || true
+    echo "options(Ncpus = $(nproc))" >> /etc/R/Rprofile.site || true
+    echo "Sys.setenv(MAKEFLAGS = '-j$(nproc)')" >> /etc/R/Rprofile.site || true
+    mkdir -p /home/r_libs && chmod -R 777 /home/r_libs || true
+
+    mkdir -p /cache/ccache && chmod -R 777 /cache/ccache || true
+    if command -v ccache > /dev/null 2>&1; then
+        ccache --set-config=max_size=8G || true
+        ccache --set-config=compression=true || true
+        ccache --set-config=compression_level=6 || true
+    fi
+
+    
+    echo "=== Install core R packages via /install_base_packages.R ==="
+    echo "Starting R package installation at: $(date -u)"
+    if [ -f /install_base_packages.R ]; then
+        # Run Rscript with trace and capture errors; do not let failures silently pass
+        if ! Rscript /install_base_packages.R; then
+            echo "WARNING: R package installer returned a non-zero exit code" >&2
+            # Continue; user may iterate on R packages separately.
+        fi
+    else
+        echo "No /install_base_packages.R found; skipping R package install" >&2
+    fi
+
+    #
+    # FINAL CLEANUP
+    #
+    echo "=== FINAL CLEANUP ==="
+    apt-get clean || true
+    rm -rf /var/lib/apt/lists/* || true
+
+    echo "=== BASE IMAGE BUILD COMPLETED ==="
+    echo "Build finished at: $(date -u)"

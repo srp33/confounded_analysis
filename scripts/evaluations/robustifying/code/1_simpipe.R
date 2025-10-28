@@ -6,9 +6,16 @@ rm(list=ls())
 setwd("/scripts/evaluations/robustifying")
 # message(getwd())  # Suppressed for cleaner output
 if(!dir.exists("/scripts/evaluations/robustifying/results")){dir.create("/scripts/evaluations/robustifying/results")}
-all(sapply(c("SummarizedExperiment", "plyr", "sva", "MCMCpack", "ROCR", "ggplot2", "limma", "nnls",  "glmnet", 
-             "rpart", "genefilter", "nnet", "e1071", "RcppArmadillo", "foreach", "parallel", "doParallel",  
-             "ranger", "scales"), require, character.only=TRUE, quietly=TRUE))
+# Load packages with better error handling
+required_packages <- c("SummarizedExperiment", "plyr", "sva", "MCMCpack", "ROCR", "ggplot2", "limma", "nnls",  "glmnet", 
+                      "rpart", "genefilter", "nnet", "e1071", "RcppArmadillo", "foreach", "parallel", "doParallel",  
+                      "ranger", "scales")
+package_results <- sapply(required_packages, require, character.only=TRUE, quietly=TRUE)
+failed_packages <- names(package_results)[!package_results]
+if(length(failed_packages) > 0) {
+  cat("Warning: Failed to load packages:", paste(failed_packages, collapse=", "), "\n")
+}
+cat("Package loading results:", all(package_results), "\n")
 
 }))
 source("/scripts/evaluations/robustifying/code/helper.R")

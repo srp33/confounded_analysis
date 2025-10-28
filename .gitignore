@@ -20,3 +20,4 @@ scripts/evaluations/combat_seq_preston/real_data_application/sample_metadata.tsv
 .nfsae4ecd6a6f0374b800009abc
 *.err
 .idea
+*.log
