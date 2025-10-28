@@ -1,5 +1,5 @@
 Bootstrap: localimage
-From: ~/confounded_analysis/grp_batch_effects/remove-batch-effects-fast.sif
+From: /grphome/grp_batch_effects/remove-batch-effects-fast.sif
 
 # Annotation stage - adds custom annotation packages from external sources
 # This stage is separate to allow better debugging and isolation of annotation issues

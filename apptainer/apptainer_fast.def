@@ -1,5 +1,5 @@
 Bootstrap: localimage
-From: ~/confounded_analysis/grp_batch_effects/remove-batch-effects-base.sif
+From: /grphome/grp_batch_effects/remove-batch-effects-base.sif
 
 # Fast-building main image that uses the pre-built base
 # This should build much faster since system deps and core R packages are already installed
