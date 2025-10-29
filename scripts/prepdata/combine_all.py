@@ -13,12 +13,27 @@ def combine_gold_unadjusted_files(gold_dir: Path, output_file: Path):
     Saves combined file to 'output_file'.
     """
     unadjusted_files = list(gold_dir.glob("gse*/unadjusted.csv"))
+    drop_files = ['gse115577', 'gse123845', 'gse163882']
+    unadjusted_files = [x for x in unadjusted_files if x.parent.name not in drop_files]
     if not unadjusted_files:
         raise FileNotFoundError(f"No unadjusted.csv files found in {gold_dir}/GSE*/")
 
     dfs = []
+
+    # DEBUG: Printing first columns to see if Sample_ID is included
+    for f in unadjusted_files:
+        df = pd.read_csv(f, nrows=1)
+        print(f.parent, df.columns.tolist())
+        if 'Unnamed: 0' in df.columns:
+            print("Printing unique values of unnamed:0 columns...")
+            col = df['Unnamed: 0']
+            print("Unique values:", col.is_unique)
+            print("Example values:", col.head())
+
     for f in unadjusted_files:
         df = pd.read_csv(f, low_memory=False)
+        # if 'meta_Sample_ID' in df.columns and 'meta_sample_id' not in df.columns:
+        #     df.rename(columns={'meta_Sample_ID': 'meta_sample_id'}, inplace=True)
         gse_id = f.parent.name
         df['meta_source'] = gse_id
         print_now(f"Loaded {f} with shape {df.shape}")
@@ -28,14 +43,32 @@ def combine_gold_unadjusted_files(gold_dir: Path, output_file: Path):
     common_cols = set(dfs[0].columns)
     for df in dfs[1:]:
         common_cols.intersection_update(df.columns)
-    common_cols = list(common_cols)
 
-    print_now(f"Using {len(common_cols)} common columns across datasets.")
+    extra_cols = {'meta_sample_id', 'meta_source'}
+    available_extra_cols = {col for col in extra_cols if any(col in df.columns for df in dfs)}
+    final_cols = list(common_cols.union(available_extra_cols))
 
-    combined_df = pd.concat([df[common_cols] for df in dfs], ignore_index=True)
+    print_now(f"Using {len(final_cols)} columns across datasets (including meta_sample_id if available).")
+
+    for i, df in enumerate(dfs):
+        missing = set(final_cols) - set(df.columns)
+        for col in missing:
+            df[col] = pd.NA
+        dfs[i] = df[final_cols]
+
+    combined_df = pd.concat(dfs, ignore_index=True)
+
+    # DEBUG: Confirm the meta_source column exists and has expected GSE IDs
+    print_now("Unique meta_source values:", combined_df['meta_source'].unique())
+
+    # DEBUG: Checking for meta columns and their values
+    meta_cols = [col for col in combined_df.columns if col.startswith("meta")]
+    for col in meta_cols:
+        print_now(f"{col}: unique values ->", combined_df[col].unique()[:10])
+
 
     output_file.parent.mkdir(parents=True, exist_ok=True)
-    combined_df.to_csv(output_file, index=False)
+    combined_df.to_csv(output_file, sep="\t", index=False)
     print_now(f"Saved combined data to {output_file} with shape {combined_df.shape}")
 
 def main():
