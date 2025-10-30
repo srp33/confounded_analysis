@@ -3,6 +3,13 @@
 #
 # A friendly wrapper to run commands in the Apptainer container
 # under the grp_batch_effects group.
+# 
+# You can run it in shell mode, or run executables
+# It defaults to using remove-batch-effects.sif, but other images can be specified using --image-path.
+#
+# It runs python, R scripts, and bash scripts automatically without specifying the executable
+#
+# It forwards all arguments appropriately
 #
 # Usage:
 #   ./run_in_apptainer.sh [--image-path <path>] shell
