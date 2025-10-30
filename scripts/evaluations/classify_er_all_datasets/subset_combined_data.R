@@ -7,7 +7,7 @@ library(dplyr)
 
 # ---- Load combined data ----
 # If the first column is gene names, set col_names = TRUE and then set rownames
-combined <- read_tsv("/data/all_combined_data/all_combined.tsv") 
+combined <- read.csv("/data/all_combined_data/all_combined.csv", stringsAsFactors=FALSE) 
 
 # Confirm that the dataset has a column called 'meta_source'
 if (!"meta_source" %in% colnames(combined)) {
@@ -48,9 +48,9 @@ for (k in 2:(length(study_names))) {
         subset_data <- combined %>% 
                 filter(meta_source %in% selected_studies)
 
-        out_file <- file.path(out_dir, paste0("subset_", k, "studies.tsv"))
+        out_file <- file.path(out_dir, paste0("subset_", k, "studies.csv"))
 
-        write_tsv(subset_data, out_file)
+        write_csv(subset_data, out_file)
 }
 
 message("Done! Created one subset for each number of studies (2–", length(study_names), ") in:\n", out_dir)

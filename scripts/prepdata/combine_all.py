@@ -68,7 +68,7 @@ def combine_gold_unadjusted_files(gold_dir: Path, output_file: Path):
 
 
     output_file.parent.mkdir(parents=True, exist_ok=True)
-    combined_df.to_csv(output_file, sep="\t", index=False)
+    combined_df.to_csv(output_file, index=False)
     print_now(f"Saved combined data to {output_file} with shape {combined_df.shape}")
 
 def main():
