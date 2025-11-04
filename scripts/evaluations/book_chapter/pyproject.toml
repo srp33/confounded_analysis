@@ -1,0 +1,9 @@
+[project]
+name = "book-chapter"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "snakemake>=9.13.5",
+]

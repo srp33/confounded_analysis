@@ -14,22 +14,17 @@ The data preparation system follows a modular architecture with five core phases
 
 1. **Dataset Download**: Multi-source acquisition from OSF, Google Drive, and Refinebio with resume capability
 2. **Format Conversion**: Standardization to HDF5, CSV, and RDS formats with gene annotation
-3. **Quality Control**: Comprehensive validation including sample filtering and batch detection
-4. **Dataset Combination**: Automated pairwise combinations for cross-study batch effect analysis
-5. **Synthetic Data Generation**: Controlled datasets with known batch effects for method validation
 
 ### Execution Control
 
 **Main Pipeline Script**: `all.sh`
-- Orchestrates all data preparation phases with intelligent dependency management
-- Supports selective phase execution and caching optimization
-- Integrates with container environments (Docker/Apptainer)
+- Orchestrates all data preparation phases with dependency management
 
 **Individual Phase Scripts**:
-- `download_datasets.py` - Multi-source dataset acquisition
-- `convert_raw_files.py` - Format standardization and conversion
-- `combine_all.py` - Automated dataset combination generation
-- `generate_structured_synthetic.py` - Synthetic data creation
+- `download_datasets.py`
+- `convert_raw_files.py`
+- `combine_all.py` 
+- `generate_structured_synthetic.py`
 
 ## Data Sources and Acquisition
 

@@ -1,0 +1,126 @@
+# --- Config ---
+# Load all parameters from the config file
+configfile: "config.yaml"
+
+OUTPUT_FOLDER = config["output_folder"]
+DATA_FOLDER = config["data_folder"]
+SCRIPTS_FOLDER = config["scripts_folder"]
+
+# Generate the list of seeds based on the config parameters. [count] seeds, starting at [start]
+split_seeds = list(range(config["split_seed_start"], config["split_seed_start"] + config["split_seed_count"]))
+
+# --- Final Target ---
+rule all:
+    input:
+        f"{OUTPUT_FOLDER}/batch_on_classifiers.png",
+        f"{OUTPUT_FOLDER}/adjusters_on_classifiers.png"
+
+
+## Figure 1 Pipeline: How does each classifier respond to batch effects?
+
+# Step 1.3: Create the batch effect plot
+rule make_fig1:
+    input:
+        data=f"data/batch_on_classifiers.csv"
+    output:
+        f"{OUTPUT_FOLDER}/batch_on_classifiers.png"
+    log:
+        f"{OUTPUT_FOLDER}/logs/plot_batch_on_classifiers.log"
+    shell:
+        """
+        python {SCRIPTS_FOLDER}/plot_batch_on_classifiers.py -i {DATA_FOLDER}/batch_on_classifiers.csv -o {output} 2>&1 | tee {log}
+        """
+
+
+# Step 1.2: Aggregate all individual batch effect results
+rule aggregate_batch_effects:
+    input:
+        expand(
+            OUTPUT_FOLDER + "/results/batch_effects/{classifier}_{mean}_{variance}_{seed}.csv",
+            classifier=config["classifiers"],
+            variance=config["batch_effect_variances"],
+            mean=config["batch_effect_means"],
+            seed=split_seeds
+        )
+    output:
+        f"{DATA_FOLDER}/batch_on_classifiers.csv"
+    log:
+        f"{OUTPUT_FOLDER}/logs/aggregate_batch_effects.log"
+    params:
+        input_dir=f"{OUTPUT_FOLDER}/results/batch_effects"
+    shell:
+        """
+        python {SCRIPTS_FOLDER}/aggregate_results.py --input-dir {params.input_dir} -o {output} \
+            2>&1 | tee {log}
+        """
+
+
+# Step 1.1: Run classification on simulated data
+rule classify_batch_effects:
+    input:
+        data=f"{DATA_FOLDER}/combined_sub.RData"
+    output:
+        f"{OUTPUT_FOLDER}/results/batch_effects/{{classifier}}_{{mean}}_{{variance}}_{{seed}}.csv"
+    log:
+        f"{OUTPUT_FOLDER}/logs/classify_batch_effects/{{classifier}}_{{mean}}_{{variance}}_{{seed}}.log"
+    shell:
+        """
+        python {SCRIPTS_FOLDER}/classify_batch_effects.py -o {output} \
+            --mean {mean} --var {variance} --classifier {classifier} --seed {seed} \
+            2>&1 | tee {log}
+        """
+
+
+## Figure 2 Pipeline: How does each adjuster help mitigate batch effects, for each classifier?
+
+# Step 2.3: Create the adjuster plot
+rule make_fig2:
+    input:
+        data=f"{DATA_FOLDER}/adjusters_on_classifiers.csv"
+    output:
+        f"{OUTPUT_FOLDER}/adjusters_on_classifiers.png"
+    log:
+        f"{OUTPUT_FOLDER}/logs/plot_adjusters_on_classifiers.log"
+    shell:
+        """
+        python {SCRIPTS_FOLDER}/plot_adjusters_on_classifiers.py 2>&1 | tee {log}
+        """
+
+
+# Step 2.2: Aggregate all individual adjuster results
+rule aggregate_adjusters:
+    input:
+        expand(
+            OUTPUT_FOLDER + "/results/adjusters/{adjuster}_{classifier}_{seed}.csv",
+            adjuster=config["adjusters"],
+            classifier=config["classifiers"],
+            seed=split_seeds
+        )
+    output:
+        f"{DATA_FOLDER}/adjusters_on_classifiers.csv"
+    log:
+        f"{OUTPUT_FOLDER}/logs/aggregate_adjusters.log"
+    params:
+        input_dir=f"{OUTPUT_FOLDER}/results/adjusters"
+    shell:
+        """
+        python {SCRIPTS_FOLDER}/aggregate_results.py \
+            --input-dir {params.input_dir} -o {output} \
+            2>&1 | tee {log}
+        """
+
+
+# Step 2.1: Run classification on real data
+rule classify_adjusters:
+    input:
+        data=f"{DATA_FOLDER}/TB_real_data.RData"
+    output:
+        f"{OUTPUT_FOLDER}/results/adjusters/{{adjuster}}_{{classifier}}_{{seed}}.csv"
+    log:
+        f"{OUTPUT_FOLDER}/logs/classify_adjusters/{{adjuster}}_{{classifier}}_{{seed}}.log"
+    shell:
+        """
+        python {SCRIPTS_FOLDER}/classify_adjusters.py -o {output} \
+            --adjuster {adjuster} --classifier {classifier} --seed {seed} \
+            2>&1 | tee {log}
+        """

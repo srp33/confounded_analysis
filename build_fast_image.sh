@@ -11,8 +11,7 @@
 
 module load apptainer
 
-echo "Building fast image from pre-built base..."
-echo "This should be much faster since system deps and core R packages are already installed."
+echo "Building fast image from base image..."
 
 # Check if base image exists
 BASE_IMAGE="$HOME/confounded_analysis/grp_batch_effects/remove-batch-effects-base.sif"
