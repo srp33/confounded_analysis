@@ -19,7 +19,7 @@ ADJ=${ADJUSTERS[$ADJ_IDX]}
 echo "Running adjuster: $ADJ on subset: $SUBSET_IDX"
 
 apptainer exec ~/confounded_analysis/apptainer/remove-batch-effects.sif \
-    Rscript scripts/evaluations/classify_er_all_datasets/run_scaling_experiment.R \
+    Rscript ~/confounded_analysis/scripts/evaluations/classify_er_all_datasets/run_scaling_experiment.R \
     "$ADJ" "$SUBSET_IDX"
 
 

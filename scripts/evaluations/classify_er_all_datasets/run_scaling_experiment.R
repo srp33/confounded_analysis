@@ -20,7 +20,7 @@ subset_index <- as.integer(args[2])
 cat("Running scaling experiment with adjuster:", adjuster, "on subset:", subset_index, "\n")
 
 # ---- Source adjustment functions ----
-source("scripts/adjust/adjust.R")
+source("/scripts/adjust/adjust.R")
 
 # ---- Adjustment wrapper ----
 apply_adjustment <- function(df, method, test_source) {
