@@ -33,7 +33,7 @@ export NUMBA_CACHE_DIR="/tmp/numba_cache"
     /opt/conda/bin/conda config --set solver classic
     /opt/conda/bin/conda install -y -c conda-forge mamba
     /opt/conda/bin/mamba install -y -c conda-forge numpy 'scikit-learn>=1.4' pandas pytorch matplotlib \
-                                        aif360 tabulate jaxtyping beartype pytables opentsne umap-learn geoparse uv seaborn \
+                                        aif360 tabulate jaxtyping beartype pytables opentsne umap-learn geoparse uv snakemake seaborn \
                                         psutil tqdm rich memory_profiler py-cpuinfo
     /opt/conda/bin/pip install gdown osfclient pybiomart
     /opt/conda/bin/conda clean --all -y

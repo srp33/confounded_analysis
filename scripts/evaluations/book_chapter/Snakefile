@@ -14,10 +14,6 @@ rule all:
     input:
         f"{OUTPUT_FOLDER}/batch_on_classifiers.png",
         f"{OUTPUT_FOLDER}/adjusters_on_classifiers.png"
-    shell:
-        """
-        ls
-        """
 
 
 ## Figure 1 Pipeline: How does each classifier respond to batch effects?
