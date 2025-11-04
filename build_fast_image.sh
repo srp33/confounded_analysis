@@ -57,4 +57,4 @@ echo "Fast build successful!"
 echo "Your container is ready at: ~/confounded_analysis/apptainer/remove-batch-effects-fast.sif"
 echo "Now running build_annotations_image.sh"
 
-sbatch build_annotations_image.sh
+sbatch $HOME/confounded_analysis/build_annotations_image.sh

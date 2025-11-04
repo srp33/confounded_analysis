@@ -96,6 +96,6 @@ echo "Base image build successful!"
 echo "Logs written to $DIAG_LOG"
 echo "Now running build_fast_image.sh."
 
-sbatch build_fast_image.sh
+sbatch $HOME/confounded_analysis/build_fast_image.sh
 
 
