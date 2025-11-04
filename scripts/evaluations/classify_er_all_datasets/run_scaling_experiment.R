@@ -1,84 +1,83 @@
-# This script will take arguments
-# Usage: Rscript run_scaling_experiment.R --adjuster log_combat
-
-# Loop through subsets 2-14 and load the csv, 
-#  - identify meta_source values,
-#  - split train/test, 
-#  - apply chosen adjuster, 
-#  - call modeling function, 
-#  - and write to csv
+# Usage:
+#   Rscript run_scaling_experiment.R <adjuster> <subset_index>
+# Example:
+#   Rscript run_scaling_experiment.R log_combat 2
 
 suppressPackageStartupMessages({
-    library(optparse)
-    library(readr)
-    library(dplyr)
-    library(reticulate)
+  library(readr)
+  library(dplyr)
 })
 
 # ---- Parse Arguments ----
-option_list <- list(
-    make_option("--adjuster", type = "character", help = "Adjustment method name")
-)
-opt <- parse_args(OptionParser(option_list = option_list))
-adjuster <- opt$adjuster
+args <- commandArgs(trailingOnly = TRUE)
+if (length(args) < 2) {
+  stop("Usage: Rscript run_scaling_experiment.R <adjuster> <subset_index>")
+}
 
-cat("Running scaling experiment with adjuster:", adjuster, "\n")
+adjuster <- args[1]
+subset_index <- as.integer(args[2])
 
-# ---- Source R scripts ----
+cat("Running scaling experiment with adjuster:", adjuster, "on subset:", subset_index, "\n")
+
+# ---- Source adjustment functions ----
 source("scripts/adjust/adjust.R")
-source("scripts/evaluations/classify_er_all_datasets/sklearn_helpers.R", local = TRUE)
 
+# ---- Adjustment wrapper ----
 apply_adjustment <- function(df, method, test_source) {
-    if (method != "gmm") {
-        df[, sapply(df, is.numeric)] <- log1p(df[, sapply(df, is.numeric)])
-        cat("Applying log transform before ", method, "\n")
+  meta_cols <- df %>% select(starts_with("meta_"))
+  num_cols <- df %>% select(where(is.numeric))
+
+  if (ncol(num_cols) == 0) stop("No numeric columns found in dataset.")
+
+  if (method != "gmm") {
+    if (any(num_cols < 0, na.rm = TRUE)) {
+      warning("Negative values found in numeric columns; consider shifting data.")
     }
-    
-    cat("Applying adjustment method: ", method, "\n")
-    if (method == "min_mean") {
-        adjusted <- adjust_min_mean(df)
-    } else if (method == "log_combat") {
-        adjusted <- adjust_log_combat(df, ref_batch = unique(df$meta_source)[1])
-    } else if (method == "mnn") {
-        adjusted <- adjust_mnn(df, merge_last = test_source)
-    } else if (method == "gmm") {
-        adjusted <- adjust_gmm(df)
-    } else {
-        stop("Unknown adjuster: ", method)
-    }
-    return(adjusted)
+    # Safe log transform (shift by min if negatives exist)
+    shift <- ifelse(any(num_cols < 0, na.rm = TRUE), abs(min(num_cols, na.rm = TRUE)) + 1, 0)
+    num_cols <- log1p(num_cols + shift)
+    cat("Applying log transform before ", method, "\n")
+  }
+
+  cat("Applying adjustment method:", method, "\n")
+  adjusted <- switch(method,
+                     min_mean = adjust_min_mean(num_cols),
+                     log_combat = adjust_log_combat(num_cols, ref_batch = unique(df$meta_source)[1]),
+                     mnn = adjust_mnn(num_cols, merge_last = test_source),
+                     gmm = adjust_gmm(num_cols),
+                     stop("Unknown adjuster: ", method)
+  )
+
+  # Recombine metadata safely
+  adjusted_df <- bind_cols(meta_cols, adjusted)
+  return(adjusted_df)
 }
 
-# Leave one out loop
-for (n_studies in 2:14) {
-    subset_path <- sprintf("grp_batch_effects/data/all_combined_subsets/subset_%dstudies.csv", n_studies)
-    cat("\nProcessing:", subset_path, "\n")
-    df <- read_csv(subset_path)
+# ---- Process single subset ----
+subset_path <- sprintf("data/all_combined_subsets/subset_%dstudies.csv", subset_index)
+cat("\nProcessing:", subset_path, "\n")
 
-    sources <- unique(df$meta_source)
-    for (test_source in sources) {
-        adjusted_df <- apply_adjustment(df, method = adjuster, test_source = test_source)
-
-        df_train <- adjusted_df %>% filter(meta_source != test_source)
-        df_test <- adjusted_df %>% filter(meta_source == test_source)
-
-        # Run classification (reusing function)
-        metrics_df <- run_sklearn_model(
-            X_train = df_train %>% select(where(is.numeric)),
-            y_train = df_train$meta_er_status,
-            X_test = df_test %>% select(where(is.numeric)),
-            y_test = df_test$meta_er_status
-        )
-
-        # Add metadata to metrics_df
-        metrics_df$adjuster <- adjuster
-        metrics_df$subset <- n_studies
-        metrics_df$test <- test_source
-
-        # Save result
-        out_path <- sprintf("grp_batch_effects/outputs/er_all_datasets/%dstudies_test%s.csv",
-                            n_studies, test_source)
-        if (!dir.exists(dirname(out_path))) dir.create(dirname(out_path), recursive = TRUE)
-        write_csv(metrics_df, out_path)
-    }
+if (!file.exists(subset_path)) {
+  stop("Missing subset file:", subset_path)
 }
+
+df <- read_csv(subset_path, show_col_types = FALSE)
+sources <- unique(df$meta_source)
+
+for (test_source in sources) {
+  cat("  -> Test source:", test_source, "\n")
+  tryCatch({
+    adjusted_df <- apply_adjustment(df, method = adjuster, test_source = test_source)
+
+    out_dir <- file.path("data/adjusted_datasets", adjuster)
+    if (!dir.exists(out_dir)) dir.create(out_dir, recursive = TRUE)
+
+    out_path <- file.path(out_dir, sprintf("subset%dstudies_test_%s.csv", subset_index, test_source))
+    write_csv(adjusted_df, out_path)
+    cat("Saved adjusted dataset to:", out_path, "\n")
+  }, error = function(e) {
+    cat("⚠️  Error while processing subset", subset_index, "test source", test_source, ":", conditionMessage(e), "\n")
+  })
+}
+
+cat("\n=== Finished subset", subset_index, "for adjuster:", adjuster, "===\n")

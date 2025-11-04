@@ -61,11 +61,6 @@ cat("Installing packages:", paste(heavy_cran_batch, collapse = ", "), "\n")
 pak::pkg_install(heavy_cran_batch)
 cat("Batch 2 completed at:", as.character(Sys.time()), "\n")
 
-# Batch 2.5: R to Python packages
-additional_core_packages <- c("reticulate", "optparse")
-cat("Installing additional core packages:", paste(additional_core_packages, collapse=", "), "\n")
-pak::pkg_install(additional_core_packages)
-
 # Batch 3: Bioconductor packages
 cat("--- Batch 3: Bioconductor packages ---\n")
 cat("Batch 3 started at:", as.character(Sys.time()), "\n")
