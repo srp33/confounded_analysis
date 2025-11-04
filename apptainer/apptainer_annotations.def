@@ -2,7 +2,6 @@ Bootstrap: localimage
 From: /grphome/grp_batch_effects/remove-batch-effects-fast.sif
 
 # Annotation stage - adds custom annotation packages from external sources
-# This stage is separate to allow better debugging and isolation of annotation issues
 
 %environment
 # Inherit all environment variables from previous stages

@@ -7,7 +7,7 @@ export LC_ALL="C.UTF-8"
 export TZ="America/Denver"
 export R_LIBS_USER="/home/r_libs"
 
-# Configure ccache for builds (optional)
+# Configure ccache for builds
 export PATH="/usr/lib/ccache:$PATH"
 export CC="ccache gcc"
 export CXX="ccache g++"
@@ -20,11 +20,8 @@ export CCACHE_COMPRESSLEVEL="6"
     apptainer/install_base_packages.R /install_base_packages.R
 
 %post
-    #
-    # Minimal, robust system setup + R tooling for Ubuntu 22.04
     # Key idea: update via existing APT metadata, install ca-certificates,
     # then switch to HTTPS and proceed.
-    #
     set -ex
 
     echo "=== STARTING BASE IMAGE BUILD ==="
@@ -36,7 +33,7 @@ export CCACHE_COMPRESSLEVEL="6"
 
     export DEBIAN_FRONTEND=noninteractive
 
-    # Add conservative apt options (retries, prefer IPv4 if needed)
+    # Add apt options (retries, prefer IPv4 if needed)
     echo 'Acquire::Retries "5";' > /etc/apt/apt.conf.d/80-retries
     echo 'APT::Acquire::Retries "3";' >> /etc/apt/apt.conf.d/80-retries
     # Not forcing IPv4 by default, but allow override via env var FORCE_IPV4=1
@@ -67,7 +64,6 @@ export CCACHE_COMPRESSLEVEL="6"
 
 
     echo "=== Add CRAN apt repository and key for a broadly compatible R release (CRAN apt for Jammy) ==="
-    # Add the CRAN key and repository in a robust manner.
     CRAN_KEY_URL="https://cloud.r-project.org/bin/linux/ubuntu/marutter_pubkey.asc"
     mkdir -p /etc/apt/trusted.gpg.d
     if command -v gpg > /dev/null 2>&1; then
@@ -121,15 +117,11 @@ export CCACHE_COMPRESSLEVEL="6"
         # Run Rscript with trace and capture errors; do not let failures silently pass
         if ! Rscript /install_base_packages.R; then
             echo "WARNING: R package installer returned a non-zero exit code" >&2
-            # Continue; user may iterate on R packages separately.
         fi
     else
         echo "No /install_base_packages.R found; skipping R package install" >&2
     fi
 
-    #
-    # FINAL CLEANUP
-    #
     echo "=== FINAL CLEANUP ==="
     apt-get clean || true
     rm -rf /var/lib/apt/lists/* || true
