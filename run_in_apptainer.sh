@@ -44,16 +44,11 @@ show_help() {
     echo "Default sbatch settings: --time 1:00:00 --mem 32G --ntasks 4 --nodes 1"
 }
 
-# Parse global options using getopt (assumes --image-path comes first)
-PARSED=$(getopt -o +i:h --long image-path:,help -n "$0" -- "$@")
-if [[ $? -ne 0 ]]; then
-    echo "Error parsing arguments. Use --help for usage information." >&2
-    exit 1
-fi
-eval set -- "$PARSED"
-
+# Parse global options manually to handle mixed option styles
+TEMP_ARGS=()
 CUSTOM_IMAGE_PATH=""
-while true; do
+
+while [[ $# -gt 0 ]]; do
     case $1 in
         -i|--image-path)
             CUSTOM_IMAGE_PATH="$2"
@@ -63,16 +58,18 @@ while true; do
             show_help
             exit 0
             ;;
-        --)
-            shift
-            break
-            ;;
         *)
-            echo "Programming error in argument parsing" >&2
-            exit 3
+            # Save remaining arguments for later processing
+            TEMP_ARGS+=("$1")
+            shift
             ;;
     esac
 done
+
+# Restore remaining arguments
+set -- "${TEMP_ARGS[@]}"
+
+
 
 # Check if we have at least one command argument
 if [ $# -lt 1 ]; then
@@ -144,7 +141,8 @@ case "$MODE" in
         declare -A SBATCH_PARAMS=(
             ["--time"]="1:00:00"
             ["--mem"]="32G"
-            ["--ntasks"]="4"
+            ["--ntasks"]="1"
+            ["--cpus-per-task"]="4"
             ["--nodes"]="1"
         )
         SBATCH_FLAGS=()
