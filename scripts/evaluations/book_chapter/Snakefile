@@ -36,7 +36,7 @@ rule make_fig1:
 rule aggregate_batch_effects:
     input:
         expand(
-            OUTPUT_FOLDER + "/results/batch_effects/{classifier}_{mean}_{variance}_{seed}.csv",
+            OUTPUT_FOLDER + "/results/batch_effects/individual/{classifier}_{mean}_{variance}_{seed}.csv",
             classifier=config["classifiers"],
             variance=config["batch_effect_variances"],
             mean=config["batch_effect_means"],
@@ -47,7 +47,7 @@ rule aggregate_batch_effects:
     log:
         OUTPUT_FOLDER + "/logs/aggregate_batch_effects.log"
     params:
-        input_dir=OUTPUT_FOLDER + "/results/batch_effects"
+        input_dir=OUTPUT_FOLDER + "/results/batch_effects/individual"
     shell:
         """
         Rscript {SCRIPTS_FOLDER}/aggregate_results.R --input-dir {params.input_dir} -o {output} \
@@ -60,7 +60,7 @@ rule classify_batch_effects:
     input:
         data=DATA_FOLDER + "/combined_sub.RData"
     output:
-        OUTPUT_FOLDER + "/results/batch_effects/{classifier}_{mean}_{variance}_{seed}.csv"
+        OUTPUT_FOLDER + "/results/batch_effects/individual/{classifier}_{mean}_{variance}_{seed}.csv"
     log:
         OUTPUT_FOLDER + "/logs/classify_batch_effects/{classifier}_{mean}_{variance}_{seed}.log"
     threads: 1
@@ -95,7 +95,7 @@ rule make_fig2:
 rule aggregate_adjusters:
     input:
         expand(
-            OUTPUT_FOLDER + "/results/adjusters/{adjuster}_{classifier}_{n_datasets}_{seed}.csv",
+            OUTPUT_FOLDER + "/results/adjusters/individual/{adjuster}_{classifier}_{n_datasets}_{seed}.csv",
             adjuster=config["adjusters"],
             classifier=config["classifiers"],
             n_datasets=config["num_datasets"],
@@ -106,7 +106,7 @@ rule aggregate_adjusters:
     log:
         OUTPUT_FOLDER + "/logs/aggregate_adjusters.log"
     params:
-        input_dir=OUTPUT_FOLDER + "/results/adjusters"
+        input_dir=OUTPUT_FOLDER + "/results/adjusters/individual"
     shell:
         """
         Rscript {SCRIPTS_FOLDER}/aggregate_results.R \
@@ -120,7 +120,7 @@ rule classify_adjusters:
     input:
         data=DATA_FOLDER + "/TB_real_data.RData"
     output:
-        OUTPUT_FOLDER + "/results/adjusters/{adjuster}_{classifier}_{n_datasets}_{seed}.csv"
+        OUTPUT_FOLDER + "/results/adjusters/individual/{adjuster}_{classifier}_{n_datasets}_{seed}.csv"
     log:
         OUTPUT_FOLDER + "/logs/classify_adjusters/{adjuster}_{classifier}_{n_datasets}_{seed}.log"
     threads: 1

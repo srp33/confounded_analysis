@@ -41,7 +41,7 @@ args <- parser$parse_args()
 
 # Parameter validation
 valid_adjusters <- c("unadjusted", "combat", "mnn")
-valid_classifiers <- c("logistic", "elnet", "svm", "rf", "lightgbm", "nnet")
+valid_classifiers <- c("logistic", "elnet", "svm", "rf", "lightgbm", "nnet", "knn", "xgboost")
 valid_num_datasets <- c(3, 4, 5, 6)
 
 if (!args$adjuster %in% valid_adjusters) {
