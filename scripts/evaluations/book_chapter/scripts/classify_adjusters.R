@@ -426,9 +426,15 @@ main_analysis_function <- function() {
     # Calculate performance using original perf_wrapper function
     perf_results <- perf_wrapper(perf_measures, predictions_list, test_labels)
     
+    # Calculate confusion matrix elements and derived metrics
+    confusion_results <- confusion_matrix_wrapper(predictions_list, test_labels)
+    
+    # Combine performance metrics and confusion matrix metrics
+    combined_results <- rbind(perf_results, confusion_results)
+    
     # Extract performance values for this method
-    perf_values <- perf_results[, adjuster]
-    names(perf_values) <- rownames(perf_results)
+    perf_values <- combined_results[, adjuster]
+    names(perf_values) <- rownames(combined_results)
     
     return(list(
       model = trained_model,
