@@ -124,11 +124,9 @@ main_job_wrapper <- function() {
     # Check input files
     data_path <- "/scripts/evaluations/book_chapter/data/TB_real_data.RData"
     helper_path <- "/scripts/evaluations/book_chapter/scripts/helper.R"
-    common_path <- "/scripts/evaluations/book_chapter/scripts/common_functions.R"
     
     cat(sprintf("[ERROR] Data file exists: %s\n", file.exists(data_path)), file = stderr())
     cat(sprintf("[ERROR] Helper file exists: %s\n", file.exists(helper_path)), file = stderr())
-    cat(sprintf("[ERROR] Common functions file exists: %s\n", file.exists(common_path)), file = stderr())
     
     # Memory usage
     gc_info <- capture.output(gc())
@@ -158,13 +156,12 @@ main_analysis_function <- function() {
   
   load(data_path)
   source("/scripts/evaluations/book_chapter/scripts/helper.R")
-  source("/scripts/evaluations/book_chapter/scripts/common_functions.R")
   
   # Set seed for reproducibility
   set.seed(seed)
   
   # ====================================================================
-  # REAL DATA PREPARATION LOGIC (extracted from common_functions.R)
+  # REAL DATA PREPARATION LOGIC
   # ====================================================================
   
   #' Filter studies based on analysis type

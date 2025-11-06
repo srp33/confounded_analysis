@@ -51,13 +51,28 @@ if (length(missing_cols) > 0) {
   stop("Missing required columns: ", paste(missing_cols, collapse = ", "))
 }
 
-# Filter to MXE metric (cross entropy) for the main visualization
-mxe_data <- data[data$metric == "mxe", ]
+cat("Available metrics:", paste(sort(unique(data$metric)), collapse = ", "), "\n")
+
+# Filter to Balanced Accuracy metric for the main visualization
+mxe_data <- data[data$metric == "acc", ]
 if (nrow(mxe_data) == 0) {
-  stop("No MXE data found in input file")
+  stop("No Balanced Accuracy data found in input file")
 }
 
-cat("Filtered to", nrow(mxe_data), "MXE observations\n")
+cat("Filtered to", nrow(mxe_data), "Balanced Accuracy observations\n")
+
+# Debug n_datasets values
+cat("Unique n_datasets values:", paste(sort(unique(mxe_data$n_datasets)), collapse = ", "), "\n")
+cat("n_datasets value counts:\n")
+print(table(mxe_data$n_datasets, useNA = "always"))
+
+# Check for and report missing n_datasets values
+na_count <- sum(is.na(mxe_data$n_datasets))
+if (na_count > 0) {
+  cat("Warning: Found", na_count, "rows with missing n_datasets values. Removing them.\n")
+  mxe_data <- mxe_data[!is.na(mxe_data$n_datasets), ]
+  cat("After removing NA values:", nrow(mxe_data), "observations remain\n")
+}
 
 # Create better labels and groupings
 mxe_data$classifier_label <- factor(mxe_data$classifier,
@@ -72,6 +87,15 @@ mxe_data$adjuster_type <- "Batch Correction"
 mxe_data$adjuster_type[mxe_data$adjuster == "unadjusted"] <- "Original Data"
 
 mxe_data$dataset_label <- paste(mxe_data$n_datasets, "studies")
+
+# Convert to factor with explicit levels to avoid NA levels
+mxe_data$dataset_label <- factor(mxe_data$dataset_label, 
+                                levels = c("3 studies", "4 studies", "5 studies", "6 studies"))
+
+# Debug dataset_label values
+cat("Unique dataset_label values:", paste(sort(unique(mxe_data$dataset_label)), collapse = ", "), "\n")
+cat("dataset_label value counts:\n")
+print(table(mxe_data$dataset_label, useNA = "always"))
 
 cat("Creating figure\n")
 
@@ -89,7 +113,7 @@ sumstats <- mxe_data %>%
 freq_data <- mxe_data %>%
   group_by(classifier_label, dataset_label, seed) %>%
   summarise(
-    best_adjuster = adjuster_label[which.min(value)],
+    best_adjuster = adjuster_label[which.max(value)],
     .groups = "drop"
   ) %>%
   group_by(classifier_label, dataset_label, best_adjuster) %>%
@@ -116,23 +140,57 @@ sumstats <- sumstats %>%
     annot = ifelse(is.na(pct), "", percent(pct, accuracy = 1))
   )
 
+# Debug final sumstats
+cat("Unique dataset_label values in sumstats:", paste(sort(unique(sumstats$dataset_label)), collapse = ", "), "\n")
+cat("Any NA values in sumstats dataset_label:", any(is.na(sumstats$dataset_label)), "\n")
+
 # Create color scheme (following original pattern)
 type_colors <- c("Original Data" = "#999999", "Batch Correction" = "#E69F00")
 
+# Determine which classifiers actually have data (excluding NA classifiers)
+classifiers_with_data <- sumstats %>%
+  filter(!is.na(classifier_label)) %>%
+  group_by(classifier_label) %>%
+  summarise(has_data = n() > 0, .groups = "drop") %>%
+  filter(has_data) %>%
+  pull(classifier_label)
+
+cat("Classifiers with data:", paste(classifiers_with_data, collapse = ", "), "\n")
+
 # Create individual plots for each classifier (grouped by classifier first)
 plot_list <- list()
-classifiers <- levels(mxe_data$classifier_label)
 
-for (classifier in classifiers) {
-  plot_data <- sumstats[sumstats$classifier_label == classifier, ]
+for (classifier in classifiers_with_data) {
+  plot_data <- sumstats[sumstats$classifier_label == classifier & !is.na(sumstats$classifier_label), ]
   
-  p <- ggplot(plot_data, aes(x = adjuster_label, y = Avg, color = adjuster_type)) +
-    geom_errorbar(aes(ymin = Down, ymax = Up), width = 0.1) +
-    geom_text(aes(label = annot, y = Up), color = "black", size = 3, vjust = -0.5) +
-    geom_line(aes(group = 1), color = "grey", size = 0.5) +
-    geom_point(size = 2) +
+  # Skip if no data after filtering
+  if (nrow(plot_data) == 0) {
+    cat("Skipping", classifier, "- no data after filtering\n")
+    next
+  }
+  
+  # Ensure consistent factor levels across all plots (only the valid ones)
+  plot_data$dataset_label <- factor(plot_data$dataset_label, 
+                                   levels = c("3 studies", "4 studies", "5 studies", "6 studies"))
+  plot_data$adjuster_label <- factor(plot_data$adjuster_label,
+                                    levels = c("Unadjusted", "ComBat", "MNN"))
+  
+  # Debug plot_data for this classifier
+  cat("Classifier:", classifier, "\n")
+  cat("  Unique dataset_label values in plot_data:", paste(sort(unique(plot_data$dataset_label)), collapse = ", "), "\n")
+  cat("  Factor levels of dataset_label:", paste(levels(plot_data$dataset_label), collapse = ", "), "\n")
+  
+  # Get raw data for this classifier for boxplots
+  raw_data <- mxe_data[mxe_data$classifier_label == classifier & !is.na(mxe_data$classifier_label), ]
+  
+  p <- ggplot(raw_data, aes(x = adjuster_label, y = value, fill = adjuster_type)) +
+    geom_boxplot(outlier.shape = 16, outlier.size = 1, alpha = 0.7) +
+    geom_text(data = plot_data, aes(x = adjuster_label, y = Avg + 0.05 * diff(range(raw_data$value)), 
+                                   label = annot, fill = NULL), 
+              color = "black", size = 3, vjust = 0) +
     facet_wrap(~ dataset_label, scales = "fixed", ncol = 4) +
-    scale_color_manual(values = type_colors) +
+    scale_y_continuous(expand = expansion(mult = c(0.05, 0.15))) +
+    scale_fill_manual(values = type_colors) +
     theme_bw() +
     theme(
       axis.title.x = element_blank(),
@@ -147,39 +205,45 @@ for (classifier in classifiers) {
       plot.title = element_text(size = 12, hjust = 0.5)
     ) +
     labs(
-      y = "Mean Cross-Entropy Loss",
+      y = "Accuracy",
       title = paste("Adjuster Effectiveness -", classifier)
     )
   
-  plot_list[[classifier]] <- p
+  plot_list[[as.character(classifier)]] <- p
 }
 
-# Create legend from one of the plots
+# Debug plot_list structure
+cat("Plot list names:", paste(names(plot_list), collapse = ", "), "\n")
+cat("Plot list length:", length(plot_list), "\n")
+
+# Create legend from the first available plot
+first_plot_name <- names(plot_list)[1]
 legend <- get_legend(
-  plot_list[["Logistic"]] + 
+  plot_list[[first_plot_name]] + 
     theme(legend.position = "bottom", legend.direction = "horizontal") +
     guides(color = guide_legend(title = NULL))
 )
 
-# Arrange plots in a grid (8 classifiers arranged in 4x2 grid)
-combined_plots <- ggarrange(
-  plot_list[["Logistic"]], plot_list[["ElasticNet"]],
-  plot_list[["SVM"]], plot_list[["Random Forest"]],
-  plot_list[["KNN"]], plot_list[["XGBoost"]],
-  plot_list[["Neural Net"]], plot_list[["LightGBM"]],
-  ncol = 2, nrow = 4,
-  common.legend = TRUE,
-  legend = "bottom"
-)
+# Try a simpler approach with grid.arrange
+library(gridExtra)
+plot_vector <- unname(plot_list)
 
-# Add overall title
-final_plot <- annotate_figure(
-  combined_plots,
-  top = text_grob("Batch Correction Method Effectiveness Across Classifiers", 
-                  face = "bold", size = 16),
-  bottom = text_grob("Lower values indicate better performance. Percentages show frequency of being the best method.",
-                     size = 10, color = "grey40")
-)
+# Arrange plots manually based on how many we have
+if (length(plot_vector) == 4) {
+  final_plot <- grid.arrange(
+    plot_vector[[1]], plot_vector[[2]],
+    plot_vector[[3]], plot_vector[[4]],
+    legend,
+    ncol = 2, nrow = 3,
+    heights = c(1, 1, 0.1)
+  )
+} else {
+  # Fallback for other numbers of plots
+  final_plot <- grid.arrange(
+    grobs = c(plot_vector, list(legend)),
+    ncol = 2
+  )
+}
 
 # Save the plot
 cat("Saving plot to:", args$output, "\n")

@@ -21,6 +21,69 @@ perf_wrapper <- function(perf_names, tst_scores, ytest){
   return(perf_df)
 }
 
+# Calculate confusion matrix elements and derived metrics
+confusion_matrix_wrapper <- function(tst_scores, ytest, threshold = 0.5) {
+  # Convert test labels to numeric
+  ytest_numeric <- as.numeric(as.character(ytest))
+  
+  # Calculate confusion matrix elements for each method
+  confusion_metrics <- sapply(tst_scores, function(preds) {
+    # Convert predictions to binary using threshold
+    pred_binary <- as.numeric(preds >= threshold)
+    
+    # Calculate confusion matrix elements
+    tp <- sum(pred_binary == 1 & ytest_numeric == 1)
+    fp <- sum(pred_binary == 1 & ytest_numeric == 0)
+    tn <- sum(pred_binary == 0 & ytest_numeric == 0)
+    fn <- sum(pred_binary == 0 & ytest_numeric == 1)
+    
+    # Calculate derived metrics
+    # Matthews Correlation Coefficient
+    mcc_denom <- sqrt((tp + fp) * (tp + fn) * (tn + fp) * (tn + fn))
+    mcc <- if(mcc_denom == 0) 0 else (tp * tn - fp * fn) / mcc_denom
+    
+    # Precision and Recall
+    precision <- if(tp + fp == 0) 0 else tp / (tp + fp)
+    recall <- if(tp + fn == 0) 0 else tp / (tp + fn)
+    
+    # Specificity
+    specificity <- if(tn + fp == 0) 0 else tn / (tn + fp)
+    
+    # Balanced Accuracy
+    sensitivity <- recall  # Same as recall
+    balanced_acc <- (sensitivity + specificity) / 2
+    
+    return(c(
+      tp = tp, fp = fp, tn = tn, fn = fn,
+      mcc = mcc, precision = precision, recall = recall, 
+      specificity = specificity, balanced_acc = balanced_acc
+    ))
+  })
+  
+  # Convert to data frame with proper structure
+  # confusion_metrics should be a matrix with 9 rows (metrics) and n columns (methods)
+  # After transpose: n rows (methods) and 9 columns (metrics)
+  confusion_transposed <- t(confusion_metrics)
+  confusion_df <- as.data.frame(confusion_transposed)
+  
+  # The rownames should be the metric names, but we transposed so they become column names
+  expected_colnames <- c("tp", "fp", "tn", "fn", "mcc", "precision", "recall", "specificity", "balanced_acc")
+  if(ncol(confusion_df) == length(expected_colnames)) {
+    colnames(confusion_df) <- expected_colnames
+  }
+  
+  # Now transpose back to get metrics as rows and methods as columns (like perf_df)
+  confusion_df <- as.data.frame(t(confusion_df))
+  
+  # Remove any problematic row names
+  if(!is.null(rownames(confusion_df))) {
+    # Ensure row names are valid
+    rownames(confusion_df) <- make.names(rownames(confusion_df), unique = TRUE)
+  }
+  
+  return(confusion_df)
+}
+
 
 
 ####  Helpers related to inverse gamma distribution
@@ -296,11 +359,15 @@ predRF <- function(
 ){
   library(caret, quietly = TRUE)
   
-  training_df <- data.frame(t(trn_set), as.factor(y_trn))
+  trn_transposed <- t(trn_set)
+  rownames(trn_transposed) <- NULL
+  training_df <- data.frame(trn_transposed, as.factor(y_trn))
   colnames(training_df) <- c(paste("gene", 1:nrow(trn_set), sep=""), "response")
   rownames(training_df) <- 1:ncol(trn_set)
   
-  test_df <- data.frame(t(tst_set))
+  tst_transposed <- t(tst_set)
+  rownames(tst_transposed) <- NULL
+  test_df <- data.frame(tst_transposed)
   colnames(test_df) <- paste("gene", 1:nrow(tst_set), sep="")
   rownames(test_df) <- 1:ncol(tst_set)
   
@@ -330,12 +397,21 @@ predNnet <- function(
   parGrid <- expand.grid(size=seq(from=2, to=3, by=1),
                          decay=10^seq(from=-4, to=-1, by=0.5))
   ctrl <- trainControl(method = "cv", number=10)
-  mod_nnet <- train(x=t(trn_set), y=as.factor(y_trn), maxit=1000, MaxNWts=50000,
+  
+  # Fix row names for training
+  trn_transposed <- t(trn_set)
+  rownames(trn_transposed) <- NULL
+  
+  mod_nnet <- train(x=trn_transposed, y=as.factor(y_trn), maxit=1000, MaxNWts=50000,
                     method="nnet", trace=FALSE,
                     trControl=ctrl, softmat=TRUE,
                     tuneGrid=parGrid)
-  pred_train_nnet <- predict(mod_nnet, t(trn_set), type="prob")[,"1"]
-  pred_test_nnet <- predict(mod_nnet, t(tst_set), type="prob")[,"1"] 
+  pred_train_nnet <- predict(mod_nnet, trn_transposed, type="prob")[,"1"]
+  
+  # Fix row names for test
+  tst_transposed <- t(tst_set)
+  rownames(tst_transposed) <- NULL
+  pred_test_nnet <- predict(mod_nnet, tst_transposed, type="prob")[,"1"] 
   
   res <- list(pred_trn_prob=pred_train_nnet, pred_tst_prob=pred_test_nnet)
   return(res)
@@ -353,7 +429,9 @@ predMas <- function(
   trn_set_norm <- t(scale(t(trn_set), center=TRUE, scale=TRUE))
   tst_set_norm <- t(scale(t(tst_set), center=TRUE, scale=TRUE))
   
-  training_df_norm <- data.frame(t(trn_set_norm), as.factor(y_trn))
+  trn_norm_transposed <- t(trn_set_norm)
+  rownames(trn_norm_transposed) <- NULL
+  training_df_norm <- data.frame(trn_norm_transposed, as.factor(y_trn))
   colnames(training_df_norm) <- c(paste("gene", 1:nrow(trn_set_norm), sep=""), "response")
   rownames(training_df_norm) <- 1:ncol(trn_set_norm)
   
@@ -394,13 +472,22 @@ predLasso_pp <- function(trn_set, tst_set=NULL, y_trn, ...){
 
 #trn_set=train_set; y_trn=train_label; tst_set=test_refadj
 predRF_pp <- function(trn_set, tst_set=NULL, y_trn){
-  data <- data.frame(y=as.factor(y_trn), t(trn_set))
+  # Create training data with proper row names
+  trn_transposed <- t(trn_set)
+  rownames(trn_transposed) <- NULL  # Remove potentially problematic row names
+  data <- data.frame(y=as.factor(y_trn), trn_transposed)
   mod <- ranger::ranger(y ~ ., data = data, write.forest=TRUE)
   mod_prob <- ranger::ranger(y ~ ., data = data, write.forest=TRUE, probability=TRUE)
-  pred_trn_prob <- predict(mod_prob, data = data.frame(t(trn_set)))$predictions[, "1"]
-  pred_trn_class <- predict(mod, data = data.frame(t(trn_set)))$predictions
+  
+  # For predictions, also fix row names
+  trn_pred_data <- t(trn_set)
+  rownames(trn_pred_data) <- NULL
+  pred_trn_prob <- predict(mod_prob, data = data.frame(trn_pred_data))$predictions[, "1"]
+  pred_trn_class <- predict(mod, data = data.frame(trn_pred_data))$predictions
   if(!is.null(tst_set)){
-    newdata <- data.frame(t(tst_set))
+    tst_transposed <- t(tst_set)
+    rownames(tst_transposed) <- NULL  # Remove potentially problematic row names
+    newdata <- data.frame(tst_transposed)
     pred_tst_prob <- predict(mod_prob, data = newdata)$predictions[, "1"]
     pred_tst_class <- predict(mod, data = newdata)$predictions
   }else{
@@ -427,8 +514,10 @@ predNnet_pp <- function(trn_set, tst_set=NULL, y_trn){
     stop("Training set or labels are NULL")
   }
   
-  # Create training data
-  data <- data.frame(y=as.factor(y_trn), t(trn_set))
+  # Create training data with proper row names
+  trn_transposed <- t(trn_set)
+  rownames(trn_transposed) <- NULL  # Remove potentially problematic row names
+  data <- data.frame(y=as.factor(y_trn), trn_transposed)
   
   # Adjust network size for dataset
   n_samples <- nrow(data)
@@ -444,7 +533,9 @@ predNnet_pp <- function(trn_set, tst_set=NULL, y_trn){
     
     # Test predictions only if test set provided
     if(!is.null(tst_set)) {
-      newdata <- data.frame(t(tst_set))
+      tst_transposed <- t(tst_set)
+      rownames(tst_transposed) <- NULL  # Remove potentially problematic row names
+      newdata <- data.frame(tst_transposed)
       pred_tst_prob <- as.vector(predict(mod, newdata = newdata))
       pred_tst_class <- as.vector(predict(mod, newdata = newdata, type="class"))
     } else {
@@ -464,7 +555,10 @@ predNnet_pp <- function(trn_set, tst_set=NULL, y_trn){
 
 # Logistic Regression with no regularization
 predLogistic_pp <- function(trn_set, tst_set=NULL, y_trn){
-  data <- data.frame(y=as.factor(y_trn), t(trn_set))
+  # Create training data with proper row names
+  trn_transposed <- t(trn_set)
+  rownames(trn_transposed) <- NULL  # Remove potentially problematic row names
+  data <- data.frame(y=as.factor(y_trn), trn_transposed)
   
   mod <- glm(y ~ ., data = data, family = binomial())
   
@@ -472,7 +566,9 @@ predLogistic_pp <- function(trn_set, tst_set=NULL, y_trn){
   pred_trn_class <- as.vector(ifelse(pred_trn_prob >= 0.5, "1", "0"))
   
   if(!is.null(tst_set)){
-    newdata <- data.frame(t(tst_set))
+    tst_transposed <- t(tst_set)
+    rownames(tst_transposed) <- NULL  # Remove potentially problematic row names
+    newdata <- data.frame(tst_transposed)
     pred_tst_prob <- as.vector(predict(mod, newdata = newdata, type="response"))
     pred_tst_class <- as.vector(ifelse(pred_tst_prob >= 0.5, "1", "0"))
   } else {
@@ -565,8 +661,12 @@ predKNN_pp <- function(trn_set, tst_set=NULL, y_trn){
         correct <- 0
         for(i in 1:n_samples) {
           train_idx <- setdiff(1:n_samples, i)
-          pred <- knn(train = t(trn_set[, train_idx]), 
-                     test = t(trn_set[, i, drop=FALSE]), 
+          trn_cv <- t(trn_set[, train_idx])
+          tst_cv <- t(trn_set[, i, drop=FALSE])
+          rownames(trn_cv) <- NULL
+          rownames(tst_cv) <- NULL
+          pred <- knn(train = trn_cv, 
+                     test = tst_cv, 
                      cl = y_trn[train_idx], k = k)
           if(as.character(pred) == as.character(y_trn[i])) correct <- correct + 1
         }
@@ -580,8 +680,12 @@ predKNN_pp <- function(trn_set, tst_set=NULL, y_trn){
           test_idx <- which(folds == fold)
           train_idx <- which(folds != fold)
           if(length(test_idx) > 0 && length(train_idx) > 0) {
-            pred <- knn(train = t(trn_set[, train_idx]), 
-                       test = t(trn_set[, test_idx]), 
+            trn_fold <- t(trn_set[, train_idx])
+            tst_fold <- t(trn_set[, test_idx])
+            rownames(trn_fold) <- NULL
+            rownames(tst_fold) <- NULL
+            pred <- knn(train = trn_fold, 
+                       test = tst_fold, 
                        cl = y_trn[train_idx], k = k)
             correct <- correct + sum(as.character(pred) == as.character(y_trn[test_idx]))
             total <- total + length(test_idx)
@@ -597,8 +701,12 @@ predKNN_pp <- function(trn_set, tst_set=NULL, y_trn){
   pred_trn_class <- character(n_samples)
   for(i in 1:n_samples) {
     train_idx <- setdiff(1:n_samples, i)
-    pred_trn_class[i] <- as.character(knn(train = t(trn_set[, train_idx]), 
-                                         test = t(trn_set[, i, drop=FALSE]), 
+    trn_subset <- t(trn_set[, train_idx])
+    tst_subset <- t(trn_set[, i, drop=FALSE])
+    rownames(trn_subset) <- NULL
+    rownames(tst_subset) <- NULL
+    pred_trn_class[i] <- as.character(knn(train = trn_subset, 
+                                         test = tst_subset, 
                                          cl = y_trn[train_idx], k = k_opt))
   }
   
@@ -607,8 +715,14 @@ predKNN_pp <- function(trn_set, tst_set=NULL, y_trn){
   
   # Test predictions
   if(!is.null(tst_set)) {
-    pred_tst_class <- as.character(knn(train = t(trn_set), 
-                                      test = t(tst_set), 
+    # Ensure proper matrix structure for KNN
+    trn_for_knn <- t(trn_set)
+    tst_for_knn <- t(tst_set)
+    rownames(trn_for_knn) <- NULL
+    rownames(tst_for_knn) <- NULL
+    
+    pred_tst_class <- as.character(knn(train = trn_for_knn, 
+                                      test = tst_for_knn, 
                                       cl = y_trn, k = k_opt))
     pred_tst_prob <- as.numeric(pred_tst_class == "1")
   } else {
@@ -690,7 +804,9 @@ predXGBoost_pp <- function(trn_set, tst_set=NULL, y_trn){
 
 predWrapper <- function(mod, tst_set, function_name){
   if(function_name=='logistic'){
-    newdata <- data.frame(t(tst_set))
+    tst_transposed <- t(tst_set)
+    rownames(tst_transposed) <- NULL
+    newdata <- data.frame(tst_transposed)
     res <- as.vector(predict(mod, newdata = newdata, type="response"))
   }else if(function_name=='lasso'){
     res <- as.vector(predict(mod, newx=t(tst_set), s="lambda.1se", type="response"))
@@ -700,15 +816,21 @@ predWrapper <- function(mod, tst_set, function_name){
     res <- predict(mod, t(tst_set), probability=TRUE)
     res <- attr(res, "probabilities")[,"1"]
   }else if(function_name=='rf'){
-    newdata <- data.frame(t(tst_set))
+    tst_transposed <- t(tst_set)
+    rownames(tst_transposed) <- NULL
+    newdata <- data.frame(tst_transposed)
     res <- predict(mod, data = newdata)$predictions[, "1"]
   }else if(function_name=='lightgbm'){
     res <- predict(mod, t(tst_set))
   }else if(function_name=='nnet'){
-    newdata <- data.frame(t(tst_set))
+    tst_transposed <- t(tst_set)
+    rownames(tst_transposed) <- NULL
+    newdata <- data.frame(tst_transposed)
     res <- as.vector(predict(mod, newdata = newdata))
   }else if(function_name=='knn'){
-    res <- knn(train = mod$train_data, test = t(tst_set), cl = mod$train_labels, k = mod$k)
+    tst_for_knn <- t(tst_set)
+    rownames(tst_for_knn) <- NULL
+    res <- knn(train = mod$train_data, test = tst_for_knn, cl = mod$train_labels, k = mod$k)
     res <- as.numeric(as.character(res) == "1")
   }else if(function_name=='xgboost'){
     test_matrix <- xgb.DMatrix(data = t(tst_set))

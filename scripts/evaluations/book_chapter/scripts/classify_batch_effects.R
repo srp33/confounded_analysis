@@ -362,12 +362,18 @@ train_and_evaluate_classifier <- function(classifier_type, normalized_data, corr
   })
   
   # Calculate performance metrics
-  perf_measures <- c("mxe", "auc")
+  perf_measures <- c("mxe", "auc", "acc", "f", "err")
   perf_df <- perf_wrapper(perf_measures, predictions, y_test)
+  
+  # Calculate confusion matrix elements (TP, FP, TN, FN) and derived metrics
+  confusion_df <- confusion_matrix_wrapper(predictions, y_test)
+  
+  # Combine performance metrics and confusion matrix metrics
+  combined_perf <- rbind(perf_df, confusion_df)
   
   list(
     predictions = predictions,
-    performance = perf_df
+    performance = combined_perf
   )
 }
 
