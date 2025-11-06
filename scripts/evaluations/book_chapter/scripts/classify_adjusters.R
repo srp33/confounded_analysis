@@ -32,9 +32,7 @@ option_list <- list(
   make_option(c("--seed"), type="integer", default=NULL,
               help="Random seed for reproducibility [required]"),
   make_option(c("-o", "--output"), type="character", default=NULL,
-              help="Output CSV file path [required]"),
-  make_option(c("--help"), action="store_true", default=FALSE,
-              help="Show this help message and exit")
+              help="Output CSV file path [required]")
 )
 
 opt_parser <- OptionParser(
@@ -55,12 +53,6 @@ opt_parser <- OptionParser(
 
 # Parse arguments
 opt <- parse_args(opt_parser)
-
-# Show help if requested
-if (opt$help) {
-  print_help(opt_parser)
-  quit(status=0)
-}
 
 # Validate required arguments
 if (is.null(opt$adjuster) || is.null(opt$classifier) || is.null(opt$`num-datasets`) || 
