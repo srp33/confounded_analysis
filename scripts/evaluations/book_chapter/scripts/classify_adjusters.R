@@ -1,7 +1,6 @@
 #!/usr/bin/env Rscript
 
 # classify_adjusters.R - Single job adjuster comparison script
-# Extracted from real_data_analysis.R for Snakemake workflow
 # Executes single adjuster × classifier × dataset × seed combination
 
 # Suppress warnings and messages for cleaner output
@@ -14,7 +13,7 @@ suppressMessages(suppressWarnings({
 suppressMessages(suppressWarnings({
   required_packages <- c("glmnet", "SummarizedExperiment", "sva", "DESeq2", "ROCR", "ggplot2", 
                         "gridExtra", "reshape2", "dplyr", "purrr", "nnls", "lightgbm", "batchelor",
-                        "optparse")
+                        "argparse")
   sapply(required_packages, require, character.only=TRUE, quietly=TRUE)
 }))
 
@@ -22,80 +21,58 @@ suppressMessages(suppressWarnings({
 # COMMAND-LINE ARGUMENT PARSING
 # ====================================================================
 
-option_list <- list(
-  make_option(c("--adjuster"), type="character", default=NULL,
-              help="Batch correction method: unadjusted, combat, or mnn [required]"),
-  make_option(c("--classifier"), type="character", default=NULL,
-              help="Classifier type: logistic, elnet, svm, rf, lightgbm, or nnet [required]"),
-  make_option(c("--num-datasets"), type="integer", default=NULL,
-              help="Number of datasets to include: 3, 4, 5, or 6 [required]"),
-  make_option(c("--seed"), type="integer", default=NULL,
-              help="Random seed for reproducibility [required]"),
-  make_option(c("-o", "--output"), type="character", default=NULL,
-              help="Output CSV file path [required]")
-)
+parser <- ArgumentParser(description = "Execute single adjuster comparison job for batch correction analysis")
 
-opt_parser <- OptionParser(
-  option_list=option_list,
-  description="Execute single adjuster comparison job for batch correction analysis",
-  usage="%prog --adjuster METHOD --classifier TYPE --num-datasets N --seed SEED -o OUTPUT.csv",
-  epilogue=paste(
-    "Examples:",
-    "  %prog --adjuster combat --classifier logistic --num-datasets 4 --seed 42 -o results.csv",
-    "  %prog --adjuster mnn --classifier svm --num-datasets 6 --seed 100 -o output.csv",
-    "",
-    "Valid adjuster methods: unadjusted, combat, mnn",
-    "Valid classifiers: logistic, elnet, svm, rf, lightgbm, nnet",
-    "Valid num-datasets: 3, 4, 5, 6",
-    sep="\n"
-  )
-)
+parser$add_argument("--adjuster", type = "character", required = TRUE,
+                   help = "Batch correction method: unadjusted, combat, or mnn")
+parser$add_argument("--classifier", type = "character", required = TRUE,
+                   help = "Classifier type: logistic, elnet, svm, rf, lightgbm, or nnet")
+parser$add_argument("--num-datasets", type = "integer", required = TRUE,
+                   help = "Number of datasets to include: 3, 4, 5, or 6")
+parser$add_argument("--seed", type = "integer", required = TRUE,
+                   help = "Random seed for reproducibility")
+parser$add_argument("-o", "--output", type = "character", required = TRUE,
+                   help = "Output CSV file path")
 
 # Parse arguments
-opt <- parse_args(opt_parser)
+args <- parser$parse_args()
 
-# Validate required arguments
-if (is.null(opt$adjuster) || is.null(opt$classifier) || is.null(opt$`num-datasets`) || 
-    is.null(opt$seed) || is.null(opt$output)) {
-  cat("Error: All parameters are required\n\n")
-  print_help(opt_parser)
-  quit(status=1)
-}
+# Arguments are automatically validated as required by argparse
 
 # Parameter validation
 valid_adjusters <- c("unadjusted", "combat", "mnn")
 valid_classifiers <- c("logistic", "elnet", "svm", "rf", "lightgbm", "nnet")
 valid_num_datasets <- c(3, 4, 5, 6)
 
-if (!opt$adjuster %in% valid_adjusters) {
+if (!args$adjuster %in% valid_adjusters) {
   cat(sprintf("Error: Invalid adjuster '%s'. Must be one of: %s\n", 
-              opt$adjuster, paste(valid_adjusters, collapse=", ")))
+              args$adjuster, paste(valid_adjusters, collapse=", ")))
   quit(status=1)
 }
 
-if (!opt$classifier %in% valid_classifiers) {
+if (!args$classifier %in% valid_classifiers) {
   cat(sprintf("Error: Invalid classifier '%s'. Must be one of: %s\n", 
-              opt$classifier, paste(valid_classifiers, collapse=", ")))
+              args$classifier, paste(valid_classifiers, collapse=", ")))
   quit(status=1)
 }
 
-if (!opt$`num-datasets` %in% valid_num_datasets) {
+if (!args$num_datasets %in% valid_num_datasets) {
   cat(sprintf("Error: Invalid num-datasets '%d'. Must be one of: %s\n", 
-              opt$`num-datasets`, paste(valid_num_datasets, collapse=", ")))
+              args$num_datasets, paste(valid_num_datasets, collapse=", ")))
   quit(status=1)
 }
 
-if (opt$seed < 1 || opt$seed > 1000) {
+if (args$seed < 1 || args$seed > 1000) {
   cat("Error: Seed must be between 1 and 1000\n")
   quit(status=1)
 }
 
 # Extract validated parameters
-adjuster <- opt$adjuster
-classifier <- opt$classifier
-num_datasets <- opt$`num-datasets`
-seed <- opt$seed
-output_file <- opt$output
+adjuster <- args$adjuster
+classifier <- args$classifier
+num_datasets <- args$num_datasets
+seed <- args$seed
+output_file <- args$output
 
 # Validate output directory exists
 output_dir <- dirname(output_file)
@@ -145,9 +122,9 @@ main_job_wrapper <- function() {
     cat(sprintf("[ERROR] Output file: %s\n", output_file), file = stderr())
     
     # Check input files
-    data_path <- "scripts/evaluations/book_chapter/data/TB_real_data.RData"
-    helper_path <- "scripts/evaluations/book_chapter/scripts/helper.R"
-    common_path <- "scripts/evaluations/book_chapter/scripts/common_functions.R"
+    data_path <- "/scripts/evaluations/book_chapter/data/TB_real_data.RData"
+    helper_path <- "/scripts/evaluations/book_chapter/scripts/helper.R"
+    common_path <- "/scripts/evaluations/book_chapter/scripts/common_functions.R"
     
     cat(sprintf("[ERROR] Data file exists: %s\n", file.exists(data_path)), file = stderr())
     cat(sprintf("[ERROR] Helper file exists: %s\n", file.exists(helper_path)), file = stderr())
@@ -172,16 +149,16 @@ main_job_wrapper <- function() {
 # MAIN ANALYSIS FUNCTION
 # ====================================================================
 
-main_analysis_function <- function() {  # Lo
-ad data and dependencies
-  data_path <- "scripts/evaluations/book_chapter/data/TB_real_data.RData"
+main_analysis_function <- function() {
+  # Load data and dependencies
+  data_path <- "/scripts/evaluations/book_chapter/data/TB_real_data.RData"
   if (!file.exists(data_path)) {
     stop(sprintf("Data file not found: %s", data_path))
   }
   
   load(data_path)
-  source("scripts/evaluations/book_chapter/scripts/helper.R")
-  source("scripts/evaluations/book_chapter/scripts/common_functions.R")
+  source("/scripts/evaluations/book_chapter/scripts/helper.R")
+  source("/scripts/evaluations/book_chapter/scripts/common_functions.R")
   
   # Set seed for reproducibility
   set.seed(seed)
@@ -255,11 +232,24 @@ ad data and dependencies
   # Prepare datasets
   datasets <- prepare_datasets(dat_lst_filtered, label_lst_filtered, test_name, study_names)
   
+  # Validate datasets
+  if(is.null(datasets$dat_test)) {
+    stop(sprintf("Test dataset '%s' is NULL or missing from data", test_name))
+  }
+  if(ncol(datasets$dat_test) == 0) {
+    stop(sprintf("Test dataset '%s' has no samples", test_name))
+  }
+  
   # Feature reduction (top 1000 most variable genes)
   n_highvar_genes <- 1000
   feat_reduced <- reduce_features(datasets$dat, datasets$dat_test, n_highvar_genes)
   dat <- feat_reduced$dat
   dat_test <- feat_reduced$dat_test
+  
+  # Validate feature-reduced data
+  if(is.null(dat_test)) {
+    stop("Test data became NULL after feature reduction")
+  }
   
   cat(sprintf("Data preparation completed:\n"))
   cat(sprintf("  Training samples: %d\n", ncol(dat)))
@@ -317,8 +307,15 @@ ad data and dependencies
       # Apply MNN correction with test set last in merge order
       mnn_result <- do.call(fastMNN, c(batch_list, list(merge.order = seq_along(unique_batches))))
       
-      # Extract corrected data
-      corrected_combined <- assay(mnn_result, "corrected")
+      # Extract corrected data (handle different batchelor versions)
+      if("corrected" %in% assayNames(mnn_result)) {
+        corrected_combined <- assay(mnn_result, "corrected")
+      } else if("reconstructed" %in% assayNames(mnn_result)) {
+        corrected_combined <- assay(mnn_result, "reconstructed")
+      } else {
+        # Fallback to first assay
+        corrected_combined <- assay(mnn_result, 1)
+      }
       
       # Split back into training and test
       n_train <- ncol(dat)
@@ -373,12 +370,26 @@ ad data and dependencies
     norm_result <- normalize_within_batches(dat_corrected, datasets$batch, datasets$batch_names)
     dat_train_norm <- norm_result$whole_norm
     
-    # Normalize test data
+    # Normalize test data with error handling
+    cat(sprintf("Debug - About to normalize test data. dat_test_corrected is NULL: %s\n", is.null(dat_test_corrected)))
+    
+    if(is.null(dat_test_corrected)) {
+      stop("Test data is NULL before normalization - batch correction failed")
+    }
+    
     dat_test_norm <- normalizeData(dat_test_corrected)
+    
+    cat(sprintf("Debug - After normalization. dat_test_norm is NULL: %s\n", is.null(dat_test_norm)))
+    if(!is.null(dat_test_norm)) {
+      cat(sprintf("Debug - dat_test_norm dimensions after normalization: %d x %d\n", nrow(dat_test_norm), ncol(dat_test_norm)))
+    }
     
     # Check for normalization issues
     if (any(is.na(dat_train_norm)) || any(is.na(dat_test_norm))) {
       stop("Normalization produced NA values")
+    }
+    if (is.null(dat_test_norm)) {
+      stop("Test data became NULL during normalization")
     }
   } else {
     dat_train_norm <- dat_corrected
@@ -434,6 +445,55 @@ ad data and dependencies
   # ====================================================================
   
   cat(sprintf("Training and evaluating classifier: %s\n", classifier))
+  
+  # Debug: Check data before passing to classifier
+  cat(sprintf("Debug - dat_train_norm is NULL: %s\n", is.null(dat_train_norm)))
+  cat(sprintf("Debug - dat_test_norm is NULL: %s\n", is.null(dat_test_norm)))
+  cat(sprintf("Debug - dat_test_corrected is NULL: %s\n", is.null(dat_test_corrected)))
+  
+  if(!is.null(dat_test_norm)) {
+    cat(sprintf("Debug - dat_test_norm dimensions: %d x %d\n", nrow(dat_test_norm), ncol(dat_test_norm)))
+  }
+  if(!is.null(dat_test_corrected)) {
+    cat(sprintf("Debug - dat_test_corrected dimensions: %d x %d\n", nrow(dat_test_corrected), ncol(dat_test_corrected)))
+  }
+  
+  # Additional validation before classifier training
+  if(is.null(dat_test_norm)) {
+    stop("Test data is NULL after normalization - this should not happen")
+  }
+  if(ncol(dat_test_norm) == 0) {
+    stop("Test data has zero columns after normalization")
+  }
+  if(nrow(dat_test_norm) == 0) {
+    stop("Test data has zero rows after normalization")
+  }
+  
+  # Classifier-specific early validation
+  n_train_samples <- ncol(dat_train_norm)
+  n_test_samples <- ncol(dat_test_norm)
+  n_features <- nrow(dat_train_norm)
+  
+  cat(sprintf("Dataset summary before classifier training:\n"))
+  cat(sprintf("  Training samples: %d\n", n_train_samples))
+  cat(sprintf("  Test samples: %d\n", n_test_samples))
+  cat(sprintf("  Features: %d\n", n_features))
+  cat(sprintf("  Training labels: %d unique values\n", length(unique(datasets$group))))
+  
+  # Early validation for problematic cases
+  if(n_train_samples < 10) {
+    warning(sprintf("Very small training set (%d samples) - results may be unreliable", n_train_samples))
+  }
+  
+  if(classifier == "lightgbm" && n_train_samples < 20) {
+    warning(sprintf("LightGBM with small dataset (%d samples) - using simplified configuration", n_train_samples))
+  }
+  
+  # Check for class imbalance
+  class_counts <- table(datasets$group)
+  if(min(class_counts) < 3) {
+    warning(sprintf("Severe class imbalance detected: %s", paste(names(class_counts), class_counts, sep="=", collapse=", ")))
+  }
   
   # Train classifier and evaluate performance
   result <- train_and_evaluate_classifier(

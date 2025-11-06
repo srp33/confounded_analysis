@@ -65,7 +65,7 @@ rule classify_batch_effects:
         OUTPUT_FOLDER + "/logs/classify_batch_effects/{classifier}_{mean}_{variance}_{seed}.log"
     threads: 1
     resources:
-        mem_mb=4000,
+        mem_mb=2000,
         runtime=30
     shell:
         """
@@ -125,7 +125,7 @@ rule classify_adjusters:
         OUTPUT_FOLDER + "/logs/classify_adjusters/{adjuster}_{classifier}_{n_datasets}_{seed}.log"
     threads: 1
     resources:
-        mem_mb=8000,
+        mem_mb=2000,
         runtime=60
     shell:
         """

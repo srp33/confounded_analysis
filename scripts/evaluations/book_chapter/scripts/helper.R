@@ -418,29 +418,45 @@ predRF_fs_pp <- function(trn_set, tst_set, y_trn){
   predict(mod, data=newdata)$predictions[,2]
 }
 
-predNnet_pp <- function(trn_set, tst_set, y_trn){
+predNnet_pp <- function(trn_set, tst_set=NULL, y_trn){
+  library(nnet, quietly = TRUE)
+  
+  # Simple validation
+  if(is.null(trn_set) || is.null(y_trn)) {
+    stop("Training set or labels are NULL")
+  }
+  
+  # Create training data
   data <- data.frame(y=as.factor(y_trn), t(trn_set))
-  newdata <- data.frame(t(tst_set))
   
-  # Adjust network size for small datasets
+  # Adjust network size for dataset
   n_samples <- nrow(data)
-  network_size <- min(10, max(2, n_samples %/% 2))
+  network_size <- min(10, max(2, n_samples %/% 3))
   
-  # Add error handling for small datasets
+  # Train neural network with fallback
   tryCatch({
-    mod <- nnet::nnet(y ~ ., data = data, size = network_size, MaxNWts = 10000, 
-                      linout = F, trace = F, maxit = 200)
+    mod <- nnet(y ~ ., data = data, size = network_size, MaxNWts = 10000, 
+                linout = FALSE, trace = FALSE, maxit = 200)
     
     pred_trn_prob <- as.vector(predict(mod, newdata = data[,-1]))
     pred_trn_class <- as.vector(predict(mod, newdata = data[,-1], type="class"))
-    pred_tst_prob <- as.vector(predict(mod, newdata = newdata))
-    pred_tst_class <- as.vector(predict(mod, newdata = newdata, type="class"))
+    
+    # Test predictions only if test set provided
+    if(!is.null(tst_set)) {
+      newdata <- data.frame(t(tst_set))
+      pred_tst_prob <- as.vector(predict(mod, newdata = newdata))
+      pred_tst_class <- as.vector(predict(mod, newdata = newdata, type="class"))
+    } else {
+      pred_tst_prob <- NULL
+      pred_tst_class <- NULL
+    }
     
     return(list(mod=mod, pred_trn_prob=pred_trn_prob, pred_tst_prob=pred_tst_prob,
                 pred_trn_class=pred_trn_class, pred_tst_class=pred_tst_class))
+                
   }, error = function(e) {
-    # Fallback to logistic regression for very small datasets
-    warning("Neural network failed, falling back to logistic regression")
+    # Fallback to logistic regression
+    warning(sprintf("ERROR Neural network failed, using logistic regression: %s", e$message))
     return(predLogistic_pp(trn_set, tst_set, y_trn))
   })
 }
@@ -448,16 +464,21 @@ predNnet_pp <- function(trn_set, tst_set, y_trn){
 # Logistic Regression with no regularization
 predLogistic_pp <- function(trn_set, tst_set=NULL, y_trn){
   data <- data.frame(y=as.factor(y_trn), t(trn_set))
+  
   mod <- glm(y ~ ., data = data, family = binomial())
+  
   pred_trn_prob <- as.vector(predict(mod, newdata = data[,-1], type="response"))
   pred_trn_class <- as.vector(ifelse(pred_trn_prob >= 0.5, "1", "0"))
+  
   if(!is.null(tst_set)){
     newdata <- data.frame(t(tst_set))
     pred_tst_prob <- as.vector(predict(mod, newdata = newdata, type="response"))
     pred_tst_class <- as.vector(ifelse(pred_tst_prob >= 0.5, "1", "0"))
-  }else{
-    pred_tst_prob <- NULL; pred_tst_class <- NULL
+  } else {
+    pred_tst_prob <- NULL
+    pred_tst_class <- NULL
   }
+  
   return(list(mod=mod, pred_trn_prob=pred_trn_prob, pred_tst_prob=pred_tst_prob,
               pred_trn_class=pred_trn_class, pred_tst_class=pred_tst_class))
 }
@@ -486,44 +507,24 @@ predLightGBM_pp <- function(trn_set, tst_set=NULL, y_trn){
   # Prepare data
   train_data <- lgb.Dataset(data = t(trn_set), label = as.numeric(as.character(y_trn)))
   
-  # Parameters for binary classification
+  # Simple parameters
   params <- list(
     objective = "binary",
     metric = "binary_logloss",
-    boosting_type = "gbdt",
     num_leaves = 31,
     learning_rate = 0.05,
-    feature_fraction = 0.9,
-    bagging_fraction = 0.8,
-    bagging_freq = 5,
     verbose = -1
   )
   
-  # For very small datasets, skip cross-validation and use fixed rounds
-  n_samples <- nrow(train_data)
-  if(n_samples < 20) {
-    # Use fixed number of rounds for small datasets
-    best_iter <- 50
-  } else {
-    # Train model with cross-validation to find optimal rounds
-    cv_result <- lgb.cv(
-      params = params,
-      data = train_data,
-      nrounds = 100,
-      nfold = min(5, n_samples %/% 2),  # Adjust folds for small datasets
-      stratified = TRUE,
-      early_stopping_rounds = 10,
-      verbose = -1
-    )
-    
-    best_iter <- cv_result$best_iter
-  }
+  # Use fixed rounds for simplicity
+  n_samples <- ncol(trn_set)
+  nrounds <- if(n_samples < 50) 30 else 100
   
-  # Train final model
+  # Train model
   mod <- lgb.train(
     params = params,
     data = train_data,
-    nrounds = best_iter,
+    nrounds = nrounds,
     verbose = -1
   )
   
@@ -533,8 +534,9 @@ predLightGBM_pp <- function(trn_set, tst_set=NULL, y_trn){
   if(!is.null(tst_set)){
     pred_tst_prob <- predict(mod, t(tst_set))
     pred_tst_class <- as.vector(ifelse(pred_tst_prob >= 0.5, "1", "0"))
-  }else{
-    pred_tst_prob <- NULL; pred_tst_class <- NULL
+  } else {
+    pred_tst_prob <- NULL
+    pred_tst_class <- NULL
   }
   
   return(list(mod=mod, pred_trn_prob=pred_trn_prob, pred_tst_prob=pred_tst_prob,

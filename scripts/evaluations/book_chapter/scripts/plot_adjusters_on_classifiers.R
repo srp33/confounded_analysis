@@ -20,37 +20,26 @@ suppressPackageStartupMessages({
 # Define command line arguments
 parser <- ArgumentParser(description = "Create adjuster effectiveness on classifiers visualization")
 
-parser$add_argument("-i", "--input", 
-                   type = "character", 
-                   required = TRUE,
+parser$add_argument("-i", "--input", type = "character", required = TRUE,
                    help = "Input CSV file with adjusters on classifiers data")
 
-parser$add_argument("-o", "--output", 
-                   type = "character", 
-                   default = "adjusters_on_classifiers.png",
+parser$add_argument("-o", "--output", type = "character", default = "adjusters_on_classifiers.png",
                    help = "Output PNG file path (default: %(default)s)")
 
-parser$add_argument("--width", 
-                   type = "double", 
-                   default = 14,
+parser$add_argument("--width", type = "double", default = 14,
                    help = "Plot width in inches (default: %(default)s)")
 
-parser$add_argument("--height", 
-                   type = "double", 
-                   default = 10,
+parser$add_argument("--height", type = "double", default = 10,
                    help = "Plot height in inches (default: %(default)s)")
 
-parser$add_argument("--dpi", 
-                   type = "integer", 
-                   default = 300,
+parser$add_argument("--dpi", type = "integer", default = 300,
                    help = "Plot resolution in DPI (default: %(default)s)")
 
-# Parse arguments
-opt <- parser$parse_args()
+# Parse arguments and input file
+args <- parser$parse_args()
 
-# Read and validate input data
-cat("Reading input data from:", opt$input, "\n")
-data <- read.csv(opt$input, stringsAsFactors = FALSE)
+cat("Reading input data from:", args$input, "\n")
+data <- read.csv(args$input, stringsAsFactors = FALSE)
 
 cat("Data dimensions:", nrow(data), "rows,", ncol(data), "columns\n")
 cat("Column names:", paste(colnames(data), collapse = ", "), "\n")
@@ -62,7 +51,7 @@ if (length(missing_cols) > 0) {
   stop("Missing required columns: ", paste(missing_cols, collapse = ", "))
 }
 
-# Filter to MXE metric for the main visualization (following original Figure 2 pattern)
+# Filter to MXE metric (cross entropy) for the main visualization
 mxe_data <- data[data$metric == "mxe", ]
 if (nrow(mxe_data) == 0) {
   stop("No MXE data found in input file")
@@ -70,24 +59,21 @@ if (nrow(mxe_data) == 0) {
 
 cat("Filtered to", nrow(mxe_data), "MXE observations\n")
 
-# Create readable adjuster labels (following original pattern)
-mxe_data$adjuster_label <- factor(mxe_data$adjuster,
-  levels = c("unadjusted", "combat", "mnn"),
-  labels = c("Original data", "Merge + ComBat", "MNN"))
-
-# Create adjuster type groupings (following original pattern)
-mxe_data$adjuster_type <- "Batch Correction"
-mxe_data$adjuster_type[mxe_data$adjuster == "unadjusted"] <- "Original Data"
-
-# Create readable classifier labels
+# Create better labels and groupings
 mxe_data$classifier_label <- factor(mxe_data$classifier,
   levels = c("logistic", "elasticnet", "svm", "rf", "knn", "xgboost", "nn", "lightgbm"),
   labels = c("Logistic", "ElasticNet", "SVM", "Random Forest", "KNN", "XGBoost", "Neural Net", "LightGBM"))
 
-# Create dataset size labels
+mxe_data$adjuster_label <- factor(mxe_data$adjuster,
+  levels = c("unadjusted", "combat", "mnn"),
+  labels = c("Unadjusted", "ComBat", "MNN"))
+
+mxe_data$adjuster_type <- "Batch Correction"
+mxe_data$adjuster_type[mxe_data$adjuster == "unadjusted"] <- "Original Data"
+
 mxe_data$dataset_label <- paste(mxe_data$n_datasets, "studies")
 
-cat("Creating visualization...\n")
+cat("Creating figure\n")
 
 # Calculate summary statistics for each combination (following original pattern)
 sumstats <- mxe_data %>%
@@ -214,16 +200,16 @@ final_plot <- annotate_figure(
 )
 
 # Save the plot
-cat("Saving plot to:", opt$output, "\n")
+cat("Saving plot to:", args$output, "\n")
 ggsave(
-  filename = opt$output,
+  filename = args$output,
   plot = final_plot,
-  width = opt$width,
-  height = opt$height,
-  dpi = opt$dpi,
+  width = args$width,
+  height = args$height,
+  dpi = args$dpi,
   units = "in"
 )
 
 cat("Plot saved successfully!\n")
-cat("Output file:", opt$output, "\n")
-cat("Dimensions:", opt$width, "x", opt$height, "inches at", opt$dpi, "DPI\n")
+cat("Output file:", args$output, "\n")
+cat("Dimensions:", args$width, "x", args$height, "inches at", args$dpi, "DPI\n")
