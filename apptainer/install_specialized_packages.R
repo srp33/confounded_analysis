@@ -89,11 +89,4 @@ if (length(pkgs_to_install) > 0) {
     cat("All packages already installed in base image\n")
 }
 
-# Note: Annotation packages moved to base image for better performance
-# They are large/slow to compile, so better to include them in the base image
-# that gets built once and reused
-
-# Note: Custom annotation packages moved to separate annotation build stage
-# for better debugging and isolation
-
 cat("--- All specialized R packages installed successfully ---\n")

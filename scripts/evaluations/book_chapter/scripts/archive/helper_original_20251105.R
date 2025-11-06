@@ -421,28 +421,13 @@ predRF_fs_pp <- function(trn_set, tst_set, y_trn){
 predNnet_pp <- function(trn_set, tst_set, y_trn){
   data <- data.frame(y=as.factor(y_trn), t(trn_set))
   newdata <- data.frame(t(tst_set))
-  
-  # Adjust network size for small datasets
-  n_samples <- nrow(data)
-  network_size <- min(10, max(2, n_samples %/% 2))
-  
-  # Add error handling for small datasets
-  tryCatch({
-    mod <- nnet::nnet(y ~ ., data = data, size = network_size, MaxNWts = 10000, 
-                      linout = F, trace = F, maxit = 200)
-    
-    pred_trn_prob <- as.vector(predict(mod, newdata = data[,-1]))
-    pred_trn_class <- as.vector(predict(mod, newdata = data[,-1], type="class"))
-    pred_tst_prob <- as.vector(predict(mod, newdata = newdata))
-    pred_tst_class <- as.vector(predict(mod, newdata = newdata, type="class"))
-    
-    return(list(mod=mod, pred_trn_prob=pred_trn_prob, pred_tst_prob=pred_tst_prob,
-                pred_trn_class=pred_trn_class, pred_tst_class=pred_tst_class))
-  }, error = function(e) {
-    # Fallback to logistic regression for very small datasets
-    warning("Neural network failed, falling back to logistic regression")
-    return(predLogistic_pp(trn_set, tst_set, y_trn))
-  })
+  mod <- nnet::nnet(y ~ ., data = data, size = 10, MaxNWts = 10000, linout = F, trace = F)
+  pred_trn_prob <- as.vector(predict(mod, newdata = data[,-1]))
+  pred_trn_class <- as.vector(predict(mod, newdata = data[,-1], type="class"))
+  pred_tst_prob <- as.vector(predict(mod, newdata = newdata))
+  pred_tst_class <- as.vector(predict(mod, newdata = newdata, type="class"))
+  return(list(mod=mod, pred_trn_prob=pred_trn_prob, pred_tst_prob=pred_tst_prob,
+              pred_trn_class=pred_trn_class, pred_tst_class=pred_tst_class))
 }
 
 # Logistic Regression with no regularization
@@ -499,25 +484,19 @@ predLightGBM_pp <- function(trn_set, tst_set=NULL, y_trn){
     verbose = -1
   )
   
-  # For very small datasets, skip cross-validation and use fixed rounds
-  n_samples <- nrow(train_data)
-  if(n_samples < 20) {
-    # Use fixed number of rounds for small datasets
-    best_iter <- 50
-  } else {
-    # Train model with cross-validation to find optimal rounds
-    cv_result <- lgb.cv(
-      params = params,
-      data = train_data,
-      nrounds = 100,
-      nfold = min(5, n_samples %/% 2),  # Adjust folds for small datasets
-      stratified = TRUE,
-      early_stopping_rounds = 10,
-      verbose = -1
-    )
-    
-    best_iter <- cv_result$best_iter
-  }
+  # Train model with cross-validation to find optimal rounds
+  cv_result <- lgb.cv(
+    params = params,
+    data = train_data,
+    nrounds = 100,
+    nfold = 5,
+    stratified = TRUE,
+    shuffle = TRUE,
+    early_stopping_rounds = 10,
+    verbose = -1
+  )
+  
+  best_iter <- cv_result$best_iter
   
   # Train final model
   mod <- lgb.train(
