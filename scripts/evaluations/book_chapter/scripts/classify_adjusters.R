@@ -13,7 +13,7 @@ suppressMessages(suppressWarnings({
 suppressMessages(suppressWarnings({
   required_packages <- c("glmnet", "SummarizedExperiment", "sva", "DESeq2", "ROCR", "ggplot2", 
                         "gridExtra", "reshape2", "dplyr", "purrr", "nnls", "lightgbm", "batchelor",
-                        "argparse")
+                        "argparse", "class", "xgboost")
   sapply(required_packages, require, character.only=TRUE, quietly=TRUE)
 }))
 

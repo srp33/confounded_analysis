@@ -29,7 +29,7 @@ parser$add_argument("-o", "--output", type = "character", default = "adjusters_o
 parser$add_argument("--width", type = "double", default = 14,
                    help = "Plot width in inches (default: %(default)s)")
 
-parser$add_argument("--height", type = "double", default = 10,
+parser$add_argument("--height", type = "double", default = 16,
                    help = "Plot height in inches (default: %(default)s)")
 
 parser$add_argument("--dpi", type = "integer", default = 300,
@@ -119,21 +119,19 @@ sumstats <- sumstats %>%
 # Create color scheme (following original pattern)
 type_colors <- c("Original Data" = "#999999", "Batch Correction" = "#E69F00")
 
-# Create individual plots for each dataset size (following Figure 2 pattern)
+# Create individual plots for each classifier (grouped by classifier first)
 plot_list <- list()
-dataset_sizes <- sort(unique(mxe_data$n_datasets))
+classifiers <- levels(mxe_data$classifier_label)
 
-for (n_datasets in dataset_sizes) {
-  dataset_label <- paste(n_datasets, "studies")
-  
-  plot_data <- sumstats[sumstats$dataset_label == dataset_label, ]
+for (classifier in classifiers) {
+  plot_data <- sumstats[sumstats$classifier_label == classifier, ]
   
   p <- ggplot(plot_data, aes(x = adjuster_label, y = Avg, color = adjuster_type)) +
     geom_errorbar(aes(ymin = Down, ymax = Up), width = 0.1) +
-    geom_text(aes(label = annot, y = max(Up) * 1.1), color = "black", size = 3) +
+    geom_text(aes(label = annot, y = Up), color = "black", size = 3, vjust = -0.5) +
     geom_line(aes(group = 1), color = "grey", size = 0.5) +
     geom_point(size = 2) +
-    facet_wrap(~ classifier_label, scales = "free_y", ncol = 4) +
+    facet_wrap(~ dataset_label, scales = "fixed", ncol = 4) +
     scale_color_manual(values = type_colors) +
     theme_bw() +
     theme(
@@ -142,53 +140,37 @@ for (n_datasets in dataset_sizes) {
       axis.title.y = element_text(size = 10),
       legend.title = element_blank(),
       legend.position = "none",
-      panel.grid.major = element_blank(),
+      panel.grid.major.y = element_line(color = "grey90", size = 0.5),
+      panel.grid.major.x = element_blank(),
       panel.grid.minor = element_blank(),
       strip.text = element_text(size = 9),
       plot.title = element_text(size = 12, hjust = 0.5)
     ) +
     labs(
       y = "Mean Cross-Entropy Loss",
-      title = paste("Adjuster Effectiveness -", dataset_label)
+      title = paste("Adjuster Effectiveness -", classifier)
     )
   
-  plot_list[[as.character(n_datasets)]] <- p
+  plot_list[[classifier]] <- p
 }
 
 # Create legend from one of the plots
 legend <- get_legend(
-  plot_list[["3"]] + 
+  plot_list[["Logistic"]] + 
     theme(legend.position = "bottom", legend.direction = "horizontal") +
     guides(color = guide_legend(title = NULL))
 )
 
-# Arrange plots in a grid (following original layout pattern)
-if (length(plot_list) == 4) {
-  # 4 dataset sizes: arrange in 2x2 grid
-  combined_plots <- ggarrange(
-    plot_list[["3"]], plot_list[["4"]],
-    plot_list[["5"]], plot_list[["6"]],
-    ncol = 2, nrow = 2,
-    common.legend = TRUE,
-    legend = "bottom"
-  )
-} else if (length(plot_list) == 3) {
-  # 3 dataset sizes: arrange in 1x3 grid
-  combined_plots <- ggarrange(
-    plot_list[["3"]], plot_list[["4"]], plot_list[["5"]],
-    ncol = 3, nrow = 1,
-    common.legend = TRUE,
-    legend = "bottom"
-  )
-} else {
-  # Fallback: arrange all plots vertically
-  combined_plots <- ggarrange(
-    plotlist = plot_list,
-    ncol = 1,
-    common.legend = TRUE,
-    legend = "bottom"
-  )
-}
+# Arrange plots in a grid (8 classifiers arranged in 4x2 grid)
+combined_plots <- ggarrange(
+  plot_list[["Logistic"]], plot_list[["ElasticNet"]],
+  plot_list[["SVM"]], plot_list[["Random Forest"]],
+  plot_list[["KNN"]], plot_list[["XGBoost"]],
+  plot_list[["Neural Net"]], plot_list[["LightGBM"]],
+  ncol = 2, nrow = 4,
+  common.legend = TRUE,
+  legend = "bottom"
+)
 
 # Add overall title
 final_plot <- annotate_figure(

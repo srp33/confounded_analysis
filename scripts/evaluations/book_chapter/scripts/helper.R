@@ -177,7 +177,8 @@ getPredFunctions <- function(learner_type){
   }else if(learner_type=="lightgbm"){return(predLightGBM_pp)
   }else if(learner_type=="nnet"){return(predNnet_pp)  #return(predNnet)
   }else if(learner_type=="naivebayes"){return(predNB)
-  }else if(learner_type=="knn"){return(predKNN) 
+  }else if(learner_type=="knn"){return(predKNN_pp) 
+  }else if(learner_type=="xgboost"){return(predXGBoost_pp)
   }else if(learner_type=="rf_fs"){return(predRF_fs_pp) 
   }else if(learner_type=="plusminus"){return(predMas)
   }else{stop("Method not supported!")}
@@ -544,6 +545,149 @@ predLightGBM_pp <- function(trn_set, tst_set=NULL, y_trn){
 }
 
 
+# K-Nearest Neighbors
+predKNN_pp <- function(trn_set, tst_set=NULL, y_trn){
+  library(class, quietly = TRUE)
+  
+  # Determine optimal k using cross-validation
+  n_samples <- ncol(trn_set)
+  k_values <- c(3, 5, 7, 9, 11)
+  k_values <- k_values[k_values < n_samples]
+  
+  if(length(k_values) == 0) {
+    k_opt <- min(3, n_samples - 1)
+  } else {
+    # Simple cross-validation to find best k
+    cv_accuracy <- sapply(k_values, function(k) {
+      # 5-fold CV or leave-one-out if too few samples
+      if(n_samples < 10) {
+        # Leave-one-out CV
+        correct <- 0
+        for(i in 1:n_samples) {
+          train_idx <- setdiff(1:n_samples, i)
+          pred <- knn(train = t(trn_set[, train_idx]), 
+                     test = t(trn_set[, i, drop=FALSE]), 
+                     cl = y_trn[train_idx], k = k)
+          if(as.character(pred) == as.character(y_trn[i])) correct <- correct + 1
+        }
+        return(correct / n_samples)
+      } else {
+        # 5-fold CV
+        folds <- cut(seq(1, n_samples), breaks = 5, labels = FALSE)
+        correct <- 0
+        total <- 0
+        for(fold in 1:5) {
+          test_idx <- which(folds == fold)
+          train_idx <- which(folds != fold)
+          if(length(test_idx) > 0 && length(train_idx) > 0) {
+            pred <- knn(train = t(trn_set[, train_idx]), 
+                       test = t(trn_set[, test_idx]), 
+                       cl = y_trn[train_idx], k = k)
+            correct <- correct + sum(as.character(pred) == as.character(y_trn[test_idx]))
+            total <- total + length(test_idx)
+          }
+        }
+        return(if(total > 0) correct / total else 0)
+      }
+    })
+    k_opt <- k_values[which.max(cv_accuracy)]
+  }
+  
+  # Train predictions (using leave-one-out to avoid overfitting)
+  pred_trn_class <- character(n_samples)
+  for(i in 1:n_samples) {
+    train_idx <- setdiff(1:n_samples, i)
+    pred_trn_class[i] <- as.character(knn(train = t(trn_set[, train_idx]), 
+                                         test = t(trn_set[, i, drop=FALSE]), 
+                                         cl = y_trn[train_idx], k = k_opt))
+  }
+  
+  # Convert to probabilities (simple approach)
+  pred_trn_prob <- as.numeric(pred_trn_class == "1")
+  
+  # Test predictions
+  if(!is.null(tst_set)) {
+    pred_tst_class <- as.character(knn(train = t(trn_set), 
+                                      test = t(tst_set), 
+                                      cl = y_trn, k = k_opt))
+    pred_tst_prob <- as.numeric(pred_tst_class == "1")
+  } else {
+    pred_tst_prob <- NULL
+    pred_tst_class <- NULL
+  }
+  
+  # Store model info (k value used)
+  mod <- list(k = k_opt, train_data = t(trn_set), train_labels = y_trn)
+  
+  return(list(mod=mod, pred_trn_prob=pred_trn_prob, pred_tst_prob=pred_tst_prob,
+              pred_trn_class=pred_trn_class, pred_tst_class=pred_tst_class))
+}
+
+# XGBoost
+predXGBoost_pp <- function(trn_set, tst_set=NULL, y_trn){
+  library(xgboost, quietly = TRUE)
+  
+  # Prepare data
+  train_matrix <- xgb.DMatrix(data = t(trn_set), label = as.numeric(as.character(y_trn)))
+  
+  # Parameters for binary classification
+  params <- list(
+    objective = "binary:logistic",
+    eval_metric = "logloss",
+    max_depth = 3,
+    eta = 0.1,
+    subsample = 0.8,
+    colsample_bytree = 0.8,
+    verbose = 0
+  )
+  
+  # Adjust number of rounds based on dataset size
+  n_samples <- ncol(trn_set)
+  nrounds <- if(n_samples < 50) 50 else if(n_samples < 200) 100 else 200
+  
+  # Train model with early stopping if enough samples
+  if(n_samples >= 20) {
+    # Use cross-validation to determine optimal rounds
+    cv_result <- xgb.cv(
+      params = params,
+      data = train_matrix,
+      nrounds = nrounds,
+      nfold = min(5, n_samples %/% 4),
+      early_stopping_rounds = 10,
+      verbose = 0,
+      showsd = FALSE
+    )
+    best_nrounds <- cv_result$best_iteration
+  } else {
+    best_nrounds <- min(30, nrounds)
+  }
+  
+  # Train final model
+  mod <- xgb.train(
+    params = params,
+    data = train_matrix,
+    nrounds = best_nrounds,
+    verbose = 0
+  )
+  
+  # Training predictions
+  pred_trn_prob <- predict(mod, train_matrix)
+  pred_trn_class <- as.character(as.numeric(pred_trn_prob >= 0.5))
+  
+  # Test predictions
+  if(!is.null(tst_set)) {
+    test_matrix <- xgb.DMatrix(data = t(tst_set))
+    pred_tst_prob <- predict(mod, test_matrix)
+    pred_tst_class <- as.character(as.numeric(pred_tst_prob >= 0.5))
+  } else {
+    pred_tst_prob <- NULL
+    pred_tst_class <- NULL
+  }
+  
+  return(list(mod=mod, pred_trn_prob=pred_trn_prob, pred_tst_prob=pred_tst_prob,
+              pred_trn_class=pred_trn_class, pred_tst_class=pred_tst_class))
+}
+
 predWrapper <- function(mod, tst_set, function_name){
   if(function_name=='logistic'){
     newdata <- data.frame(t(tst_set))
@@ -563,6 +707,12 @@ predWrapper <- function(mod, tst_set, function_name){
   }else if(function_name=='nnet'){
     newdata <- data.frame(t(tst_set))
     res <- as.vector(predict(mod, newdata = newdata))
+  }else if(function_name=='knn'){
+    res <- knn(train = mod$train_data, test = t(tst_set), cl = mod$train_labels, k = mod$k)
+    res <- as.numeric(as.character(res) == "1")
+  }else if(function_name=='xgboost'){
+    test_matrix <- xgb.DMatrix(data = t(tst_set))
+    res <- predict(mod, test_matrix)
   }
   return(res)
 }

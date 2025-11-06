@@ -29,7 +29,7 @@ initialize_analysis <- function(n_studies, debug_mode = FALSE) {
   n_highvar_genes <- 1000
   B <- if(debug_mode) 3 else 100
   
-  learner_types <- c("logistic", "elnet", "svm", "rf", "lightgbm", "nnet")
+  learner_types <- c("logistic", "elnet", "svm", "rf", "lightgbm", "nnet", "knn", "xgboost")
   perf_measures <- c("mxe", "auc", "rmse", "f", "err", "acc")
   perf_measures_names <- c("Mean cross-entropy loss", "AUC", "Root-mean-squared error", 
                            "F1 score", "Error rate", "Accuracy")

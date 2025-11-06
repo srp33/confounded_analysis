@@ -20,6 +20,8 @@ classifiers:
   - "rf"
   - "lightgbm"
   - "nnet"
+  - "knn"
+  - "xgboost"
 
 adjusters:
   - "unadjusted"
