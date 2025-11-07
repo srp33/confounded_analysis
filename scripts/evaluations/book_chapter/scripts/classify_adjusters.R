@@ -26,7 +26,7 @@ parser <- ArgumentParser(description = "Execute single adjuster comparison job f
 parser$add_argument("--adjuster", type = "character", required = TRUE,
                    help = "Batch correction method: unadjusted, combat, or mnn")
 parser$add_argument("--classifier", type = "character", required = TRUE,
-                   help = "Classifier type: logistic, elnet, svm, rf, lightgbm, or nnet")
+                   help = "Classifier type: logistic, elnet, elasticnet, svm, rf, lightgbm, nnet, knn, or xgboost")
 parser$add_argument("--num-datasets", type = "integer", required = TRUE,
                    help = "Number of datasets to include: 3, 4, 5, or 6")
 parser$add_argument("--seed", type = "integer", required = TRUE,
@@ -41,7 +41,7 @@ args <- parser$parse_args()
 
 # Parameter validation
 valid_adjusters <- c("unadjusted", "combat", "mnn")
-valid_classifiers <- c("logistic", "elnet", "svm", "rf", "lightgbm", "nnet", "knn", "xgboost")
+valid_classifiers <- c("logistic", "elnet", "elasticnet", "svm", "rf", "lightgbm", "nnet", "knn", "xgboost")
 valid_num_datasets <- c(3, 4, 5, 6)
 
 if (!args$adjuster %in% valid_adjusters) {

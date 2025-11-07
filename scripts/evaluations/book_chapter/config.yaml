@@ -18,7 +18,7 @@ classifiers:
   - "svm"
   - "rf"
   - "lightgbm"
-  - "nn"
+  - "nnet"
   - "knn"
   - "xgboost"
 

@@ -29,7 +29,7 @@ rule make_fig1:
         OUTPUT_FOLDER + "/logs/plot_batch_on_classifiers.log"
     shell:
         """
-        Rscript {input.script} -i {input.data} -o {output} 2>&1 | tee {log}
+        Rscript {input.script} -i {input.data} -o {output} > {log} 2>&1
         """
 
 
@@ -52,8 +52,7 @@ rule aggregate_batch_effects:
         input_dir=OUTPUT_FOLDER + "/results/batch_effects/individual"
     shell:
         """
-        Rscript {input.script} --input-dir {params.input_dir} -o {output} \
-            2>&1 | tee {log}
+        Rscript {input.script} --input-dir {params.input_dir} -o {output} > {log} 2>&1
         """
 
 
@@ -75,7 +74,7 @@ rule classify_batch_effects:
         """
         Rscript {input.script} -o {output} \
             --mean {wildcards.mean} --var {wildcards.variance} --classifier {wildcards.classifier} --seed {wildcards.seed} \
-            2>&1 | tee {log}
+            > {log} 2>&1
         """
 
 
@@ -92,7 +91,7 @@ rule make_fig2:
         OUTPUT_FOLDER + "/logs/plot_adjusters_on_classifiers.log"
     shell:
         """
-        Rscript {input.script} -i {input.data} -o {output} 2>&1 | tee {log}
+        Rscript {input.script} -i {input.data} -o {output} > {log} 2>&1
         """
 
 
@@ -117,7 +116,7 @@ rule aggregate_adjusters:
         """
         Rscript {input.script} \
             --input-dir {params.input_dir} -o {output} \
-            2>&1 | tee {log}
+            > {log} 2>&1
         """
 
 
@@ -139,5 +138,5 @@ rule classify_adjusters:
         """
         Rscript {input.script} -o {output} \
             --adjuster {wildcards.adjuster} --classifier {wildcards.classifier} --num-datasets {wildcards.n_datasets} --seed {wildcards.seed} \
-            2>&1 | tee {log}
+            > {log} 2>&1
         """

@@ -35,7 +35,7 @@ Usage:
   Or directly: Rscript classify_batch_effects.R --classifier <type> --mean <value> --var <value> --seed <value> -o <output>
 
 Arguments:
-  --classifier    Classifier type (logistic, elnet, svm, rf, lightgbm, nnet, knn, xgboost)
+  --classifier    Classifier type (logistic, elnet, elasticnet, svm, rf, lightgbm, nnet, knn, xgboost)
   --mean         Batch effect mean parameter (typically 5)
   --var          Batch effect variance parameter (1, 3, or 5)  
   --seed         Random seed for reproducibility (integer)
@@ -83,14 +83,14 @@ This script extracts single job functionality from 1_simpipe.R for parallel exec
   output_path <- args[output_idx + 1]
   
   # Validate parameters
-  valid_classifiers <- c("logistic", "elnet", "svm", "rf", "lightgbm", "nnet", "knn", "xgboost")
+  valid_classifiers <- c("logistic", "elnet", "elasticnet", "svm", "rf", "lightgbm", "nnet", "knn", "xgboost")
   if(!classifier %in% valid_classifiers) {
     cat("Error: Invalid classifier. Must be one of:", paste(valid_classifiers, collapse=", "), "\n", file=stderr())
     quit(status = 1)
   }
   
-  if(is.na(mean_val) || mean_val <= 0) {
-    cat("Error: Mean parameter must be a positive number\n", file=stderr())
+  if(is.na(mean_val) || mean_val < 0) {
+    cat("Error: Mean parameter must be a non-negative number\n", file=stderr())
     quit(status = 1)
   }
   
