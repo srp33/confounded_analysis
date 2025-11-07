@@ -318,9 +318,9 @@ main_analysis_function <- function() {
       
       # Combine training and test data for MNN correction
       combined_dat <- cbind(dat, dat_test)
-      combined_batch <- c(batch, rep(max(batch) + 1, ncol(dat_test)))  # Test set gets new batch ID
+      combined_batch <- c(batch, rep(max(batch) + 1, ncol(dat_test)))  # Test set gets highest batch ID
       
-      # Create batch list for MNN (each batch as separate matrix)
+      # Create batch list for MNN (each batch as separate matrix), sorted by batch label
       unique_batches <- sort(unique(combined_batch))
       batch_list <- lapply(unique_batches, function(b) {
         combined_dat[, combined_batch == b]

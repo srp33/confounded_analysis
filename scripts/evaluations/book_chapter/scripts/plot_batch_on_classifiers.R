@@ -143,7 +143,7 @@ p_main <- ggplot(sumstats, aes(x = mean, y = Avg, color = variance_group)) +
     x = "Batch Effect Mean",
     y =  metric_name,
     title = "Impact of Batch Effects on Classifier Performance",
-    subtitle = "Higher values indicate worse performance. Error bars show 95% confidence intervals."
+    subtitle = "Subtitle"
   ) +
   guides(color = guide_legend(title = NULL, nrow = 1))
 

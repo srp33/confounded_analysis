@@ -31,7 +31,6 @@ np_py <- NULL
 
 tryCatch({
   cat("Attempting to import Python modules for RVC...\n")
-  # [RVC MODIFICATION] Import the scikit-rvm RVC class and numpy
   rvm_module <- import("scikit_rvm")
   RVC_py <<- rvm_module$RVC
   np_py <<- import("numpy")
