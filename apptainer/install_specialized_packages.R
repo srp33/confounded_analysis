@@ -71,29 +71,22 @@ for (pkg in bioc_packages) {
 }
 
 # Install only packages that aren't already installed
-cat("--- Installing CRAN packages not in base image ---\n")
-cran_packages <- c(
+cat("--- Installing packages not in base image ---\n")
+extra_packages <- c(
     "MLmetrics", "ROCR", "nnls", "moments", "pracma",
     "ggpubr", "ggtext", "corrplot", "DT",
     "Rtsne", "umap", "kableExtra", "argparse", "docstring", 
     "itertools", "fairadapt", "pacman", "Seurat",
-    "seqgendiff"  # Alternative RNA-seq simulation package
+    "seqgendiff", "lightgbm", "parsnip", "tidymodels", "xgboost"
 )
 
 # Filter out already installed packages
-cran_to_install <- cran_packages[!cran_packages %in% installed_pkgs]
-if (length(cran_to_install) > 0) {
-    cat("Installing", length(cran_to_install), "CRAN packages:", paste(cran_to_install, collapse=", "), "\n")
-    pak::pkg_install(cran_to_install)
+pkgs_to_install <- extra_packages[!extra_packages %in% installed_pkgs]
+if (length(pkgs_to_install) > 0) {
+    cat("Installing", length(pkgs_to_install), " packages:", paste(pkgs_to_install, collapse=", "), "\n")
+    pak::pkg_install(pkgs_to_install)
 } else {
-    cat("All CRAN packages already installed in base image\n")
+    cat("All packages already installed in base image\n")
 }
-
-# Note: Annotation packages moved to base image for better performance
-# They are large/slow to compile, so better to include them in the base image
-# that gets built once and reused
-
-# Note: Custom annotation packages moved to separate annotation build stage
-# for better debugging and isolation
 
 cat("--- All specialized R packages installed successfully ---\n")

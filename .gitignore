@@ -21,3 +21,5 @@ scripts/evaluations/combat_seq_preston/real_data_application/sample_metadata.tsv
 *.err
 .idea
 *.log
+scripts/evaluations/book_chapter/tests
+scripts/evaluations/book_chapter/.snakemake

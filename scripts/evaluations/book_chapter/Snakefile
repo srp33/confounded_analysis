@@ -9,11 +9,86 @@ SCRIPTS_FOLDER = config["scripts_folder"]
 # Generate the list of seeds based on the config parameters. [count] seeds, starting at [start]
 split_seeds = list(range(config["split_seed_start"], config["split_seed_start"] + config["split_seed_count"]))
 
+# --- Error Reporting ---
+import os
+from pathlib import Path
+
+def check_for_failures():
+    """Check for jobs that have logs but no outputs"""
+    failures = []
+    
+    # Check classify_adjusters
+    log_dir = Path(OUTPUT_FOLDER) / "logs" / "classify_adjusters"
+    result_dir = Path(OUTPUT_FOLDER) / "results" / "adjusters" / "individual"
+    
+    if log_dir.exists():
+        for log_file in log_dir.glob("*.log"):
+            expected_output = result_dir / f"{log_file.stem}.csv"
+            if not expected_output.exists():
+                failures.append({
+                    "log": str(log_file),
+                    "expected_output": str(expected_output),
+                    "rule": "classify_adjusters"
+                })
+    
+    # Check classify_batch_effects
+    log_dir = Path(OUTPUT_FOLDER) / "logs" / "classify_batch_effects"
+    result_dir = Path(OUTPUT_FOLDER) / "results" / "batch_effects" / "individual"
+    
+    if log_dir.exists():
+        for log_file in log_dir.glob("*.log"):
+            expected_output = result_dir / f"{log_file.stem}.csv"
+            if not expected_output.exists():
+                failures.append({
+                    "log": str(log_file),
+                    "expected_output": str(expected_output),
+                    "rule": "classify_batch_effects"
+                })
+    
+    return failures
+
+onsuccess:
+    failures = check_for_failures()
+    if failures:
+        report_file = OUTPUT_FOLDER + "/FAILED_JOBS.txt"
+        with open(report_file, "w") as f:
+            f.write(f"Snakemake Failure Report\n")
+            f.write(f"{'='*80}\n")
+            f.write(f"Found {len(failures)} failed jobs\n\n")
+            
+            # Group by rule
+            by_rule = {}
+            for fail in failures:
+                rule = fail['rule']
+                if rule not in by_rule:
+                    by_rule[rule] = []
+                by_rule[rule].append(fail)
+            
+            for rule, fails in by_rule.items():
+                f.write(f"\n{rule}: {len(fails)} failures\n")
+                f.write(f"{'-'*80}\n")
+                for fail in fails[:20]:  # Show first 20
+                    f.write(f"  Log: {fail['log']}\n")
+                if len(fails) > 20:
+                    f.write(f"  ... and {len(fails) - 20} more\n")
+            
+            f.write(f"\n{'='*80}\n")
+            f.write(f"To see detailed error messages, run:\n")
+            f.write(f"  python3 scripts/evaluations/book_chapter/check_failures.py\n")
+        
+        print(f"\n⚠️  WARNING: {len(failures)} jobs failed. See {report_file} for details.")
+        print(f"    Run: python3 scripts/evaluations/book_chapter/check_failures.py\n")
+    else:
+        print("\n✓ All jobs completed successfully!\n")
+
+onerror:
+    print("\n❌ Snakemake encountered an error during execution.\n")
+
 # --- Final Target ---
 rule all:
     input:
-        f"{OUTPUT_FOLDER}/batch_on_classifiers.png",
-        f"{OUTPUT_FOLDER}/adjusters_on_classifiers.png"
+        OUTPUT_FOLDER + "/batch_on_classifiers.png",
+        OUTPUT_FOLDER + "/adjusters_on_classifiers.png"
 
 
 ## Figure 1 Pipeline: How does each classifier respond to batch effects?
@@ -21,53 +96,60 @@ rule all:
 # Step 1.3: Create the batch effect plot
 rule make_fig1:
     input:
-        data=f"data/batch_on_classifiers.csv"
+        data=OUTPUT_FOLDER + "/batch_on_classifiers.csv",
+        script=SCRIPTS_FOLDER + "/plot_batch_on_classifiers.R"
     output:
-        f"{OUTPUT_FOLDER}/batch_on_classifiers.png"
+        OUTPUT_FOLDER + "/batch_on_classifiers.png"
     log:
-        f"{OUTPUT_FOLDER}/logs/plot_batch_on_classifiers.log"
+        OUTPUT_FOLDER + "/logs/plot_batch_on_classifiers.log"
     shell:
         """
-        python {SCRIPTS_FOLDER}/plot_batch_on_classifiers.py -i {DATA_FOLDER}/batch_on_classifiers.csv -o {output} 2>&1 | tee {log}
+        Rscript {input.script} -i {input.data} -o {output} > {log} 2>&1
         """
 
 
 # Step 1.2: Aggregate all individual batch effect results
 rule aggregate_batch_effects:
     input:
-        expand(
-            OUTPUT_FOLDER + "/results/batch_effects/{classifier}_{mean}_{variance}_{seed}.csv",
+        data=expand(
+            OUTPUT_FOLDER + "/results/batch_effects/individual/{classifier}_{mean}_{variance}_{seed}.csv",
             classifier=config["classifiers"],
             variance=config["batch_effect_variances"],
             mean=config["batch_effect_means"],
             seed=split_seeds
-        )
+        ),
+        script=SCRIPTS_FOLDER + "/aggregate_results.R"
     output:
-        f"{DATA_FOLDER}/batch_on_classifiers.csv"
+        OUTPUT_FOLDER + "/batch_on_classifiers.csv"
     log:
-        f"{OUTPUT_FOLDER}/logs/aggregate_batch_effects.log"
+        OUTPUT_FOLDER + "/logs/aggregate_batch_effects.log"
     params:
-        input_dir=f"{OUTPUT_FOLDER}/results/batch_effects"
+        input_dir=OUTPUT_FOLDER + "/results/batch_effects/individual"
     shell:
         """
-        python {SCRIPTS_FOLDER}/aggregate_results.py --input-dir {params.input_dir} -o {output} \
-            2>&1 | tee {log}
+        Rscript {input.script} --input-dir {params.input_dir} -o {output} > {log} 2>&1
         """
 
 
 # Step 1.1: Run classification on simulated data
 rule classify_batch_effects:
     input:
-        data=f"{DATA_FOLDER}/combined_sub.RData"
+        data=DATA_FOLDER + "/combined_sub.RData",
+        script=SCRIPTS_FOLDER + "/classify_batch_effects.R",
+        helper=SCRIPTS_FOLDER + "/helper.R"
     output:
-        f"{OUTPUT_FOLDER}/results/batch_effects/{{classifier}}_{{mean}}_{{variance}}_{{seed}}.csv"
+        OUTPUT_FOLDER + "/results/batch_effects/individual/{classifier}_{mean}_{variance}_{seed}.csv"
     log:
-        f"{OUTPUT_FOLDER}/logs/classify_batch_effects/{{classifier}}_{{mean}}_{{variance}}_{{seed}}.log"
+        OUTPUT_FOLDER + "/logs/classify_batch_effects/{classifier}_{mean}_{variance}_{seed}.log"
+    threads: 1
+    resources:
+        mem_mb=2000,
+        runtime=30
     shell:
         """
-        python {SCRIPTS_FOLDER}/classify_batch_effects.py -o {output} \
-            --mean {mean} --var {variance} --classifier {classifier} --seed {seed} \
-            2>&1 | tee {log}
+        Rscript {input.script} -o {output} \
+            --mean {wildcards.mean} --var {wildcards.variance} --classifier {wildcards.classifier} --seed {wildcards.seed} \
+            > {log} 2>&1
         """
 
 
@@ -76,51 +158,60 @@ rule classify_batch_effects:
 # Step 2.3: Create the adjuster plot
 rule make_fig2:
     input:
-        data=f"{DATA_FOLDER}/adjusters_on_classifiers.csv"
+        data=OUTPUT_FOLDER + "/adjusters_on_classifiers.csv",
+        script=SCRIPTS_FOLDER + "/plot_adjusters_on_classifiers.R"
     output:
-        f"{OUTPUT_FOLDER}/adjusters_on_classifiers.png"
+        OUTPUT_FOLDER + "/adjusters_on_classifiers.png"
     log:
-        f"{OUTPUT_FOLDER}/logs/plot_adjusters_on_classifiers.log"
+        OUTPUT_FOLDER + "/logs/plot_adjusters_on_classifiers.log"
     shell:
         """
-        python {SCRIPTS_FOLDER}/plot_adjusters_on_classifiers.py 2>&1 | tee {log}
+        Rscript {input.script} -i {input.data} -o {output} > {log} 2>&1
         """
 
 
 # Step 2.2: Aggregate all individual adjuster results
 rule aggregate_adjusters:
     input:
-        expand(
-            OUTPUT_FOLDER + "/results/adjusters/{adjuster}_{classifier}_{seed}.csv",
+        data=expand(
+            OUTPUT_FOLDER + "/results/adjusters/individual/{adjuster}_{classifier}_{n_datasets}_{seed}.csv",
             adjuster=config["adjusters"],
             classifier=config["classifiers"],
+            n_datasets=config["num_datasets"],
             seed=split_seeds
-        )
+        ),
+        script=SCRIPTS_FOLDER + "/aggregate_results.R"
     output:
-        f"{DATA_FOLDER}/adjusters_on_classifiers.csv"
+        OUTPUT_FOLDER + "/adjusters_on_classifiers.csv"
     log:
-        f"{OUTPUT_FOLDER}/logs/aggregate_adjusters.log"
+        OUTPUT_FOLDER + "/logs/aggregate_adjusters.log"
     params:
-        input_dir=f"{OUTPUT_FOLDER}/results/adjusters"
+        input_dir=OUTPUT_FOLDER + "/results/adjusters/individual"
     shell:
         """
-        python {SCRIPTS_FOLDER}/aggregate_results.py \
+        Rscript {input.script} \
             --input-dir {params.input_dir} -o {output} \
-            2>&1 | tee {log}
+            > {log} 2>&1
         """
 
 
 # Step 2.1: Run classification on real data
 rule classify_adjusters:
     input:
-        data=f"{DATA_FOLDER}/TB_real_data.RData"
+        data=DATA_FOLDER + "/TB_real_data.RData",
+        script=SCRIPTS_FOLDER + "/classify_adjusters.R",
+        helper=SCRIPTS_FOLDER + "/helper.R",
     output:
-        f"{OUTPUT_FOLDER}/results/adjusters/{{adjuster}}_{{classifier}}_{{seed}}.csv"
+        OUTPUT_FOLDER + "/results/adjusters/individual/{adjuster}_{classifier}_{n_datasets}_{seed}.csv"
     log:
-        f"{OUTPUT_FOLDER}/logs/classify_adjusters/{{adjuster}}_{{classifier}}_{{seed}}.log"
+        OUTPUT_FOLDER + "/logs/classify_adjusters/{adjuster}_{classifier}_{n_datasets}_{seed}.log"
+    threads: 1
+    resources:
+        mem_mb=2000,
+        runtime=60
     shell:
         """
-        python {SCRIPTS_FOLDER}/classify_adjusters.py -o {output} \
-            --adjuster {adjuster} --classifier {classifier} --seed {seed} \
-            2>&1 | tee {log}
+        Rscript {input.script} -o {output} \
+            --adjuster {wildcards.adjuster} --classifier {wildcards.classifier} --num-datasets {wildcards.n_datasets} --seed {wildcards.seed} \
+            > {log} 2>&1
         """

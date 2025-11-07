@@ -47,8 +47,7 @@ export CCACHE_COMPRESSLEVEL="6"
 
     
     echo "=== Install minimal packages needed for secure HTTPS and repository keys (ca-certificates must be present before switching APT sources to HTTPS) ==="
-    if apt-get install -y --no-install-recommends \
-        ca-certificates apt-transport-https wget curl gnupg2 dirmngr lsb-release
+    apt-get install -y --no-install-recommends ca-certificates apt-transport-https wget curl gnupg2 dirmngr lsb-release
 
     
     echo "=== Convert apt sources to HTTPS (safe now that ca-certificates exists) to avoid further HTTP->HTTPS TLS transforms==="
@@ -78,7 +77,7 @@ export CCACHE_COMPRESSLEVEL="6"
     echo "deb [signed-by=/etc/apt/trusted.gpg.d/cran_ubuntu_key.gpg] https://cloud.r-project.org/bin/linux/ubuntu ${CODENAME}-cran40/" \
         > /etc/apt/sources.list.d/cran.list
 
-    "apt-get update (w/ CRAN metadata) attempt"
+    echo "apt-get update (w/ CRAN metadata) attempt"
     apt-get update
 
     

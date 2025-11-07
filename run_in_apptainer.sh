@@ -23,56 +23,52 @@ set -euo pipefail
 
 show_help() {
     echo "Usage:"
-    echo "  $0 [--image-path <path>] shell"
-    echo "  $0 [--image-path <path>] <executable> [args...]"
-    echo "  $0 [--image-path <path>] <script.R> [args...]"
-    echo "  $0 [--image-path <path>] <script.py> [args...]"
-    echo "  $0 [--image-path <path>] <script.sh> [args...]"
-    echo "  $0 [--image-path <path>] --sbatch [sbatch-flags] <script> [script-args...]"
+    echo "  $0 [--app-image-path <path>] shell"
+    echo "  $0 [--app-image-path <path>] <executable> [args...]"
+    echo "  $0 [--app-image-path <path>] <script.R> [args...]"
+    echo "  $0 [--app-image-path <path>] <script.py> [args...]"
+    echo "  $0 [--app-image-path <path>] <script.sh> [args...]"
+    echo "  $0 [--app-image-path <path>] --app-sbatch [sbatch-flags] <script> [script-args...]"
     echo ""
     echo "Options:"
-    echo "  -i, --image-path <path>  Override the default Apptainer image path"
-    echo "  -h, --help               Show this help message"
+    echo "  --app-image-path <path>  Override the default Apptainer image path"
+    echo "  --app-help               Show this help message"
     echo ""
     echo "Examples:"
-    echo "  $0 --sbatch /scripts/evaluations/robustifying/code/3_real_data_pipe.R"
-    echo "  $0 --sbatch --time 00:10:00 --mem 1G script.R  # Override defaults"
-    echo "  $0 --sbatch --time 02:00:00 --cpus-per-task 4 script.py arg1 arg2"
-    echo "  $0 --image-path /path/to/custom.sif shell"
-    echo "  $0 -i /path/to/custom.sif shell  # Short option"
+    echo "  $0 --app-sbatch /scripts/evaluations/robustifying/code/3_real_data_pipe.R"
+    echo "  $0 --app-sbatch --time 00:10:00 --mem 1G script.R  # Override defaults"
+    echo "  $0 --app-sbatch --time 02:00:00 --cpus-per-task 4 script.py arg1 arg2"
+    echo "  $0 --app-image-path /path/to/custom.sif shell"
     echo ""
     echo "Default sbatch settings: --time 1:00:00 --mem 32G --ntasks 4 --nodes 1"
 }
 
-# Parse global options using getopt (assumes --image-path comes first)
-PARSED=$(getopt -o +i:h --long image-path:,help -n "$0" -- "$@")
-if [[ $? -ne 0 ]]; then
-    echo "Error parsing arguments. Use --help for usage information." >&2
-    exit 1
-fi
-eval set -- "$PARSED"
-
+# Parse global options manually to handle mixed option styles
+TEMP_ARGS=()
 CUSTOM_IMAGE_PATH=""
-while true; do
+
+while [[ $# -gt 0 ]]; do
     case $1 in
-        -i|--image-path)
+        --app-image-path)
             CUSTOM_IMAGE_PATH="$2"
             shift 2
             ;;
-        -h|--help)
+        --app-help)
             show_help
             exit 0
             ;;
-        --)
-            shift
-            break
-            ;;
         *)
-            echo "Programming error in argument parsing" >&2
-            exit 3
+            # Save remaining arguments for later processing
+            TEMP_ARGS+=("$1")
+            shift
             ;;
     esac
 done
+
+# Restore remaining arguments
+set -- "${TEMP_ARGS[@]}"
+
+
 
 # Check if we have at least one command argument
 if [ $# -lt 1 ]; then
@@ -139,12 +135,13 @@ case "$MODE" in
         sg grp_batch_effects -c "apptainer shell \"$APPTAINER_IMAGE\""
         ;;
 
-    --sbatch)
+    --app-sbatch)
         # Handle sbatch mode with default arguments
         declare -A SBATCH_PARAMS=(
             ["--time"]="1:00:00"
             ["--mem"]="32G"
-            ["--ntasks"]="4"
+            ["--ntasks"]="1"
+            ["--cpus-per-task"]="4"
             ["--nodes"]="1"
         )
         SBATCH_FLAGS=()
@@ -183,7 +180,7 @@ case "$MODE" in
         done
         
         if [[ -z "$SCRIPT" ]]; then
-            echo "Error: No script specified for sbatch mode"
+            echo "Error: No script specified for --app-sbatch mode"
             exit 1
         fi
         
