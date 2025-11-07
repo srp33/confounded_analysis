@@ -4,6 +4,8 @@
 # Script to create batch effects on classifiers visualization
 # Expected to be called from Snakemake workflow
 
+SHARE_Y_AXIS <- TRUE
+
 # Suppress warnings and messages for cleaner output
 options(warn = -1)
 suppressPackageStartupMessages({
@@ -58,16 +60,6 @@ if (length(missing_cols) > 0) {
 metric = "balanced_acc"
 metric_name = "Balanced Accuracy"
 metric_data <- data[data$metric == metric, ]
-if (nrow(metric_data) == 0) {
-  cat("Warning: No data found for metric 'balanced_acc', trying 'auc' instead\n")
-  metric = "auc"
-  metric_name = "AUC"
-  metric_data <- data[data$metric == metric, ]
-  if (nrow(metric_data) == 0) {
-    cat("Available metrics:", paste(unique(data$metric), collapse = ", "), "\n")
-    stop("No data found for metric:", metric)
-  }
-}
 
 cat("Filtered to", nrow(metric_data), " observations\n")
 
@@ -103,12 +95,32 @@ n_variances <- length(unique(metric_data$variance))
 variance_colors <- RColorBrewer::brewer.pal(max(3, min(n_variances, 9)), "Set1")[1:n_variances]
 names(variance_colors) <- paste("Variance =", sort(unique(metric_data$variance)))
 
+# Calculate global y-axis limits if sharing is enabled
+if (SHARE_Y_AXIS) {
+  global_y_min <- min(metric_data$value, na.rm = TRUE)
+  global_y_max <- max(metric_data$value, na.rm = TRUE)
+  global_y_range <- global_y_max - global_y_min
+  # Add some padding
+  global_y_limits <- c(global_y_min - 0.05 * global_y_range, 
+                       global_y_max + 0.05 * global_y_range)
+  cat("Using shared y-axis limits:", round(global_y_limits[1], 3), "to", round(global_y_limits[2], 3), "\n")
+}
+
+cat("Y-axis sharing:", ifelse(SHARE_Y_AXIS, "enabled", "disabled"), "\n")
+
 # Create the main plot
 p_main <- ggplot(sumstats, aes(x = mean, y = Avg, color = variance_group)) +
   geom_errorbar(aes(ymin = Down, ymax = Up), width = 0.05, alpha = 0.7) +
   geom_line(aes(group = variance_group), size = 0.8) +
   geom_point(size = 2.5) +
-  facet_wrap(~ classifier_label, scales = "free_y", ncol = 4) +
+  {if (SHARE_Y_AXIS) {
+    facet_wrap(~ classifier_label, scales = "fixed", ncol = 4)
+  } else {
+    facet_wrap(~ classifier_label, scales = "free_y", ncol = 4)
+  }} +
+  {if (SHARE_Y_AXIS) {
+    scale_y_continuous(limits = global_y_limits, expand = expansion(mult = c(0.05, 0.05)))
+  }} +
   scale_color_manual(values = variance_colors) +
   scale_x_continuous(breaks = sort(unique(metric_data$mean))) +
   theme_bw() +

@@ -9,6 +9,81 @@ SCRIPTS_FOLDER = config["scripts_folder"]
 # Generate the list of seeds based on the config parameters. [count] seeds, starting at [start]
 split_seeds = list(range(config["split_seed_start"], config["split_seed_start"] + config["split_seed_count"]))
 
+# --- Error Reporting ---
+import os
+from pathlib import Path
+
+def check_for_failures():
+    """Check for jobs that have logs but no outputs"""
+    failures = []
+    
+    # Check classify_adjusters
+    log_dir = Path(OUTPUT_FOLDER) / "logs" / "classify_adjusters"
+    result_dir = Path(OUTPUT_FOLDER) / "results" / "adjusters" / "individual"
+    
+    if log_dir.exists():
+        for log_file in log_dir.glob("*.log"):
+            expected_output = result_dir / f"{log_file.stem}.csv"
+            if not expected_output.exists():
+                failures.append({
+                    "log": str(log_file),
+                    "expected_output": str(expected_output),
+                    "rule": "classify_adjusters"
+                })
+    
+    # Check classify_batch_effects
+    log_dir = Path(OUTPUT_FOLDER) / "logs" / "classify_batch_effects"
+    result_dir = Path(OUTPUT_FOLDER) / "results" / "batch_effects" / "individual"
+    
+    if log_dir.exists():
+        for log_file in log_dir.glob("*.log"):
+            expected_output = result_dir / f"{log_file.stem}.csv"
+            if not expected_output.exists():
+                failures.append({
+                    "log": str(log_file),
+                    "expected_output": str(expected_output),
+                    "rule": "classify_batch_effects"
+                })
+    
+    return failures
+
+onsuccess:
+    failures = check_for_failures()
+    if failures:
+        report_file = OUTPUT_FOLDER + "/FAILED_JOBS.txt"
+        with open(report_file, "w") as f:
+            f.write(f"Snakemake Failure Report\n")
+            f.write(f"{'='*80}\n")
+            f.write(f"Found {len(failures)} failed jobs\n\n")
+            
+            # Group by rule
+            by_rule = {}
+            for fail in failures:
+                rule = fail['rule']
+                if rule not in by_rule:
+                    by_rule[rule] = []
+                by_rule[rule].append(fail)
+            
+            for rule, fails in by_rule.items():
+                f.write(f"\n{rule}: {len(fails)} failures\n")
+                f.write(f"{'-'*80}\n")
+                for fail in fails[:20]:  # Show first 20
+                    f.write(f"  Log: {fail['log']}\n")
+                if len(fails) > 20:
+                    f.write(f"  ... and {len(fails) - 20} more\n")
+            
+            f.write(f"\n{'='*80}\n")
+            f.write(f"To see detailed error messages, run:\n")
+            f.write(f"  python3 scripts/evaluations/book_chapter/check_failures.py\n")
+        
+        print(f"\n⚠️  WARNING: {len(failures)} jobs failed. See {report_file} for details.")
+        print(f"    Run: python3 scripts/evaluations/book_chapter/check_failures.py\n")
+    else:
+        print("\n✓ All jobs completed successfully!\n")
+
+onerror:
+    print("\n❌ Snakemake encountered an error during execution.\n")
+
 # --- Final Target ---
 rule all:
     input:
