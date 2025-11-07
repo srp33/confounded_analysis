@@ -197,18 +197,21 @@ for (classifier in classifiers_with_data) {
   # Get raw data for this classifier for boxplots
   raw_data <- mxe_data[mxe_data$classifier_label == classifier & !is.na(mxe_data$classifier_label), ]
   
-  # Calculate annotation position based on y-axis limits
+  # Calculate annotation position at the top of the plot
   if (SHARE_Y_AXIS) {
-    annotation_y <- plot_data$Avg + 0.05 * (global_y_limits[2] - global_y_limits[1])
+    annotation_y <- global_y_limits[2] * 0.98  # Position at 98% of max y-axis
   } else {
-    annotation_y <- plot_data$Avg + 0.05 * diff(range(raw_data$value))
+    local_y_max <- max(raw_data$value, na.rm = TRUE)
+    local_y_min <- min(raw_data$value, na.rm = TRUE)
+    local_y_range <- local_y_max - local_y_min
+    annotation_y <- local_y_max + 0.12 * local_y_range  # Position at top with padding
   }
   
   p <- ggplot(raw_data, aes(x = adjuster_label, y = value, fill = adjuster_type)) +
     geom_boxplot(outlier.shape = 16, outlier.size = 1, alpha = 0.7) +
     geom_text(data = plot_data, aes(x = adjuster_label, y = annotation_y, 
                                    label = annot, fill = NULL), 
-              color = "black", size = 3, vjust = 0) +
+              color = "black", size = 3, vjust = 1) +
     facet_wrap(~ dataset_label, scales = "fixed", ncol = 4) +
     {if (SHARE_Y_AXIS) {
       scale_y_continuous(limits = global_y_limits, expand = expansion(mult = c(0, 0)))
@@ -254,21 +257,11 @@ library(gridExtra)
 plot_vector <- unname(plot_list)
 
 # Arrange plots manually based on how many we have
-if (length(plot_vector) == 4) {
-  final_plot <- grid.arrange(
-    plot_vector[[1]], plot_vector[[2]],
-    plot_vector[[3]], plot_vector[[4]],
-    legend,
-    ncol = 2, nrow = 3,
-    heights = c(1, 1, 0.1)
-  )
-} else {
-  # Fallback for other numbers of plots
+# Fallback for other numbers of plots
   final_plot <- grid.arrange(
     grobs = c(plot_vector, list(legend)),
     ncol = 2
   )
-}
 
 # Save the plot
 cat("Saving plot to:", args$output, "\n")
