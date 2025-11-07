@@ -465,7 +465,28 @@ main_execution <- function() {
     # Subset data into batches and filter genes
     cat("Subsetting data into batches and filtering genes...\n")
     N_batch <- 3
-    subset_data <- subset_and_filter_data(train_expr, y_train, params$mean, N_batch)
+    N_sample_size <- 20  # Fixed sample size per batch (not tied to batch effect mean!)
+    
+    # Validate we have enough samples
+    n_cases <- sum(y_train == 1)
+    n_controls <- sum(y_train == 0)
+    required_cases <- N_batch * (N_sample_size / 2)
+    required_controls <- N_batch * (N_sample_size / 2)
+    
+    if(n_cases < required_cases || n_controls < required_controls) {
+      cat(sprintf("Warning: Insufficient samples. Need %d cases + %d controls, have %d cases + %d controls\n",
+                 required_cases, required_controls, n_cases, n_controls))
+      # Reduce sample size if needed
+      max_possible <- min(floor(n_cases / N_batch) * 2, floor(n_controls / N_batch) * 2)
+      if(max_possible >= 4) {  # Minimum 2 cases + 2 controls per batch
+        N_sample_size <- max_possible
+        cat(sprintf("Reducing sample size to %d per batch\n", N_sample_size))
+      } else {
+        stop("Insufficient samples for meaningful analysis")
+      }
+    }
+    
+    subset_data <- subset_and_filter_data(train_expr, y_train, N_sample_size, N_batch)
     curr_train_expr <- subset_data$train_expr
     curr_y_train <- subset_data$y_train
     batch <- subset_data$batch
@@ -474,8 +495,8 @@ main_execution <- function() {
     # Apply gene filter to test data
     curr_test_expr <- test_expr[subset_data$gene_filter, ]
     
-    cat(sprintf("Data preparation complete: %d genes, %d training samples, %d test samples\n",
-               nrow(curr_train_expr), ncol(curr_train_expr), ncol(curr_test_expr)))
+    cat(sprintf("Data preparation complete: %d genes, %d training samples (%d per batch), %d test samples\n",
+               nrow(curr_train_expr), ncol(curr_train_expr), N_sample_size, ncol(curr_test_expr)))
     
     # Generate hyperparameters for batch effect simulation
     cat("Generating hyperparameters for batch effect simulation...\n")

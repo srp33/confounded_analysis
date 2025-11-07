@@ -51,33 +51,45 @@ if (length(missing_cols) > 0) {
   stop("Missing required columns: ", paste(missing_cols, collapse = ", "))
 }
 
-# Filter to MXE metric (cross entropy) for the main visualization
-mxe_data <- data[data$metric == "mxe", ]
-if (nrow(mxe_data) == 0) {
-  stop("No MXE data found in input file")
+#MXE = mean cross entropy
+#MCC = Matthews Correlation Coefficient
+
+# Filter to balanced accuracy for the main visualization
+metric = "balanced_acc"
+metric_name = "Balanced Accuracy"
+metric_data <- data[data$metric == metric, ]
+if (nrow(metric_data) == 0) {
+  cat("Warning: No data found for metric 'balanced_acc', trying 'auc' instead\n")
+  metric = "auc"
+  metric_name = "AUC"
+  metric_data <- data[data$metric == metric, ]
+  if (nrow(metric_data) == 0) {
+    cat("Available metrics:", paste(unique(data$metric), collapse = ", "), "\n")
+    stop("No data found for metric:", metric)
+  }
 }
 
-cat("Filtered to", nrow(mxe_data), "MXE observations\n")
+cat("Filtered to", nrow(metric_data), " observations\n")
 
 # Create better labels and groupings
-mxe_data$classifier_label <- factor(mxe_data$classifier,
+metric_data$classifier_label <- factor(metric_data$classifier,
   levels = c("logistic", "elasticnet", "svm", "rf", "knn", "xgboost", "nn", "lightgbm"),
   labels = c("Logistic", "ElasticNet", "SVM", "Random Forest", "KNN", "XGBoost", "Neural Net", "LightGBM"))
 
 # Create batch effect intensity labels
-mxe_data$batch_intensity <- paste("Mean:", mxe_data$mean, "Var:", mxe_data$variance)
-mxe_data$batch_label <- factor(mxe_data$batch_intensity,
-  levels = unique(mxe_data$batch_intensity[order(mxe_data$mean, mxe_data$variance)]))
+metric_data$batch_intensity <- paste("Mean:", metric_data$mean, "Var:", metric_data$variance)
+metric_data$batch_label <- factor(metric_data$batch_intensity,
+  levels = unique(metric_data$batch_intensity[order(metric_data$mean, metric_data$variance)]))
 
 # Create variance grouping for color coding
-mxe_data$variance_group <- factor(mxe_data$variance,
-  levels = sort(unique(mxe_data$variance)),
-  labels = paste("Variance =", sort(unique(mxe_data$variance))))
+metric_data$variance_group <- factor(metric_data$variance,
+  levels = sort(unique(metric_data$variance)),
+  labels = paste("Variance =", sort(unique(metric_data$variance))))
 
 cat("Creating figure\n")
 
 # Calculate summary statistics for each combination
-sumstats <- mxe_data %>%
+sumstats <- metric_data %>%
   group_by(classifier_label, mean, variance, variance_group, batch_label) %>%
   summarise(
     Avg = mean(value),
@@ -87,9 +99,9 @@ sumstats <- mxe_data %>%
   )
 
 # Create color palette for variance levels
-n_variances <- length(unique(mxe_data$variance))
+n_variances <- length(unique(metric_data$variance))
 variance_colors <- RColorBrewer::brewer.pal(max(3, min(n_variances, 9)), "Set1")[1:n_variances]
-names(variance_colors) <- paste("Variance =", sort(unique(mxe_data$variance)))
+names(variance_colors) <- paste("Variance =", sort(unique(metric_data$variance)))
 
 # Create the main plot
 p_main <- ggplot(sumstats, aes(x = mean, y = Avg, color = variance_group)) +
@@ -98,7 +110,7 @@ p_main <- ggplot(sumstats, aes(x = mean, y = Avg, color = variance_group)) +
   geom_point(size = 2.5) +
   facet_wrap(~ classifier_label, scales = "free_y", ncol = 4) +
   scale_color_manual(values = variance_colors) +
-  scale_x_continuous(breaks = sort(unique(mxe_data$mean))) +
+  scale_x_continuous(breaks = sort(unique(metric_data$mean))) +
   theme_bw() +
   theme(
     axis.title.x = element_text(size = 12),
@@ -117,7 +129,7 @@ p_main <- ggplot(sumstats, aes(x = mean, y = Avg, color = variance_group)) +
   ) +
   labs(
     x = "Batch Effect Mean",
-    y = "Mean Cross-Entropy Loss",
+    y =  metric_name,
     title = "Impact of Batch Effects on Classifier Performance",
     subtitle = "Higher values indicate worse performance. Error bars show 95% confidence intervals."
   ) +

@@ -4,6 +4,8 @@
 # Script to create adjuster effectiveness on classifiers visualization
 # Expected to be called from Snakemake workflow
 
+SHARE_Y_AXIS <- TRUE
+
 # Suppress warnings and messages for cleaner output
 options(warn = -1)
 suppressPackageStartupMessages({
@@ -53,13 +55,13 @@ if (length(missing_cols) > 0) {
 
 cat("Available metrics:", paste(sort(unique(data$metric)), collapse = ", "), "\n")
 
-# Filter to Balanced Accuracy metric for the main visualization
-mxe_data <- data[data$metric == "acc", ]
+# Filter to MCC metric for the main visualization
+mxe_data <- data[data$metric == "mcc", ]
 if (nrow(mxe_data) == 0) {
-  stop("No Balanced Accuracy data found in input file")
+  stop("No MCC data found in input file")
 }
 
-cat("Filtered to", nrow(mxe_data), "Balanced Accuracy observations\n")
+cat("Filtered to", nrow(mxe_data), "MCC observations\n")
 
 # Debug n_datasets values
 cat("Unique n_datasets values:", paste(sort(unique(mxe_data$n_datasets)), collapse = ", "), "\n")
@@ -156,6 +158,18 @@ classifiers_with_data <- sumstats %>%
   pull(classifier_label)
 
 cat("Classifiers with data:", paste(classifiers_with_data, collapse = ", "), "\n")
+cat("Y-axis sharing:", ifelse(SHARE_Y_AXIS, "enabled", "disabled"), "\n")
+
+# Calculate global y-axis limits if sharing is enabled
+if (SHARE_Y_AXIS) {
+  global_y_min <- 0 #min(mxe_data$value, na.rm = TRUE)
+  global_y_max <- max(mxe_data$value, na.rm = TRUE)
+  global_y_range <- global_y_max - global_y_min
+  # Add some padding for annotations
+  global_y_limits <- c(global_y_min - 0.05 * global_y_range, 
+                       global_y_max + 0.15 * global_y_range)
+  cat("Using shared y-axis limits:", round(global_y_limits[1], 3), "to", round(global_y_limits[2], 3), "\n")
+}
 
 # Create individual plots for each classifier (grouped by classifier first)
 plot_list <- list()
@@ -183,13 +197,24 @@ for (classifier in classifiers_with_data) {
   # Get raw data for this classifier for boxplots
   raw_data <- mxe_data[mxe_data$classifier_label == classifier & !is.na(mxe_data$classifier_label), ]
   
+  # Calculate annotation position based on y-axis limits
+  if (SHARE_Y_AXIS) {
+    annotation_y <- plot_data$Avg + 0.05 * (global_y_limits[2] - global_y_limits[1])
+  } else {
+    annotation_y <- plot_data$Avg + 0.05 * diff(range(raw_data$value))
+  }
+  
   p <- ggplot(raw_data, aes(x = adjuster_label, y = value, fill = adjuster_type)) +
     geom_boxplot(outlier.shape = 16, outlier.size = 1, alpha = 0.7) +
-    geom_text(data = plot_data, aes(x = adjuster_label, y = Avg + 0.05 * diff(range(raw_data$value)), 
+    geom_text(data = plot_data, aes(x = adjuster_label, y = annotation_y, 
                                    label = annot, fill = NULL), 
               color = "black", size = 3, vjust = 0) +
     facet_wrap(~ dataset_label, scales = "fixed", ncol = 4) +
-    scale_y_continuous(expand = expansion(mult = c(0.05, 0.15))) +
+    {if (SHARE_Y_AXIS) {
+      scale_y_continuous(limits = global_y_limits, expand = expansion(mult = c(0, 0)))
+    } else {
+      scale_y_continuous(expand = expansion(mult = c(0.05, 0.15)))
+    }} +
     scale_fill_manual(values = type_colors) +
     theme_bw() +
     theme(
@@ -205,7 +230,7 @@ for (classifier in classifiers_with_data) {
       plot.title = element_text(size = 12, hjust = 0.5)
     ) +
     labs(
-      y = "Accuracy",
+      y = "Matthews Correlation Coefficient",
       title = paste("Adjuster Effectiveness -", classifier)
     )
   

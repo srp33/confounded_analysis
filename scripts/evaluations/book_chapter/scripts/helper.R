@@ -234,11 +234,13 @@ trainPipe <- function(train_set, test_set, train_label, lfit=learner_fit){
 getPredFunctions <- function(learner_type){
   if(learner_type=="logistic"){return(predLogistic_pp)
   }else if(learner_type=="lasso"){return(predLasso_pp)  #return(predLasso)
-  }else if(learner_type=="elnet"){return(predElnet_pp)
+  }else if(learner_type=="elnet"){return(predElnet_pp)  # Keep backward compatibility
+  }else if(learner_type=="elasticnet"){return(predElnet_pp)  # New name
   }else if(learner_type=="svm"){return(predSVM)
   }else if(learner_type=="rf"){return(predRF_pp)  #return(predRF)
   }else if(learner_type=="lightgbm"){return(predLightGBM_pp)
-  }else if(learner_type=="nnet"){return(predNnet_pp)  #return(predNnet)
+  }else if(learner_type=="nnet"){return(predNnet_pp)  # Keep backward compatibility
+  }else if(learner_type=="nn"){return(predNnet_pp)  # New name
   }else if(learner_type=="naivebayes"){return(predNB)
   }else if(learner_type=="knn"){return(predKNN_pp) 
   }else if(learner_type=="xgboost"){return(predXGBoost_pp)
@@ -810,7 +812,7 @@ predWrapper <- function(mod, tst_set, function_name){
     res <- as.vector(predict(mod, newdata = newdata, type="response"))
   }else if(function_name=='lasso'){
     res <- as.vector(predict(mod, newx=t(tst_set), s="lambda.1se", type="response"))
-  }else if(function_name=='elnet'){
+  }else if(function_name=='elnet' || function_name=='elasticnet'){
     res <- as.vector(predict(mod, newx=t(tst_set), s="lambda.1se", type="response"))
   }else if(function_name=='svm'){
     res <- predict(mod, t(tst_set), probability=TRUE)
@@ -822,7 +824,7 @@ predWrapper <- function(mod, tst_set, function_name){
     res <- predict(mod, data = newdata)$predictions[, "1"]
   }else if(function_name=='lightgbm'){
     res <- predict(mod, t(tst_set))
-  }else if(function_name=='nnet'){
+  }else if(function_name=='nnet' || function_name=='nn'){
     tst_transposed <- t(tst_set)
     rownames(tst_transposed) <- NULL
     newdata <- data.frame(tst_transposed)

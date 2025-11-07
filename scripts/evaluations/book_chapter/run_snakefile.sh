@@ -3,9 +3,9 @@
 #SBATCH --job-name=snakemake
 #SBATCH --nodes=1
 #SBATCH --ntasks-per-node=1
-#SBATCH --cpus-per-task=96
+#SBATCH --cpus-per-task=128
 #SBATCH --mem-per-cpu=2G
-#SBATCH --time=02:00:00
+#SBATCH --time=06:00:00
 #SBATCH --output=/grphome/grp_batch_effects/outputs/book_chapter/logs/snakemake_%j.out
 
 BOOK_CHAPTER_DIR="/scripts/evaluations/book_chapter"
