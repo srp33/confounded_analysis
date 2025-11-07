@@ -133,7 +133,7 @@ validate_job_completeness <- function(results_data, input_dir, verbose = FALSE) 
     cat("Detected job type: Batch Effects Analysis\n")
     
     # Expected parameters from config
-    expected_classifiers <- c("logistic", "elasticnet", "svm", "rf", "knn", "xgboost", "nn", "lightgbm")
+    expected_classifiers <- c("logistic", "elasticnet", "svm", "rf", "knn", "xgboost", "nn", "rvc")
     expected_means <- c(5)
     expected_variances <- c(1, 3, 5)
     expected_seeds <- 42:141  # 100 seeds starting from 42
@@ -170,7 +170,7 @@ validate_job_completeness <- function(results_data, input_dir, verbose = FALSE) 
     
     # Expected parameters from config
     expected_adjusters <- c("unadjusted", "combat", "mnn")
-    expected_classifiers <- c("logistic", "elasticnet", "svm", "rf", "knn", "xgboost", "nn", "lightgbm")
+    expected_classifiers <- c("logistic", "elasticnet", "svm", "rf", "knn", "xgboost", "nn", "rvc")
     expected_n_datasets <- c(3, 4, 5, 6)
     expected_seeds <- 42:141  # 100 seeds starting from 42
     

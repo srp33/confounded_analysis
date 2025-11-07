@@ -238,7 +238,6 @@ getPredFunctions <- function(learner_type){
   }else if(learner_type=="elasticnet"){return(predElnet_pp)  # New name
   }else if(learner_type=="svm"){return(predSVM)
   }else if(learner_type=="rf"){return(predRF_pp)  #return(predRF)
-  }else if(learner_type=="lightgbm"){return(predLightGBM_pp)
   }else if(learner_type=="nnet"){return(predNnet_pp)  # Keep backward compatibility
   }else if(learner_type=="nn"){return(predNnet_pp)  # New name
   }else if(learner_type=="naivebayes"){return(predNB)
@@ -599,50 +598,6 @@ predElnet_pp <- function(trn_set, tst_set=NULL, y_trn){
               pred_trn_class=pred_trn_class, pred_tst_class=pred_tst_class))
 }
 
-# LightGBM
-predLightGBM_pp <- function(trn_set, tst_set=NULL, y_trn){
-  library(lightgbm, quietly = TRUE)
-  
-  # Prepare data
-  train_data <- lgb.Dataset(data = t(trn_set), label = as.numeric(as.character(y_trn)))
-  
-  # Simple parameters
-  params <- list(
-    objective = "binary",
-    metric = "binary_logloss",
-    num_leaves = 31,
-    learning_rate = 0.05,
-    verbose = -1
-  )
-  
-  # Use fixed rounds for simplicity
-  n_samples <- ncol(trn_set)
-  nrounds <- if(n_samples < 50) 30 else 100
-  
-  # Train model
-  mod <- lgb.train(
-    params = params,
-    data = train_data,
-    nrounds = nrounds,
-    verbose = -1
-  )
-  
-  pred_trn_prob <- predict(mod, t(trn_set))
-  pred_trn_class <- as.vector(ifelse(pred_trn_prob >= 0.5, "1", "0"))
-  
-  if(!is.null(tst_set)){
-    pred_tst_prob <- predict(mod, t(tst_set))
-    pred_tst_class <- as.vector(ifelse(pred_tst_prob >= 0.5, "1", "0"))
-  } else {
-    pred_tst_prob <- NULL
-    pred_tst_class <- NULL
-  }
-  
-  return(list(mod=mod, pred_trn_prob=pred_trn_prob, pred_tst_prob=pred_tst_prob,
-              pred_trn_class=pred_trn_class, pred_tst_class=pred_tst_class))
-}
-
-
 # K-Nearest Neighbors
 predKNN_pp <- function(trn_set, tst_set=NULL, y_trn){
   library(class, quietly = TRUE)
@@ -822,8 +777,6 @@ predWrapper <- function(mod, tst_set, function_name){
     rownames(tst_transposed) <- NULL
     newdata <- data.frame(tst_transposed)
     res <- predict(mod, data = newdata)$predictions[, "1"]
-  }else if(function_name=='lightgbm'){
-    res <- predict(mod, t(tst_set))
   }else if(function_name=='nnet' || function_name=='nn'){
     tst_transposed <- t(tst_set)
     rownames(tst_transposed) <- NULL

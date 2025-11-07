@@ -65,8 +65,8 @@ cat("Filtered to", nrow(metric_data), " observations\n")
 
 # Create better labels and groupings
 metric_data$classifier_label <- factor(metric_data$classifier,
-  levels = c("logistic", "elasticnet", "svm", "rf", "knn", "xgboost", "nn", "lightgbm"),
-  labels = c("Logistic", "ElasticNet", "SVM", "Random Forest", "KNN", "XGBoost", "Neural Net", "LightGBM"))
+  levels = c("logistic", "elasticnet", "svm", "rf", "knn", "xgboost", "nn", "rvc"),
+  labels = c("Logistic", "ElasticNet", "SVM", "Random Forest", "KNN", "XGBoost", "Neural Net", "RVC"))
 
 # Create batch effect intensity labels
 metric_data$batch_intensity <- paste("Mean:", metric_data$mean, "Var:", metric_data$variance)
@@ -143,7 +143,7 @@ p_main <- ggplot(sumstats, aes(x = mean, y = Avg, color = variance_group)) +
     x = "Batch Effect Mean",
     y =  metric_name,
     title = "Impact of Batch Effects on Classifier Performance",
-    subtitle = "Higher values indicate worse performance. Error bars show 95% confidence intervals."
+    subtitle = "Subtitle"
   ) +
   guides(color = guide_legend(title = NULL, nrow = 1))
 
