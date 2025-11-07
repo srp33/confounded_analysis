@@ -15,11 +15,9 @@ suppressPackageStartupMessages({
   library(limma)
   library(Seurat)
   library(batchelor)
-  library(rliger)
   library(fairadapt)
   library(future)
   library(huge)
-  library(preprocessCore)
   library(data.table)
 })
 
@@ -192,6 +190,24 @@ restore_names <- function(matrix, prep_list) {
   rownames(matrix) <- original_rownames
   colnames(matrix) <- original_colnames
   
+  return(matrix)
+}
+
+restore_names_safe <- function(matrix, prep_list) {
+  # Restore feature names
+  if (nrow(matrix) == length(prep_list$orig_features)) {
+    rownames(matrix) <- prep_list$orig_features
+  } else {
+    warning("Number of rows in matrix does not match number of original features; row names not restored.")
+  }
+
+  # Restore sample names
+  if (ncol(matrix) == length(prep_list$orig_samples)) {
+    colnames(matrix) <- prep_list$orig_samples
+  } else {
+    warning("Number of columns in matrix does not match number of original samples; column names not restored.")
+  }
+
   return(matrix)
 }
 
@@ -553,7 +569,7 @@ adjust_liger <- function(df_, batch, data_are_counts, debug = FALSE) {
 }
 
 
-adjust_mnn <- function(df_, batch, data_are_counts, debug = FALSE) {
+adjust_mnn <- function(df_, batch, test_source, data_are_counts, debug = FALSE) {
   #' Adjust using the mnnCorrect method from batchelor.
   #' @param df_ The data matrix (features x samples).
   #' @param batch The batch variable vector.
@@ -563,11 +579,20 @@ adjust_mnn <- function(df_, batch, data_are_counts, debug = FALSE) {
   
   message("Adjusting with MNN.")
   prep_list <- prep_seurat_like(df_, batch, data_are_counts)
-  sce_list <- lapply(unique(batch), function(b) as.SingleCellExperiment(prep_list$obj[, prep_list$obj$Batch == b]))
+
+  batch_levels <- unique(batch)
+  batch_levels <- c(setdiff(batch_levels, test_source), test_source)
+  
+  sce_list <- lapply(batch_levels, function(b) 
+    as.SingleCellExperiment(prep_list$obj[, prep_list$obj$Batch == b]))
+
   sce_corrected <- do.call(batchelor::mnnCorrect, c(sce_list, list(assay.type = "logcounts")))
   corrected_matrix <- as.matrix(assay(sce_corrected, "corrected"))
+
+  # Restore original rownames and order
+  corrected_matrix <- restore_names_safe(corrected_matrix, prep_list)
   
-  return(restore_names(corrected_matrix, prep_list))
+  return(corrected_matrix)
 }
 
 
@@ -1080,7 +1105,7 @@ options(future.globals.maxSize = 2000 * 1024^2)
 
 
 # Parse command line arguments ------------------------------------------------
-if (!interactive()){
+if (sys.nframe() == 0 && !interactive()){
 parser <- ArgumentParser(description = "A script to apply various batch correction methods to tidy data.")
 
 parser$add_argument("input_file", help = "Path to the input CSV file. Rows are samples, columns are features/metadata.")
@@ -1149,6 +1174,7 @@ message("Writing adjusted data to '", args$output_file, "'")
 adjusted_data %>%
   mutate(across(where(is.numeric), ~ sprintf("%.6f", .))) %>%
   fwrite(args$output_file)
-}
+
 elapsed_time = Sys.time() - start_time
 message("Successfully saved adjusted data to '", args$output_file, "'", " in ", elapsed_time, " seconds.")
+}
