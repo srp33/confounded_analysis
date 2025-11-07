@@ -78,8 +78,8 @@ if (na_count > 0) {
 
 # Create better labels and groupings
 mxe_data$classifier_label <- factor(mxe_data$classifier,
-  levels = c("logistic", "elasticnet", "svm", "rf", "knn", "xgboost", "nn", "lightgbm"),
-  labels = c("Logistic", "ElasticNet", "SVM", "Random Forest", "KNN", "XGBoost", "Neural Net", "LightGBM"))
+  levels = c("logistic", "elasticnet", "svm", "rf", "knn", "xgboost", "nn", "rvc"),
+  labels = c("Logistic", "ElasticNet", "SVM", "Random Forest", "KNN", "XGBoost", "Neural Net", "RVC"))
 
 mxe_data$adjuster_label <- factor(mxe_data$adjuster,
   levels = c("unadjusted", "combat", "mnn"),

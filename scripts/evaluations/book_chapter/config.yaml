@@ -17,10 +17,10 @@ classifiers:
   - "elasticnet"
   - "svm"
   - "rf"
-  - "lightgbm"
   - "nnet"
   - "knn"
   - "xgboost"
+  - "rvc"
 
 adjusters:
   - "unadjusted"

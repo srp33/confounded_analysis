@@ -5,14 +5,13 @@
 #SBATCH --ntasks-per-node=1
 #SBATCH --cpus-per-task=24
 #SBATCH --mem-per-cpu=2G
-#SBATCH --time=06:00:00
+#SBATCH --time=04:00:00
 #SBATCH --output=/grphome/grp_batch_effects/outputs/book_chapter/logs/snakemake_%j.out
 
 BOOK_CHAPTER_DIR="/scripts/evaluations/book_chapter"
 
 # Cleanup old logs and temporary files to prevent space issues
 echo "Cleaning up old logs and temporary files..."
-find $HOME/confounded_analysis/grp_batch_effects/outputs/book_chapter/logs/ -name "snakemake_*.out" -size +10M -mtime +1 -delete 2>/dev/null || true
 find $HOME/.snakemake -type f -mtime +7 -delete 2>/dev/null || true
 
 mkdir -p $HOME/confounded_analysis/grp_batch_effects/outputs/book_chapter

@@ -12,10 +12,32 @@ suppressMessages(suppressWarnings({
 # Load required libraries
 suppressMessages(suppressWarnings({
   required_packages <- c("glmnet", "SummarizedExperiment", "sva", "DESeq2", "ROCR", "ggplot2", 
-                        "gridExtra", "reshape2", "dplyr", "purrr", "nnls", "lightgbm", "batchelor",
-                        "argparse", "class", "xgboost")
+                        "gridExtra", "reshape2", "dplyr", "purrr", "nnls", "batchelor",
+                        "argparse", "class", "xgboost",
+                        "reticulate") 
   sapply(required_packages, require, character.only=TRUE, quietly=TRUE)
 }))
+
+# ====================================================================
+# [RVC MODIFICATION] RETICULATE / RVC SETUP
+# ====================================================================
+# This section attempts to load the necessary Python modules for RVC.
+# We define them as NULL globally and use <<- to assign them if found.
+RVC_py <- NULL
+np_py <- NULL
+
+tryCatch({
+  cat("Attempting to import Python modules for RVC...\n")
+  # [RVC MODIFICATION] Import the scikit-rvm RVC class and numpy
+  rvm_module <- import("scikit_rvm")
+  RVC_py <<- rvm_module$RVC
+  np_py <<- import("numpy")
+  cat("Successfully imported scikit_rvm and numpy.\n")
+}, error = function(e) {
+  cat("[WARNING] Could not import Python modules 'scikit_rvm' or 'numpy'.\n")
+  cat("[WARNING] The 'rvc' classifier will be unavailable.\n")
+  cat(sprintf("[WARNING] Python Error: %s\n", e$message))
+})
 
 # ====================================================================
 # COMMAND-LINE ARGUMENT PARSING
@@ -26,7 +48,7 @@ parser <- ArgumentParser(description = "Execute single adjuster comparison job f
 parser$add_argument("--adjuster", type = "character", required = TRUE,
                    help = "Batch correction method: unadjusted, combat, or mnn")
 parser$add_argument("--classifier", type = "character", required = TRUE,
-                   help = "Classifier type: logistic, elnet, elasticnet, svm, rf, lightgbm, nnet, knn, or xgboost")
+                   help = "Classifier type: logistic, elnet, elasticnet, svm, rf, nnet, knn, xgboost, or rvc")
 parser$add_argument("--num-datasets", type = "integer", required = TRUE,
                    help = "Number of datasets to include: 3, 4, 5, or 6")
 parser$add_argument("--seed", type = "integer", required = TRUE,
@@ -41,7 +63,7 @@ args <- parser$parse_args()
 
 # Parameter validation
 valid_adjusters <- c("unadjusted", "combat", "mnn")
-valid_classifiers <- c("logistic", "elnet", "elasticnet", "svm", "rf", "lightgbm", "nnet", "knn", "xgboost")
+valid_classifiers <- c("logistic", "elnet", "elasticnet", "svm", "rf", "nnet", "knn", "xgboost", "rvc")
 valid_num_datasets <- c(3, 4, 5, 6)
 
 if (!args$adjuster %in% valid_adjusters) {
@@ -157,6 +179,10 @@ main_analysis_function <- function() {
   load(data_path)
   source("/scripts/evaluations/book_chapter/scripts/helper.R")
   
+  if (classifier == "rvc" && (is.null(RVC_py) || is.null(np_py))) {
+    stop("Classifier 'rvc' was requested, but Python dependencies 'scikit-rvm' or 'numpy' could not be imported. Please install them.")
+  }
+  
   # Set seed for reproducibility
   set.seed(seed)
   
@@ -164,7 +190,6 @@ main_analysis_function <- function() {
   # REAL DATA PREPARATION LOGIC
   # ====================================================================
   
-  #' Filter studies based on analysis type
   filter_studies <- function(dat_lst, label_lst, n_studies) {
     all_studies <- c("GSE37250_SA", "US", "India", "GSE37250_M", "Africa", "GSE39941_M")
     selected_studies <- all_studies[1:n_studies]
@@ -255,10 +280,9 @@ main_analysis_function <- function() {
   cat(sprintf("  Training batches: %d\n", length(unique(datasets$batch))))
   
   # ====================================================================
-  # BATCH CORRECTION APPLICATION LOGIC
+  # BATCH CORRECTION 
   # ====================================================================
   
-  #' Apply batch correction methods with sophisticated test set handling
   apply_batch_corrections <- function(dat, batch, group, dat_test, method) {
     if (method == "unadjusted") {
       # No correction - return original data
@@ -272,8 +296,9 @@ main_analysis_function <- function() {
       
       # Apply ComBat to combined training and test data
       combined_dat <- cbind(dat, dat_test)
-      combined_batch <- c(batch, rep(ref_batch, ncol(dat_test)))  # Test set uses reference batch
-      combined_labels <- c(group, rep(0, ncol(dat_test)))  # Use dummy labels for test
+      # Test set gets its own batch label
+      combined_batch <- c(batch, rep(max(batch) + 1, ncol(dat_test)))  
+      combined_labels <- c(group, rep(max(group) + 1, ncol(dat_test)))
       
       # Apply ComBat correction
       combat_combined <- ComBat(combined_dat, batch=combined_batch, 
@@ -403,18 +428,52 @@ main_analysis_function <- function() {
   # ====================================================================
   
   #' Train single classifier and evaluate performance
+  # RVC needs it's own branch since it's from python
   train_and_evaluate_classifier <- function(classifier_type, train_data, train_labels, test_data, test_labels) {
-    # Get prediction function for classifier type
-    learner_fit <- getPredFunctions(classifier_type)
     
-    # Train model
-    cat(sprintf("Training %s classifier...\n", classifier_type))
-    trained_model <- trainPipe(train_set = train_data, train_label = train_labels, 
-                              test_set = NULL, lfit = learner_fit)
+    # Initialize variables
+    trained_model <- NULL
+    test_predictions <- NULL
     
-    # Generate predictions on test set
-    cat(sprintf("Generating predictions...\n"))
-    test_predictions <- predWrapper(trained_model$mod, test_data, classifier_type)
+    if (classifier_type == "rvc") {
+      cat("Training rvc classifier (using reticulate)...\n")
+      
+      # Transpose data: R (features x samples) -> Python (samples x features)
+      X_train_t <- t(train_data)
+      X_test_t <- t(test_data)
+      
+      X_train_py <- r_to_py(X_train_t)
+      y_train_r <- as.numeric(as.factor(train_labels)) - 1
+      y_train_py <- r_to_py(y_train_r)
+      X_test_py <- r_to_py(X_test_t)
+      
+      # Using rbf kernel
+      model_py <- RVC_py(kernel = "rbf")
+      model_py$fit(X_train_py, y_train_py)
+      
+      # This returns (n_samples, n_classes)
+      preds_py <- model_py$predict_proba(X_test_py)
+      
+      # Convert predictions back to R
+      # We need the probability of the positive class (class "1"), which is the 2nd column
+      preds_r <- py_to_r(preds_py)
+      test_predictions <- preds_r[, 2] 
+      
+      trained_model <- list(mod = model_py)
+      
+    } else {
+      # Get prediction function for classifier type
+      learner_fit <- getPredFunctions(classifier_type)
+      
+      # Train model
+      cat(sprintf("Training %s classifier...\n", classifier_type))
+      trained_model <- trainPipe(train_set = train_data, train_label = train_labels, 
+                                test_set = NULL, lfit = learner_fit)
+      
+      # Generate predictions on test set
+      cat(sprintf("Generating predictions...\n"))
+      test_predictions <- predWrapper(trained_model$mod, test_data, classifier_type)
+    }
     
     # Calculate performance metrics
     perf_measures <- c("mxe", "auc", "rmse", "f", "err", "acc")
@@ -488,9 +547,7 @@ main_analysis_function <- function() {
     warning(sprintf("Very small training set (%d samples) - results may be unreliable", n_train_samples))
   }
   
-  if(classifier == "lightgbm" && n_train_samples < 20) {
-    warning(sprintf("LightGBM with small dataset (%d samples) - using simplified configuration", n_train_samples))
-  }
+
   
   # Check for class imbalance
   class_counts <- table(datasets$group)
