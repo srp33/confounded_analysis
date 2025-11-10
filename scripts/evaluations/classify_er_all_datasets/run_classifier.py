@@ -52,16 +52,44 @@ def main():
         print(f"File not found: {csv_file}")
         sys.exit(1)
 
+    print(f"\n[DEBUG] Loading CSV: {csv_file}")
     df = pd.read_csv(csv_file)
-    test_source = parse_test_source(csv_file)
-    adjuster = os.path.basename(os.path.dirname(csv_file))
+    print(f"[DEBUG] Dataset shape: {df.shape}")
+    print(f"[DEBUG] Columns: {list(df.columns)}")
 
     if 'meta_er_status' not in df.columns or 'meta_source' not in df.columns:
         raise ValueError("CSV must contain 'meta_er_status' and 'meta_source' columns")
     
+
+    print(f"[DEBUG] Missing values in 'meta_er_status': {df['meta_er_status'].isna().sum()} / {len(df)} total rows")
+    print(f"[DEBUG] Unique meta_source values: {df['meta_source'].unique()[:10]}")
+
+    test_source = parse_test_source(csv_file)
+    adjuster = os.path.basename(os.path.dirname(csv_file))
+    
+    print(f"[DEBUG] Parsed test_source = {test_source}")
+    print(f"[DEBUG] Adjuster (parent directory) = {adjuster}")
+
+    print(f"[DEBUG] Train set: {train_df.shape[0]} rows, Test set: {test_df.shape[0]} rows")
+
+    # If case mismatches might be an issue, you can also test:
+    lower_match = df['meta_source'].str.lower() == test_source.lower()
+    print(f"[DEBUG] Rows matching test_source (case-insensitive): {lower_match.sum()}")
+
+    if train_df.empty or test_df.empty:
+        print("[ERROR] Train or test set is empty — possible mismatch between test_source and meta_source values")
+        print(f"[DEBUG] First few meta_source values: {df['meta_source'].head()}")
+        sys.exit(1)
+
+    # Check for NaNs in label columns
+    print(f"[DEBUG] Missing labels — train: {train_df['meta_er_status'].isna().sum()}, test: {test_df['meta_er_status'].isna().sum()}")
+
+
+
     # Train/test split
     train_df = df[df['meta_source'] != test_source]
     test_df = df[df['meta_source'] == test_source]
+    print(df['meta'])
     if train_df.empty or test_df.empty:
         raise ValueError(f"No train/test samples for test source {test_source}")
     
