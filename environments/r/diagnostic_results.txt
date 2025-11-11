@@ -1,0 +1,90 @@
+==========================================
+Nix-User-Chroot Diagnostic Tests
+==========================================
+
+TEST 1: User Namespaces
+----------------------------------------
+✅ User namespaces are ENABLED
+
+TEST 2: Filesystem Features
+----------------------------------------
+✅ chmod works
+✅ chown works
+   Filesystem type: xfs
+✅ Local filesystem
+
+TEST 3: Permissions Inside nix-user-chroot
+----------------------------------------
+✅ Permissions work inside nix-user-chroot
+
+TEST 4: Nix Build Sandbox
+----------------------------------------
+Testing if Nix can unpack and chmod a simple tarball...
+✅ Tarball unpack + chmod works
+
+TEST 5: R Package Build Scenario
+----------------------------------------
+Testing actual R package build process...
+Found curl derivation: /nix/store/mv0nd3v3maqsiqxvcbvvy0g1pv4698yn-curl_5.2.3.tar.gz.drv
+Attempting to fetch curl tarball...
+warning: you did not specify '--add-root'; the result might be removed by the garbage collector
+/nix/store/3b0vm82jds2y6p68lx7rnvz2zd04wg7q-curl_5.2.3.tar.gz
+✅ Tarball fetched: /nix/store/3b0vm82jds2y6p68lx7rnvz2zd04wg7q-curl_5.2.3.tar.gz
+Unpacking to: /tmp/tmp.C5Bbk9DD5P
+Unpack exit code: 0
+Attempting chmod on unpacked files...
+chmod exit code: 0
+✅ R package unpack + chmod works
+✅ R package build scenario works
+
+TEST 6: Binary Cache Connectivity
+----------------------------------------
+Testing cache.nixos.org...
+✅ cache.nixos.org reachable
+Testing rstats-on-nix.cachix.org...
+✅ rstats-on-nix.cachix.org reachable
+Checking if r-curl is in binary cache...
+❌ r-curl NOT in any configured cache
+
+TEST 7: Nix Configuration
+----------------------------------------
+✅ nix.conf exists
+✅ sandbox disabled
+✅ builders set (should prevent local builds)
+✅ cache.nixos.org configured
+✅ rstats-on-nix.cachix.org configured
+
+TEST 8: Nix Store Space
+----------------------------------------
+Nix store filesystem:
+vip-ib.vast.rc.byu.edu:/grphome/grp_batch_effects/nix  2.0T  772G  1.3T  38% /nix
+✅ Sufficient space available
+
+TEST 9: Nix Build Mode
+----------------------------------------
+Build mode: local
+✅ Using local builds (expected for nix-user-chroot)
+
+==========================================
+SUMMARY
+==========================================
+
+User Namespaces:     ✅ OK
+Filesystem:          ✅ OK
+chmod:               ✅ OK
+Chroot Permissions:  ✅ OK
+Nix Unpack Test:     ✅ OK
+R Package Build:     ✅ OK
+Cache Connectivity:  ✅ OK
+r-curl in Cache:     ❌ NO
+Nix Config:          ✅ OK
+Store Space:         ✅ OK
+
+ROOT CAUSE: Package not in binary cache
+  → r-curl (and likely other packages) not available pre-built
+  → With 'builders =' set, Nix should refuse to build but tries anyway
+  → Solutions:
+    1. Build on a working Nix system, copy closure to HPC
+    2. Try different nixpkgs snapshot with better cache coverage
+    3. Remove 'builders =' to allow local builds (if permissions work)
+

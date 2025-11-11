@@ -21,11 +21,6 @@ suppressMessages(suppressWarnings({
   }
 }))
 
-# ====================================================================
-# [RVC MODIFICATION] RETICULATE / RVC SETUP
-# ====================================================================
-# This section attempts to load the necessary Python modules for RVC.
-# We define them as NULL globally and use <<- to assign them if found.
 RVC_py <- NULL
 np_py <- NULL
 
@@ -200,7 +195,6 @@ subset_and_filter_data <- function(train_expr, y_train, N_sample_size, N_batch =
   batches_ind <- map(1:N_batch, ~which(batch == .x))
   
   # Remove genes with only 0 values in any batch
-  # This is critical for preventing numerical issues in batch correction
   g_keep <- map(1:N_batch, ~{
     which(apply(curr_train_expr[, batch == .x], 1, function(x){!all(x==0)}))
   })

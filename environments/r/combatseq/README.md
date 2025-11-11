@@ -1,0 +1,188 @@
+# ComBat-seq R Environment
+
+This directory contains the rix-generated R environment specification for ComBat-seq workflows.
+
+## Files
+
+- **generate_env.R**: R script that uses rix() to generate the environment definition
+- **run_generator.sh**: Phase 1 helper script to run generate_env.R in a temporary R+rix shell
+- **run_with_rix.R**: Helper script that installs rix and runs generate_env.R
+- **default.nix**: Generated Nix expression defining the R environment (focused subset for ComBat-seq)
+- **.Rprofile**: Generated R profile for library path isolation
+
+## Environment Details
+
+- **R Version**: 4.4.2 (pinned via date: 2024-12-14)
+- **Bioconductor**: 3.21 (compatible with R 4.4.x)
+- **Total Packages**: ~30 R packages (focused subset)
+- **System Dependencies**: 3 system packages (openssl, curl, libxml2)
+
+## Package Categories
+
+### Bioconductor Core (3 packages)
+BiocManager, SummarizedExperiment, ExperimentHub
+
+### Batch Correction (7 packages)
+sva (ComBat and ComBat-seq), limma, vsn, ComplexHeatmap, RUVSeq, DESeq2, batchelor
+
+### Core Infrastructure (2 packages)
+data.table, Matrix
+
+### Tidyverse (3 packages)
+tidyverse (includes dplyr, ggplot2, tidyr, etc.), dplyr, ggplot2
+
+### Statistical Packages (3 packages)
+caret, glmnet, e1071
+
+### Machine Learning Metrics (2 packages)
+MLmetrics, ROCR
+
+### Utilities (1 package)
+argparse (command-line argument parsing)
+
+### IDE Integration (1 package)
+languageserver (REQUIRED for VS Code R extension)
+
+## System Dependencies
+
+openssl, curl, libxml2
+
+## Design Notes
+
+This environment uses the same R/Bioconductor version (4.4.x / 3.21) as the batch-effects environment for consistency. ComBat-seq methods are stable across Bioconductor versions, so using the latest version ensures:
+
+1. Better package availability
+2. Consistent R version across all environments
+3. Easier maintenance (single R version to manage)
+4. No compatibility issues between environments
+
+The original requirement was for Bioconductor 3.11 (R 4.0.x era), but:
+- ComBat-seq algorithms haven't changed significantly
+- Using the same R version as batch-effects simplifies the setup
+- All required packages are available in Bioc 3.21
+
+## Two-Phase rix Workflow
+
+### Phase 1: Authoring (Generate Environment Definition)
+
+Run this phase once to create/update the environment definition:
+
+```bash
+./run_generator.sh
+```
+
+This will:
+1. Enter a temporary Nix shell with R and rix
+2. Run generate_env.R to create default.nix and .Rprofile
+3. Exit the temporary shell
+
+**When to run Phase 1:**
+- Initial setup
+- Adding or removing R packages
+- Updating R version or Bioconductor version
+- Modifying system dependencies
+
+### Phase 2: Activation (Use the Environment)
+
+Run this phase to build and use the environment:
+
+#### First-Time Build (20-40 minutes)
+
+```bash
+./build_environment.sh
+```
+
+This will:
+1. Enter nix-user-chroot namespace
+2. Build all R packages from default.nix
+3. Install packages to shared Nix store
+4. Log progress to build.log
+
+**Note**: First build takes 20-40 minutes. Subsequent activations are instant (~500ms).
+
+#### Quick Validation (No Build)
+
+Before building, validate the environment:
+
+```bash
+./quick_test.sh
+```
+
+This checks:
+- nix-user-chroot availability
+- default.nix and .Rprofile existence
+- Nix syntax validation
+- Environment instantiation
+
+#### Comprehensive Testing
+
+After building, run the full test suite:
+
+```bash
+./test_environment.sh
+```
+
+This tests:
+1. R version check
+2. All package loading (test_packages.R)
+3. ComBat-seq functionality (test_combatseq.R)
+4. Library path isolation
+5. Bioconductor version
+6. Core ComBat-seq packages (sva, limma, DESeq2)
+7. Nix store size
+
+#### Interactive Shell
+
+Activate the environment for interactive use:
+
+```bash
+./nix_activate.sh
+```
+
+Then run R:
+```bash
+R
+```
+
+#### Run R Scripts
+
+Execute R scripts in the environment:
+
+```bash
+/grphome/grp_batch_effects/nix/nix-user-chroot /grphome/grp_batch_effects/nix bash -c "
+  source ~/.nix-profile/etc/profile.d/nix.sh && \
+  cd $(pwd) && \
+  nix-shell --run 'Rscript your_script.R'
+"
+```
+
+**When to run Phase 2:**
+- After Phase 1 (first time)
+- When you need to use the environment
+- After modifying packages (rebuild required)
+
+## Modifying the Environment
+
+To add or remove packages:
+
+1. Edit `generate_env.R` and modify the `r_pkgs` or `system_pkgs` lists
+2. Run Phase 1 again: `./run_generator.sh`
+3. Run Phase 2 to rebuild the environment (see Task 8.4)
+
+## Comparison with batch-effects Environment
+
+| Feature | batch-effects | combatseq |
+|---------|--------------|-----------|
+| R Version | 4.4.2 | 4.4.2 |
+| Bioconductor | 3.21 | 3.21 |
+| Total Packages | 183 | ~30 |
+| Focus | Full pipeline | ComBat-seq only |
+| System Deps | 18 | 3 |
+
+The combatseq environment is a focused subset optimized for ComBat-seq workflows, reducing build time and storage requirements.
+
+## Generated by
+
+- rix version: 0.17.2
+- Generated on: 2025-11-08
+- nixpkgs snapshot: 2024-12-14 (rstats-on-nix fork)
