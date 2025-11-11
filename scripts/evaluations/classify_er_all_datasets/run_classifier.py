@@ -5,6 +5,9 @@ import numpy as np
 from sklearn.ensemble import HistGradientBoostingClassifier
 from sklearn.metrics import (accuracy_score, roc_auc_score, confusion_matrix, matthews_corrcoef)
 
+import functools
+print = functools.partial(print, flush=True)
+
 def parse_test_source(filename):
     """Extract the test source from filename."""
     basename = os.path.basename(filename)
@@ -16,7 +19,10 @@ def parse_test_source(filename):
 
 def run_classifier(X_train, y_train, X_test, y_test, random_state=42):
     model = HistGradientBoostingClassifier(max_iter=100, random_state=random_state)
+
+    # Now fit the model
     model.fit(X_train, y_train)
+
     y_pred = model.predict(X_test)
     y_proba = model.predict_proba(X_test)[:, 1]
 
@@ -43,70 +49,79 @@ def run_classifier(X_train, y_train, X_test, y_test, random_state=42):
     }
 
 def main():
-    if len(sys.argv) != 2:
-        print("Usage: python run_classifier.py <adjusted_csv>")
+    if len(sys.argv) != 3:
+        print("Usage: python run_classifier.py <adjusted_csv> <output_dir>")
         sys.exit(1)
 
     csv_file = sys.argv[1]
+    output_dir = sys.argv[2]
+
     if not os.path.exists(csv_file):
         print(f"File not found: {csv_file}")
         sys.exit(1)
 
-    print(f"\n[DEBUG] Loading CSV: {csv_file}")
     df = pd.read_csv(csv_file)
-    print(f"[DEBUG] Dataset shape: {df.shape}")
-    print(f"[DEBUG] Columns: {list(df.columns)}")
 
     if 'meta_er_status' not in df.columns or 'meta_source' not in df.columns:
         raise ValueError("CSV must contain 'meta_er_status' and 'meta_source' columns")
-    
 
     print(f"[DEBUG] Missing values in 'meta_er_status': {df['meta_er_status'].isna().sum()} / {len(df)} total rows")
     print(f"[DEBUG] Unique meta_source values: {df['meta_source'].unique()[:10]}")
+    print(f"[DEBUG] Unique meta_er_status values: {df['meta_er_status'].unique()[:10]}")
 
     test_source = parse_test_source(csv_file)
     adjuster = os.path.basename(os.path.dirname(csv_file))
-    
-    print(f"[DEBUG] Parsed test_source = {test_source}")
-    print(f"[DEBUG] Adjuster (parent directory) = {adjuster}")
 
-    print(f"[DEBUG] Train set: {train_df.shape[0]} rows, Test set: {test_df.shape[0]} rows")
-
-    # If case mismatches might be an issue, you can also test:
     lower_match = df['meta_source'].str.lower() == test_source.lower()
-    print(f"[DEBUG] Rows matching test_source (case-insensitive): {lower_match.sum()}")
 
+    # ✅ Case-insensitive split
+    train_df = df[df['meta_source'].str.lower() != test_source.lower()]
+    test_df = df[df['meta_source'].str.lower() == test_source.lower()]
+ 
     if train_df.empty or test_df.empty:
         print("[ERROR] Train or test set is empty — possible mismatch between test_source and meta_source values")
         print(f"[DEBUG] First few meta_source values: {df['meta_source'].head()}")
         sys.exit(1)
 
-    # Check for NaNs in label columns
-    print(f"[DEBUG] Missing labels — train: {train_df['meta_er_status'].isna().sum()}, test: {test_df['meta_er_status'].isna().sum()}")
+    # ✅ Print unique label values to catch string vs numeric issues
+    print("[DEBUG] Unique values in meta_er_status (train):", train_df['meta_er_status'].unique())
+    print("[DEBUG] Unique values in meta_er_status (test):", test_df['meta_er_status'].unique())
 
+    # ✅ Print all meta columns for reference
+    meta_cols = [c for c in df.columns if c.startswith("meta_")]
+    print(f"[DEBUG] Meta columns found: {meta_cols}")
+    print("[DEBUG] Example meta data (first 5 rows):")
+    print(df[meta_cols].head())
 
-
-    # Train/test split
-    train_df = df[df['meta_source'] != test_source]
-    test_df = df[df['meta_source'] == test_source]
-    print(df['meta'])
-    if train_df.empty or test_df.empty:
-        raise ValueError(f"No train/test samples for test source {test_source}")
-    
-    # Features
     feature_cols = [c for c in df.columns if not c.startswith("meta_")]
-    X_train, y_train = train_df[feature_cols].values, train_df['meta_er_status'].values
-    X_test, y_test = test_df[feature_cols].values, test_df['meta_er_status'].values
+    X_train, y_train = train_df[feature_cols], train_df['meta_er_status']
+    X_test, y_test = test_df[feature_cols], test_df['meta_er_status']
 
-    metrics = run_classifier(X_train, y_train, X_test, y_test)
+    print(f"[DEBUG] X_train shape: {X_train.shape}, y_train length: {len(y_train)}")
+    print(f"[DEBUG] X_test shape: {X_test.shape}, y_test length: {len(y_test)}")
+
+    # Assuming X_train is a DataFrame and y_train is a Series
+    mask = y_train.notna()  # True for rows where y_train is not NaN
+    X_train_clean = X_train[mask]
+    y_train_clean = y_train[mask]
+
+    mask_test = y_test.notna()
+    X_test_clean = X_test[mask_test]
+    y_test_clean = y_test[mask_test]
+
+    metrics = run_classifier(X_train_clean, y_train_clean, X_test_clean, y_test_clean)
     metrics['adjuster'] = adjuster
     metrics['subset_file'] = os.path.basename(csv_file)
     metrics['test_source'] = test_source
 
-    # Save temporary per-job CSV
-    results_dir = os.path.join("results", adjuster)
+    # --- Use the provided output directory ---
+    results_dir = os.path.join(output_dir, "", adjuster)
     os.makedirs(results_dir, exist_ok=True)
-    result_file = os.path.join(results_dir, f"{os.path.basename(csv_file).replace('.csv','')}_metrics.csv")
+
+    result_file = os.path.join(
+        results_dir,
+        f"{os.path.basename(csv_file).replace('.csv', '')}_metrics.csv"
+    )
     pd.DataFrame([metrics]).to_csv(result_file, index=False)
 
     print(f"Saved classifier metrics: {result_file}")
