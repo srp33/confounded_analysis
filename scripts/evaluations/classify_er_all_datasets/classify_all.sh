@@ -5,7 +5,7 @@
 #SBATCH --cpus-per-task=8
 #SBATCH --mem=16G
 #SBATCH --time=04:00:00
-#SBATCH --output=logs/all_%A_%a.out
+#SBATCH --output=logs/classify_%A_%a.out
 
 # LOAD MODULES, INSERT CODE, AND RUN YOUR PROGRAMS HERE
 ANALYSIS_DIR=~/confounded_analysis
