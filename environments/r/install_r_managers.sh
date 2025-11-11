@@ -1,10 +1,7 @@
 # Add HOME/.local/bin to PATH if not there already
 case ":$PATH:" in
-  *":$HOME/.local/bin:"*)
-    ;;
-  *)
-    export PATH="$HOME/.local/bin:$PATH"
-    ;;
+  *":$HOME/.local/bin:"*) ;; # Already there
+  *) export PATH="$HOME/.local/bin:$PATH" ;;
 esac
 
 # Install r-lib/rig (The R *language* manager)
