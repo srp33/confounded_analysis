@@ -5,6 +5,7 @@
 PROJECT_NAME="" VERBOSE=false FORCE_SYNC=false LIST_PROJECTS=false SHOW_HELP=false
 HAS_UV=false HAS_RIG=false HAS_RV=false HAS_PYTHON_ENV=false HAS_R_ENV=false PYTHON_ACTIVATED=false R_ACTIVATED=false 
 PROJECT_PATH="" 
+ENVIRONMENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ORIGINAL_DIR="$(pwd)"
 trap 'cd "$ORIGINAL_DIR" 2>/dev/null || true' EXIT INT TERM
 
@@ -33,7 +34,9 @@ check_prerequisites() {
 
 detect_environments() {
     [[ "$VERBOSE" == true ]] && echo "[VERBOSE] Detecting environments for project: $PROJECT_NAME"
-    PROJECT_PATH="environments/${PROJECT_NAME}"
+    
+    # Look for project in environments directory
+    PROJECT_PATH="$ENVIRONMENTS_DIR/${PROJECT_NAME}"
     if [[ ! -d "$PROJECT_PATH" ]]; then
         echo -e "\nERROR: Project '$PROJECT_NAME' not found at $PROJECT_PATH/\nRun 'source load_envs.sh --list' to see available projects\n"
         return 1
@@ -48,9 +51,9 @@ detect_environments() {
 
 list_available_projects() {
     echo -e "\nAvailable Projects:\n==================="
-    [[ ! -d "environments" ]] && echo -e "No environments directory found.\n" && return 0
+    [[ ! -d "$ENVIRONMENTS_DIR" ]] && echo -e "No environments directory found.\n" && return 0
     local python_only=() r_only=() both=()
-    for project_dir in environments/*/; do
+    for project_dir in "$ENVIRONMENTS_DIR"/*/; do
         [[ ! -d "$project_dir" ]] && continue
         local project_name=$(basename "$project_dir") has_python=false has_r=false
         [[ -f "$project_dir/pyproject.toml" ]] && has_python=true
@@ -173,16 +176,9 @@ activate_r_env() {
     [[ "$needs_sync" == false ]] && echo "  ⚡ R environment up-to-date, skipping sync"
     if [[ "$needs_sync" == true ]]; then
         echo "  Syncing R dependencies..."
-        if [[ "$VERBOSE" == true ]]; then
-            (cd "$abs_project_path" && rv sync) || { echo -e "\nERROR: rv sync failed\n"; return 1; }
-        else
-            (cd "$abs_project_path" && rv sync 2>&1 | grep -E "(Installing|Error|Warning)" || true)
-            [[ ${PIPESTATUS[0]} -ne 0 ]] && echo -e "\nERROR: rv sync failed\n" && return 1
-        fi
+        (cd "$abs_project_path" && rv sync) || { echo -e "\nERROR: rv sync failed\n"; return 1; }
     fi
 
-    #   r: r/4.3.3-72k3zwr, r/4.4.0-ncfmhh4, r/4.4.0-o776kvt, r/4.5.0-xcvdvru, r/4.5.1-gg7txi7, r/4.5.1-hbue2wm, r/4.5.1-5sqddv2, r/4.5.1-264p7tz
-    
     # Find the library path
     local rv_lib_path="$rv_dir/library"
     [[ ! -d "$rv_lib_path" ]] && rv_lib_path="$rv_dir"
@@ -288,6 +284,7 @@ ENVIRONMENT DETECTION:
 
 DIRECTORY STRUCTURE:
     environments/
+    ├── load_envs.sh            # This script
     ├── book_chapter/
     │   ├── pyproject.toml      # Python dependencies (optional)
     │   ├── rproject.toml       # R dependencies (optional)
@@ -307,8 +304,11 @@ PREREQUISITES:
 
 NOTES:
     • The script must be sourced, not executed:
-      ✓ Correct:   source load_envs.sh book_chapter
-      ✗ Incorrect: bash load_envs.sh book_chapter
+      ✓ Correct:   source environments/load_envs.sh book_chapter
+      ✗ Incorrect: bash environments/load_envs.sh book_chapter
+
+    • The script works from any directory - it finds projects relative
+      to its own location in the environments/ directory.
 
     • Smart sync: Dependencies are only synced if configuration files
       are newer than the environment directories.
