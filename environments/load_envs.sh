@@ -72,6 +72,7 @@ list_available_projects() {
 
 deactivate_existing_environments() {
     [[ "$VERBOSE" == true ]] && echo "[VERBOSE] Checking for existing environments to deactivate..."
+    [[ "$VERBOSE" == true ]] && echo "[DEBUG] R before python deactivate: $(command -v R)"
     
     # Deactivate Python/virtualenv
     if [[ -n "$VIRTUAL_ENV" ]]; then
@@ -82,6 +83,7 @@ deactivate_existing_environments() {
         unset VIRTUAL_ENV
     fi
     
+    [[ "$VERBOSE" == true ]] && echo "[DEBUG] R before after python deactivate, before conda deactivate: $(command -v R)"
     # Deactivate Conda
     if [[ -n "$CONDA_DEFAULT_ENV" ]]; then
         [[ "$VERBOSE" == true ]] && echo "  Deactivating Conda environment: $CONDA_DEFAULT_ENV"
@@ -93,12 +95,14 @@ deactivate_existing_environments() {
         unset CONDA_PYTHON_EXE
         unset CONDA_SHLVL
     fi
+
+    [[ "$VERBOSE" == true ]] && echo "[DEBUG] R after conda deactivate: $(command -v R)"
     
-    # Clear R environment
-    if [[ -n "$R_LIBS_USER" ]]; then
-        [[ "$VERBOSE" == true ]] && echo "  Clearing existing R environment: $R_LIBS_USER"
-        unset R_LIBS_USER
-    fi
+    # Do not clear R environment
+    # if [[ -n "$R_LIBS_USER" ]]; then
+    #     [[ "$VERBOSE" == true ]] && echo "  Clearing existing R environment: $R_LIBS_USER"
+    #     unset R_LIBS_USER
+    # fi
     
     [[ "$VERBOSE" == true ]] && echo "  ✓ Environment cleanup complete"
 }
@@ -120,7 +124,10 @@ activate_python_env() {
         fi
     fi
     [[ ! -f "$abs_project_path/.venv/bin/activate" ]] && echo -e "\nERROR: .venv/bin/activate not found\n" && return 1
+
+    [[ "$VERBOSE" == true ]] && echo "[DEBUG] R before python activation: $(command -v R)"
     source "$abs_project_path/.venv/bin/activate"
+    [[ "$VERBOSE" == true ]] && echo "[DEBUG] R after python activation: $(command -v R)"
     [[ -z "$VIRTUAL_ENV" ]] && echo -e "\nERROR: Failed to activate Python environment\n" && return 1
     local python_version=$(python --version 2>&1)
     [[ "$VERBOSE" == true ]] && echo "  ✓ Python activated: $python_version at $VIRTUAL_ENV" || echo "  ✓ Python: $python_version"
@@ -129,86 +136,71 @@ activate_python_env() {
 
 activate_r_env() {
     [[ "$VERBOSE" == true ]] && echo "[VERBOSE] Activating R environment..."
+    [[ "$VERBOSE" == true ]] && echo "[DEBUG] R before module load: $(command -v R)"
+
     local abs_project_path="$(cd "$PROJECT_PATH" && pwd)" || { echo "ERROR: Failed to resolve $PROJECT_PATH"; return 1; }
     
     # Extract R version from rproject.toml
     local r_version_spec=$(grep -E '^\s*r_version\s*=' "$abs_project_path/rproject.toml" | sed -E 's/.*=\s*"([^"]+)".*/\1/')
     [[ -z "$r_version_spec" ]] && r_version_spec="4.5"
     
-    # Check if R is already available and at correct version
-    local load_module=false
-    if command -v R &> /dev/null; then
-        local current_r_version=$(R --version 2>&1 | grep -oP 'R version \K[0-9]+\.[0-9]+' | head -n1)
-        if [[ "$current_r_version" == "$r_version_spec"* ]]; then
-            [[ "$VERBOSE" == true ]] && echo "  ⚡ R version $current_r_version already loaded, skipping module load"
-        else
-            [[ "$VERBOSE" == true ]] && echo "  R version $current_r_version doesn't match required $r_version_spec"
-            load_module=true
-        fi
-    else
-        [[ "$VERBOSE" == true ]] && echo "  R not found, loading best match for R=${r_version_spec} from module system..."
-        load_module=true
+    
+    # Load R from module system
+    
+    # Find matching R module
+    local r_module=$(module -t avail r/ 2>&1 | grep -E "^r/${r_version_spec}" | head -n1)
+    
+    if [[ -z "$r_module" ]]; then
+        echo -e "\nERROR: No R module matching version $r_version_spec found"
+        echo "Available R modules:"
+        module -t avail r/ 2>&1 | grep "^r/"
+        return 1
     fi
     
-    # Load R from module system if needed
-    if [[ "$load_module" == true ]]; then
-        local r_module=""
-        
-        # First, try to find the module using r_paths.conf (more reliable)
-        local r_paths_conf="$ENVIRONMENTS_DIR/r_paths.conf"
-        if [[ -f "$r_paths_conf" ]]; then
-            local r_bin_path=$(grep -E "^${r_version_spec}=" "$r_paths_conf" | cut -d= -f2-)
-            if [[ -n "$r_bin_path" && -d "$r_bin_path" ]]; then
-                # Extract the short hash from the path (e.g., 264p7tz from ...r-4.5.1-264p7tzsobm57jhwvpte6ky7gzb45g7j/bin)
-                # The short hash is the first 7 characters after "r-X.Y.Z-"
-                local r_hash=$(echo "$r_bin_path" | grep -oP 'r-[0-9.]+\-\K[a-z0-9]{7}')
-                if [[ -n "$r_hash" ]]; then
-                    r_module="r/${r_version_spec}-${r_hash}"
-                    [[ "$VERBOSE" == true ]] && echo "  Found module from r_paths.conf: $r_module"
-                fi
-            fi
-        fi
-        
-        # Fallback: search for any matching module
-        if [[ -z "$r_module" ]]; then
-            r_module=$(module -t avail r/ 2>&1 | grep -E "^r/${r_version_spec}" | head -n1)
-            [[ "$VERBOSE" == true ]] && echo "  Found module from search: $r_module"
-        fi
-        
-        if [[ -z "$r_module" ]]; then
-            echo -e "\nERROR: No R module matching version $r_version_spec found"
-            echo "Available R modules:"
-            module avail r/ 2>&1 | grep "^r/"
-            return 1
-        fi
-        
-        [[ "$VERBOSE" == true ]] && echo "  Loading module: $r_module"
-        # Note: module load may return non-zero exit code for warnings, so we check R availability instead
-        module load "$r_module" 2>&1 | grep -v "^-*$" | grep -v "^$" | head -3 || true
-    fi
+    echo "  Loading module: $r_module"
+    
+    # Load the module - capture output to show warnings but don't fail on them
+    local module_output
+    local module_exit
+    local err_file
+    
+    # Create a temporary file to hold stderr output
+    err_file=$(mktemp) || { echo "ERROR: Failed to create temp file"; return 1; }
 
-    # Verify R is accessible after module load
+    # Run `module load` in the CURRENT shell. 
+    # Redirecting output causes module load to fail.
+    module load "$r_module"
+
+    # Verify R is accessible - if not, try to fix PATH using module info
     if ! command -v R &> /dev/null; then
-        # Try to find R using R_HOME if set
-        if [[ -n "${R_HOME:-}" ]]; then
-            [[ "$VERBOSE" == true ]] && echo "  R not in PATH, but R_HOME is set: $R_HOME"
-            if [[ -x "$R_HOME/bin/R" ]]; then
-                export PATH="$R_HOME/bin:$PATH"
-                [[ "$VERBOSE" == true ]] && echo "  Added $R_HOME/bin to PATH"
-            else
-                echo -e "\nERROR: R_HOME is set but $R_HOME/bin/R not found or not executable"
-                return 1
+        [[ "$VERBOSE" == true ]] && echo "[DEBUG] No R after load module: $(command -v R)"
+
+        [[ "$VERBOSE" == true ]] && echo "  R command not in PATH, attempting to locate it..."
+        return 1
+        
+        # Get the R module that's loaded (must start with "r/" and have version 4.x or 3.x)
+        local current_r_module=$(module list 2>&1 | grep -oP "\br/[34]\.[0-9.]+[-.][a-z0-9]+" | head -n1)
+        
+        if [[ -n "$current_r_module" ]]; then
+            # Try to find R using module show (Lmod uses prepend_path, not prepend-path)
+            local r_path=$(module show "$current_r_module" 2>&1 | grep -oP 'prepend_path\("PATH","?\K[^"]+' | head -n1)
+            
+            if [[ -n "$r_path" && -d "$r_path" ]]; then
+                [[ "$VERBOSE" == true ]] && echo "  Found R path from module: $r_path"
+                export PATH="$r_path:$PATH"
             fi
         fi
         
-        # Check again after PATH update
+        # Final check
         if ! command -v R &> /dev/null; then
-            echo -e "\nERROR: R still not accessible after module load"
-            echo "Debugging information:"
-            echo "  PATH: $PATH"
-            echo "  R_HOME: ${R_HOME:-not set}"
-            echo "  Module list:"
-            module list 2>&1 | head -5
+            echo -e "\nERROR: R not accessible even though module is loaded"
+            echo "This can happen when Python venv modifies PATH."
+            echo ""
+            echo "Loaded R module: ${current_r_module:-none}"
+            echo ""
+            echo "Workaround: Load R module manually before sourcing this script:"
+            echo "  module load r/${r_version_spec}"
+            echo "  source environments/load_envs.sh book_chapter"
             return 1
         fi
     fi
@@ -261,8 +253,15 @@ activate_environments() {
     
     echo -e "\nActivating environments for project: $PROJECT_NAME\n=================================================="
     local activation_failed=false
-    [[ "$HAS_PYTHON_ENV" == true ]] && ! activate_python_env && activation_failed=true
+    
+    # --- START FIX ---
+    # Activate R *first* to let 'module load' modify the base PATH
     [[ "$HAS_R_ENV" == true ]] && ! activate_r_env && activation_failed=true
+    
+    # Activate Python *second* to prepend its venv to the PATH
+    [[ "$HAS_PYTHON_ENV" == true ]] && ! activate_python_env && activation_failed=true
+    # --- END FIX ---
+
     [[ "$activation_failed" == true ]] && echo -e "\nEnvironment activation completed with errors" && return 1
     if [[ "$HAS_PYTHON_ENV" == true && "$HAS_R_ENV" == true ]]; then
         [[ "$VERBOSE" == true && -n "$VIRTUAL_ENV" && -n "$R_LIBS_USER" ]] && echo -e "\n[VERBOSE] Dual env: VIRTUAL_ENV=$VIRTUAL_ENV, R_LIBS_USER=$R_LIBS_USER"
@@ -391,11 +390,14 @@ check_sourced() {
 main() {
     check_sourced || return 1
     parse_arguments "$@" || return 1
+    [[ "$VERBOSE" == true ]] && echo "[DEBUG] R after argument parsing: $(command -v R)"
     [[ "$SHOW_HELP" == true ]] && display_help && return 0
     [[ "$LIST_PROJECTS" == true ]] && list_available_projects && return 0
     [[ -z "$PROJECT_NAME" ]] && echo -e "\nERROR: No project name provided\nUsage: source load_envs.sh <project_name>\nRun 'source load_envs.sh --list' to see projects\n" >&2 && return 1
     check_prerequisites
+    [[ "$VERBOSE" == true ]] && echo "[DEBUG] R after check_prerequisites: $(command -v R)"
     detect_environments || return 3
+    [[ "$VERBOSE" == true ]] && echo "[DEBUG] R after detect_environments: $(command -v R)"
     activate_environments || return 4
     display_status
 }
