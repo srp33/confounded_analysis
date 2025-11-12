@@ -122,9 +122,28 @@ def main():
         results_dir,
         f"{os.path.basename(csv_file).replace('.csv', '')}_metrics.csv"
     )
-    pd.DataFrame([metrics]).to_csv(result_file, index=False)
+    # --- Safe write: write to a temporary file first ---
+    tmp_path = result_file + ".tmp"
 
-    print(f"Saved classifier metrics: {result_file}")
+    # Write complete CSV content (header + row) to temp file
+    pd.DataFrame([metrics]).to_csv(tmp_path, index=False)
+
+    # Verify that the temp file looks complete before moving it
+    # (check for header line and nonzero file size)
+    is_complete = False
+    if os.path.getsize(tmp_path) > 0:
+        with open(tmp_path, "r") as f:
+            first_line = f.readline().strip()
+            if first_line == "Accuracy,ROC AUC,Sensitivity,Specificity,MCC,True Negative,False Positive,False Negative,True Positive,adjuster,subset_file,test_source":
+                is_complete = True
+
+    if is_complete:
+        # Replace old file atomically (if it exists)
+        os.replace(tmp_path, result_file)
+        print(f"✅ Saved classifier metrics: {result_file}")
+    else:
+        print(f"⚠️ Incomplete write detected for {result_file}. Temp file left at {tmp_path}")
+
 
 if __name__ == "__main__":
     main()

@@ -22,14 +22,9 @@ fi
 ADJUSTERS=("gmm" "log_combat" "min_mean" "mnn")
 ADJ_FOLDER="${ADJUSTERS[$SLURM_ARRAY_TASK_ID]}"
 CSV_DIR="$DATA_DIR/$ADJ_FOLDER"
-OUTPUT_CSV="$OUTPUT_DIR/${ADJ_FOLDER}.csv"
+OUT_SUBDIR="$OUTPUT_DIR/$ADJ_FOLDER"
 
-mkdir -p "$OUTPUT_DIR"
-
-# --- CSV header if file does not exist ---
-if [ ! -f "$OUTPUT_CSV" ]; then
-    echo "dataset,accuracy,precision,recall,f1" > "$OUTPUT_CSV"
-fi
+mkdir -p "$OUT_SUBDIR"
 
 # --- Get list of CSVs ---
 shopt -s nullglob
@@ -38,35 +33,61 @@ CSV_FILES=("$CSV_DIR"/*.csv)
 if [ ${#CSV_FILES[@]} -eq 0 ]; then
     echo "No CSV files found in $CSV_DIR"
     exit 1
-fi 
+fi
 
-# --- Skip datasets that are already processed ---
-PROCESSED=$(tail -n +2 "$OUTPUT_CSV" | cut -d',' -f1)  # dataset column
+# --- Expected header in complete metrics files ---
+EXPECTED_HEADER="Accuracy,ROC AUC,Sensitivity,Specificity,MCC,True Negative,False Positive,False Negative,True Positive,adjuster,subset_file,test_source"
+
+# --- Identify datasets that need processing ---
 TO_PROCESS=()
 for f in "${CSV_FILES[@]}"; do
-    fname=$(basename "$f")
-    if ! grep -qx "$fname" <<< "$PROCESSED"; then
+    fname=$(basename "$f" .csv)
+    metrics_file="$OUT_SUBDIR/${fname}_metrics.csv"
+    tmp_file="$metrics_file.tmp"
+
+    # Skip if a temp file exists (incomplete previous run)
+    if [ -f "$tmp_file" ]; then
+        echo "⚠️  Found temp file for $fname — previous run interrupted. Will reprocess."
         TO_PROCESS+=("$f")
+        continue
     fi
+
+    # If metrics file exists, check completeness
+    if [ -f "$metrics_file" ]; then
+        # Check file size and header
+        if [ -s "$metrics_file" ]; then
+            first_line=$(head -n 1 "$metrics_file")
+            if [ "$first_line" == "$EXPECTED_HEADER" ]; then
+                echo "✅ Skipping $fname — metrics file complete."
+                continue
+            else
+                echo "⚠️  Metrics file for $fname has wrong or incomplete header. Reprocessing."
+            fi
+        else
+            echo "⚠️  Metrics file for $fname is empty. Reprocessing."
+        fi
+    fi
+
+    # If we reach here, the file is missing or incomplete
+    TO_PROCESS+=("$f")
 done
 
 if [ ${#TO_PROCESS[@]} -eq 0 ]; then
-    echo "All datasets for $ADJ_FOLDER already processed!"
+    echo "✅ All datasets for $ADJ_FOLDER are already processed and complete!"
     exit 0
 fi
 
 # --- Run classifier on remaining CSVs ---
 for CSV_FILE in "${TO_PROCESS[@]}"; do
-    echo "Processing $CSV_FILE..."
-    
+    echo "🚀 Processing $CSV_FILE..."
     python "$CLASSIFIER_SCRIPT" "$CSV_FILE" "$OUTPUT_DIR"
     STATUS=$?
 
     if [ $STATUS -eq 0 ]; then
-        echo "Classifier finished successfully for $CSV_FILE"
+        echo "✅ Classifier finished successfully for $CSV_FILE"
     else
-        echo "ERROR: Classifier failed for $CSV_FILE" >&2
+        echo "❌ ERROR: Classifier failed for $CSV_FILE" >&2
     fi
 done
 
-echo "✅ Finished all remaining datasets for $ADJ_FOLDER."
+echo "🏁 Finished all remaining datasets for $ADJ_FOLDER."
