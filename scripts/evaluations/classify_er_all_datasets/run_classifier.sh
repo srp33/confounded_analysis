@@ -33,7 +33,7 @@ CSV_FILES=("$CSV_DIR"/*.csv)
 if [ ${#CSV_FILES[@]} -eq 0 ]; then
     echo "No CSV files found in $CSV_DIR"
     exit 1
-fi
+fi 
 
 # --- Expected header in complete metrics files ---
 EXPECTED_HEADER="Accuracy,ROC AUC,Sensitivity,Specificity,MCC,True Negative,False Positive,False Negative,True Positive,adjuster,subset_file,test_source"
@@ -79,15 +79,16 @@ fi
 
 # --- Run classifier on remaining CSVs ---
 for CSV_FILE in "${TO_PROCESS[@]}"; do
-    echo "🚀 Processing $CSV_FILE..."
+    echo "Processing $CSV_FILE..."
+    
     python "$CLASSIFIER_SCRIPT" "$CSV_FILE" "$OUTPUT_DIR"
     STATUS=$?
 
     if [ $STATUS -eq 0 ]; then
-        echo "✅ Classifier finished successfully for $CSV_FILE"
+        echo "Classifier finished successfully for $CSV_FILE"
     else
-        echo "❌ ERROR: Classifier failed for $CSV_FILE" >&2
+        echo "ERROR: Classifier failed for $CSV_FILE" >&2
     fi
 done
 
-echo "🏁 Finished all remaining datasets for $ADJ_FOLDER."
+echo "✅ Finished all remaining datasets for $ADJ_FOLDER."
