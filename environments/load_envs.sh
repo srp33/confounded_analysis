@@ -146,14 +146,35 @@ activate_r_env() {
             load_module=true
         fi
     else
-        [[ "$VERBOSE" == true ]] && echo "  R not found, loading from module system..."
+        [[ "$VERBOSE" == true ]] && echo "  R not found, loading best match for R=${r_version_spec} from module system..."
         load_module=true
     fi
     
     # Load R from module system if needed
     if [[ "$load_module" == true ]]; then
-        # Find matching R module
-        local r_module=$(module -t avail r/ 2>&1 | grep -E "^r/${r_version_spec}" | head -n1)
+        local r_module=""
+        
+        # First, try to find the module using r_paths.conf (more reliable)
+        local r_paths_conf="$ENVIRONMENTS_DIR/r_paths.conf"
+        if [[ -f "$r_paths_conf" ]]; then
+            local r_bin_path=$(grep -E "^${r_version_spec}=" "$r_paths_conf" | cut -d= -f2-)
+            if [[ -n "$r_bin_path" && -d "$r_bin_path" ]]; then
+                # Extract the short hash from the path (e.g., 264p7tz from ...r-4.5.1-264p7tzsobm57jhwvpte6ky7gzb45g7j/bin)
+                # The short hash is the first 7 characters after "r-X.Y.Z-"
+                local r_hash=$(echo "$r_bin_path" | grep -oP 'r-[0-9.]+\-\K[a-z0-9]{7}')
+                if [[ -n "$r_hash" ]]; then
+                    r_module="r/${r_version_spec}-${r_hash}"
+                    [[ "$VERBOSE" == true ]] && echo "  Found module from r_paths.conf: $r_module"
+                fi
+            fi
+        fi
+        
+        # Fallback: search for any matching module
+        if [[ -z "$r_module" ]]; then
+            r_module=$(module -t avail r/ 2>&1 | grep -E "^r/${r_version_spec}" | head -n1)
+            [[ "$VERBOSE" == true ]] && echo "  Found module from search: $r_module"
+        fi
+        
         if [[ -z "$r_module" ]]; then
             echo -e "\nERROR: No R module matching version $r_version_spec found"
             echo "Available R modules:"
@@ -162,8 +183,49 @@ activate_r_env() {
         fi
         
         [[ "$VERBOSE" == true ]] && echo "  Loading module: $r_module"
-        module load "$r_module" || { echo -e "\nERROR: Failed to load R module\n"; return 1; }
+        # Note: module load may return non-zero exit code for warnings, so we check R availability instead
+        module load "$r_module" 2>&1 | grep -v "^-*$" | grep -v "^$" | head -3 || true
     fi
+
+    # Verify R is accessible after module load
+    if ! command -v R &> /dev/null; then
+        # Try to find R using R_HOME if set
+        if [[ -n "${R_HOME:-}" ]]; then
+            [[ "$VERBOSE" == true ]] && echo "  R not in PATH, but R_HOME is set: $R_HOME"
+            if [[ -x "$R_HOME/bin/R" ]]; then
+                export PATH="$R_HOME/bin:$PATH"
+                [[ "$VERBOSE" == true ]] && echo "  Added $R_HOME/bin to PATH"
+            else
+                echo -e "\nERROR: R_HOME is set but $R_HOME/bin/R not found or not executable"
+                return 1
+            fi
+        fi
+        
+        # Check again after PATH update
+        if ! command -v R &> /dev/null; then
+            echo -e "\nERROR: R still not accessible after module load"
+            echo "Debugging information:"
+            echo "  PATH: $PATH"
+            echo "  R_HOME: ${R_HOME:-not set}"
+            echo "  Module list:"
+            module list 2>&1 | head -5
+            return 1
+        fi
+    fi
+    
+    local loaded_r_version=$(R --version 2>&1 | grep -oP 'R version \K[0-9]+\.[0-9]+' | head -n1)
+    [[ "$VERBOSE" == true ]] && echo "  ✓ R successfully loaded: version $loaded_r_version"
+    
+    # Check for multiple R installations in PATH (warn only, not an error)
+    if [[ "$VERBOSE" == true ]]; then
+        local r_count=$(type -a R 2>/dev/null | grep -c "is /")
+        if [[ $r_count -gt 1 ]]; then
+            echo "  ⚠ WARNING: Multiple R installations found in PATH:"
+            type -a R 2>/dev/null | grep "is /" | sed 's/^/    /'
+            echo "    Using: $(which R)"
+        fi
+    fi
+    
     
     # Check for rv directory (could be .rv or rv depending on rv version)
     local rv_dir="$abs_project_path/rv"
