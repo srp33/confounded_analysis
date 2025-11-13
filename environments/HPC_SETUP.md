@@ -11,12 +11,18 @@
 bash environments/install_managers.sh
 ```
 
-### 2. Activate an environment:
+### 2. Edit Toml files
+See the env_template folder for a base, see book_chapter for example
+
+### 3. Activate an environment:
 ```bash
 source environments/load_envs.sh book_chapter
 ```
 
-### 3. Deactivate:
+### 4. Run file using environment:
+
+
+### 5. Deactivate:
 ```bash
 deactivate
 ```
@@ -42,16 +48,6 @@ This gives you:
 - ✅ Compatibility for all packages (CRAN source fallback)
 - ✅ No FlexiBLAS dependency issues
 
-## Available Environments
-
-### book_chapter
-- **R**: 4.4 (module system)
-- **Python**: 3.12 (uv)
-- **Packages**: Full Bioconductor stack, tidyverse, batch correction tools
-
-### env_template
-- Like book_chapter, but only has the toml files (all you need to start)
-
 
 ## Usage
 
@@ -59,6 +55,7 @@ This gives you:
 ```bash
 source environments/load_envs.sh book_chapter
 ```
+
 
 ### List available projects:
 ```bash
@@ -70,132 +67,6 @@ source environments/load_envs.sh --list
 source environments/load_envs.sh book_chapter --verbose
 ```
 
-## How It Works
-
-### R Module Loading
-
-1. Script reads `r_version` from `rproject.toml` (e.g., "4.4")
-2. Loads matching R module: `module load r/4.4.0-ncfmhh4`
-3. R module provides:
-   - R installation
-   - OpenBLAS (BLAS/LAPACK)
-   - System libraries in `LD_LIBRARY_PATH`
-
-### R Package Installation (rv)
-
-1. rv reads `rproject.toml` dependencies
-2. Tries PPM first (pre-compiled binaries)
-3. Falls back to CRAN (compiles from source) if PPM fails
-4. Installs to `rv/library/` in project directory
-5. Sets `R_LIBS_USER` to project's rv directory
-
-## Creating New Environments
-
-### 1. Create project directory:
-```bash
-mkdir environments/my_project
-```
-
-### 2. Create rproject.toml:
-```toml
-[project]
-name = "my_project"
-r_version = "4.4"
-
-repositories = [
-    { alias = "PPM", url = "https://packagemanager.posit.co/cran/latest" },
-    { alias = "CRAN", url = "https://cloud.r-project.org" },
-    { alias = "BioCsoft", url = "https://bioconductor.org/packages/3.20/bioc" },
-]
-
-dependencies = [
-    "dplyr",
-    "ggplot2",
-    # ... your packages
-]
-```
-
-### 3. (Optional) Create pyproject.toml for Python:
-```toml
-[project]
-name = "my_project"
-version = "0.1.0"
-requires-python = ">=3.12"
-
-dependencies = [
-    "numpy",
-    "pandas",
-    # ... your packages
-]
-```
-
-### 4. Activate:
-```bash
-source environments/load_envs.sh my_project
-```
-
-rv and uv will automatically install all dependencies.
-
-## Troubleshooting
-
-### R module not found
-```
-ERROR: No R module matching version X.Y found
-```
-
-**Solution:**
-- Check available versions: `module avail r/`
-- Update `r_version` in `rproject.toml` to match available version
-- Currently supported: R 4.4+
-
-### rv sync fails
-
-**Check R is loaded:**
-```bash
-module list | grep r/
-which R
-```
-
-**Try verbose mode:**
-```bash
-source environments/load_envs.sh book_chapter --verbose
-```
-
-**Common causes:**
-- R module not loaded
-- Wrong R version (need 4.4+)
-- Network issues downloading packages
-
-### Package compilation is slow
-
-**This is normal** when using CRAN source fallback:
-- PPM binaries install in seconds
-- CRAN source compilation takes minutes per package
-- Matrix, S4Arrays compile from source (5-10 minutes each)
-- Other packages use PPM binaries (fast)
-
-**To speed up:**
-- Use multiple cores: rv uses all available cores by default
-- Be patient on first sync, subsequent syncs are fast
-- Consider using conda if compilation is too slow
-
-### FlexiBLAS errors (should not happen with current setup)
-
-If you see:
-```
-libflexiblas.so.3: cannot open shared object file
-```
-
-**This means:**
-- You're using old configuration with PPM-only
-- Update `rproject.toml` to include CRAN fallback:
-```toml
-repositories = [
-    { alias = "PPM", url = "https://packagemanager.posit.co/cran/latest" },
-    { alias = "CRAN", url = "https://cloud.r-project.org" },  # Add this
-    # ... rest of repos
-]
-```
 
 ## Performance Optimization for Many Jobs
 
@@ -255,10 +126,7 @@ The updated `load_envs.sh` and `create_rv_env.sh` scripts now:
 - **Modern tooling**: Better dependency resolution, cleaner lock files
 
 ### Trade-offs:
-- **System libraries**: Must install missing libraries yourself (FlexiBLAS, GLPK, etc.)
 - **Initial setup**: More upfront work to install system dependencies
 - **Two tools**: Separate Python and R package managers
 
 Once system libraries are installed, you get much faster workflows and access to the latest packages.
-## Advantages:
-- **Speed**: 10-100x fast
