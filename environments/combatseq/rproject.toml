@@ -1,0 +1,72 @@
+[project]
+name = "combatseq"
+r_version = "4.0.5"
+
+# Use older CRAN snapshot and Bioconductor 3.11 for compatibility
+repositories = [
+    { alias = "CRAN", url = "https://packagemanager.posit.co/cran/2020-06-01" },
+    { alias = "BioCsoft", url = "https://bioconductor.org/packages/3.11/bioc" },
+    { alias = "BioCann", url = "https://bioconductor.org/packages/3.11/data/annotation" },
+    { alias = "BioCexp", url = "https://bioconductor.org/packages/3.11/data/experiment" },
+]
+
+dependencies = [
+    # === Core Infrastructure ===
+    "pacman", "data.table", "foreach", "parallel", "doParallel", "future",
+    "remotes",
+    
+    # === Tidyverse Ecosystem ===
+    "tidyverse",  # Includes dplyr, ggplot2, tidyr, purrr, readr, stringr, tibble
+    "readxl", "vroom",
+    
+    # === Statistical Packages ===
+    "glmnet", "e1071", "caret", "rpart", "nnet",
+    "MCMCpack", "huge", "nnls", "pracma",
+    "reshape2", "plyr",
+    
+    # === Visualization ===
+    "gridExtra", "ggpubr", "png", "magick", "colorspace", "scales",
+    "R.devices", "kableExtra",
+    
+    # === Bioconductor Core ===
+    "BiocManager",
+    "SummarizedExperiment", "limma", "vsn",
+    "AnnotationDbi", "biomaRt", "ExperimentHub",
+    "ComplexHeatmap", "DelayedMatrixStats",
+    "annotate",
+    
+    # === Batch Correction & QC ===
+    "BatchQC",
+    "sva",           # ComBat and other batch correction methods
+    "batchelor",     # Bioconductor batch correction methods
+    "RUVSeq",        # Remove Unwanted Variation
+    "SCAN.UPC",
+    
+    # === Differential Expression ===
+    "DESeq2",
+    
+    # === Data Access ===
+    "GEOquery",
+    
+    # === Annotation Packages ===
+    "pd.hg.u133a",
+    "pd.hg.u133.plus.2",
+    "illuminaHumanv4.db",
+    "hugene11sttranscriptcluster.db",
+    
+    # === Machine Learning ===
+    "MLmetrics", "ROCR",
+    
+    # === Dimensionality Reduction ===
+    "Rtsne",
+    
+    # === Utilities ===
+    "argparse", "docstring", "itertools",
+    
+    # === Specialized Packages ===
+    "Seurat",        # Single-cell analysis
+    "preprocessCore",
+    
+    # === VS Code Integration ===
+    "languageserver", # REQUIRED for VS Code R extension
+]
