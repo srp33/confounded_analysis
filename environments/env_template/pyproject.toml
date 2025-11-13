@@ -1,41 +1,21 @@
 [project]
-name = "book_chapter"
+name = "YOUR_PROJECT_NAME"
 version = "1.0.0"
 description = "Batch effect correction analysis pipeline for RNA-seq data"
-requires-python = ">=3.10"
+requires-python = "=3.10"
 dependencies = [
-    # Core scientific computing
     "numpy>=1.24",
     "pandas>=2.0",
     "scikit-learn>=1.4",
-    
-    # Deep learning frameworks
-    "torch>=2.0",
-    
-    # Machine learning and fairness
-    "aif360>=0.5",
-    
+
     # Dimensionality reduction and visualization
-    "umap-learn>=0.5",
-    "opentsne>=1.0",
     "matplotlib>=3.7",
     "seaborn>=0.12",
     
-    # Data I/O and formats
-    "tables>=3.8",  # pytables for HDF5
-    
     # Utilities
-    "tabulate>=0.9",
-    "jaxtyping>=0.2",
-    "beartype>=0.15",
-    "psutil>=5.9",
     "tqdm>=4.65",
-    "rich>=13.0",
-    "memory-profiler>=0.61",
-    "py-cpuinfo>=9.0",
     
     # Data download and access
-    "gdown>=4.7",
     "osfclient>=0.0.5",
     "pybiomart>=0.2",
     

@@ -1,0 +1,20 @@
+[project]
+name = "YOUR_PROJECT_NAME"
+r_version = "4.4.0"
+
+# Hybrid approach: PPM for fast binaries, CRAN as fallback for FlexiBLAS issues
+# PPM is tried first (fast), CRAN compiles from source if PPM fails
+# Most packages use PPM binaries, only Matrix/S4Arrays compile from source
+repositories = [
+    { alias = "PPM", url = "https://packagemanager.posit.co/cran/latest" },
+    { alias = "CRAN", url = "https://cloud.r-project.org" },
+    { alias = "BioCsoft", url = "https://bioconductor.org/packages/3.20/bioc" },
+    { alias = "BioCann", url = "https://bioconductor.org/packages/3.20/data/annotation" },
+    { alias = "BioCexp", url = "https://bioconductor.org/packages/3.20/data/experiment" },
+]
+
+dependencies = [
+    # === Tidyverse Ecosystem ===
+    "tidyverse", "pak",
+    "ggplot2",
+]

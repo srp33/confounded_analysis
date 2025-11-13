@@ -1,124 +1,201 @@
-# HPC Environment Setup Guide
+## System Overview
 
-This guide explains how to use the environment management system on HPC clusters where you don't have sudo access.
+- **R**: Loaded from HPC module system (I can only get R=4.4 to work)
+- **uv**: User-local Python package manager
+- **rv**: User-local R package manager
 
-## Key Differences from Standard Setup
-
-- **R**: Loaded from HPC module system instead of using `rig`
-- **uv**: Installed user-local for Python package management
-- **rv**: Installed user-local for R package management
-- **System libraries**: Installed to `~/.local` when not available via modules
-
-## Initial Setup
+## Quick Start
 
 ### 1. Install package managers (one-time):
 ```bash
 bash environments/install_managers.sh
 ```
 
-### 2. Install required system libraries (one-time):
-
-Some R packages require system libraries that may not be available on your HPC system. Install them locally:
-
+### 2. Activate an environment:
 ```bash
-# FlexiBLAS - Required for Matrix, S4Arrays, and other linear algebra packages
-bash environments/install_flexiblas.sh
-
-# GLPK - Required for igraph (used by batchelor and network analysis packages)
-bash environments/install_glpk.sh
+source environments/load_envs.sh book_chapter
 ```
 
-These libraries will be installed to `~/.local/lib` and automatically found by `load_envs.sh`.
-
-### 3. Verify R is available via modules:
+### 3. Deactivate:
 ```bash
-module avail r/
+deactivate
 ```
-You should see versions like `r/4.4.0-ncfmhh4`, `r/4.5.1-gg7txi7`, etc.
 
-## Using Environments
+That's it! The script will:
+- Load R 4.4 from modules
+- Use rv to install R packages (PPM binaries + CRAN source fallback)
+- Use uv to install Python packages (if pyproject.toml exists)
+
+
+### Repository Configuration
+
+```toml
+repositories = [
+    { alias = "PPM", url = "https://packagemanager.posit.co/cran/latest" },  # Fast binaries
+    { alias = "CRAN", url = "https://cloud.r-project.org" },                 # Source fallback
+    { alias = "BioCsoft", url = "https://bioconductor.org/packages/3.20/bioc" },
+]
+```
+
+This gives you:
+- ✅ Fast installation for most packages (PPM binaries)
+- ✅ Compatibility for all packages (CRAN source fallback)
+- ✅ No FlexiBLAS dependency issues
+
+## Available Environments
+
+### book_chapter
+- **R**: 4.4 (module system)
+- **Python**: 3.12 (uv)
+- **Packages**: Full Bioconductor stack, tidyverse, batch correction tools
+
+### env_template
+- Like book_chapter, but only has the toml files (all you need to start)
+
+
+## Usage
 
 ### Activate an environment:
 ```bash
 source environments/load_envs.sh book_chapter
 ```
 
-The script will:
-1. Automatically load the appropriate R module based on `rproject.toml`
-2. Activate the Python virtual environment (if present)
-3. Set up the R library path for project-specific packages
-
 ### List available projects:
 ```bash
 source environments/load_envs.sh --list
 ```
 
-### Force dependency sync:
+### Verbose mode (for debugging):
 ```bash
-source environments/load_envs.sh book_chapter --force-sync
+source environments/load_envs.sh book_chapter --verbose
 ```
 
-## How R Module Loading Works
+## How It Works
 
-When you activate an R environment:
+### R Module Loading
 
-1. The script reads the `r_version` from `rproject.toml` (e.g., "4.5")
-2. It searches for matching modules: `module avail r/4.5*`
-3. It loads the first matching module
-4. R packages are installed to `.rv/` in your project directory
+1. Script reads `r_version` from `rproject.toml` (e.g., "4.4")
+2. Loads matching R module: `module load r/4.4.0-ncfmhh4`
+3. R module provides:
+   - R installation
+   - OpenBLAS (BLAS/LAPACK)
+   - System libraries in `LD_LIBRARY_PATH`
 
-## Creating New R Environments
+### R Package Installation (rv)
 
+1. rv reads `rproject.toml` dependencies
+2. Tries PPM first (pre-compiled binaries)
+3. Falls back to CRAN (compiles from source) if PPM fails
+4. Installs to `rv/library/` in project directory
+5. Sets `R_LIBS_USER` to project's rv directory
+
+## Creating New Environments
+
+### 1. Create project directory:
 ```bash
-# From anywhere, specify the project directory
-bash environments/create_rv_env.sh environments/book_chapter
-
-# Or from environments
-bash create_rv_env.sh book_chapter
+mkdir environments/my_project
 ```
 
-This will:
-1. Read the R version from `rproject.toml`
-2. Load R from the module system (if not already loaded)
-3. Initialize an rv project
-4. Install packages listed in `rproject.toml`
+### 2. Create rproject.toml:
+```toml
+[project]
+name = "my_project"
+r_version = "4.4"
+
+repositories = [
+    { alias = "PPM", url = "https://packagemanager.posit.co/cran/latest" },
+    { alias = "CRAN", url = "https://cloud.r-project.org" },
+    { alias = "BioCsoft", url = "https://bioconductor.org/packages/3.20/bioc" },
+]
+
+dependencies = [
+    "dplyr",
+    "ggplot2",
+    # ... your packages
+]
+```
+
+### 3. (Optional) Create pyproject.toml for Python:
+```toml
+[project]
+name = "my_project"
+version = "0.1.0"
+requires-python = ">=3.12"
+
+dependencies = [
+    "numpy",
+    "pandas",
+    # ... your packages
+]
+```
+
+### 4. Activate:
+```bash
+source environments/load_envs.sh my_project
+```
+
+rv and uv will automatically install all dependencies.
 
 ## Troubleshooting
 
 ### R module not found
-If you get "No R module matching version X.Y found":
+```
+ERROR: No R module matching version X.Y found
+```
+
+**Solution:**
 - Check available versions: `module avail r/`
-- Update `r_version` in `rproject.toml` to match an available version
+- Update `r_version` in `rproject.toml` to match available version
+- Currently supported: R 4.4+
 
 ### rv sync fails
-- Ensure R is loaded: `module list | grep r/`
-- Check R is accessible: `which R`
-- Try verbose mode: `source environments/load_envs.sh book_chapter --verbose`
 
-### Missing system library errors
-
-If you see errors like:
-```
-unable to load shared object: libflexiblas.so.3: cannot open shared object file
-unable to load shared object: libglpk.so.40: cannot open shared object file
+**Check R is loaded:**
+```bash
+module list | grep r/
+which R
 ```
 
-**Solution**: Install the missing library locally:
-- For FlexiBLAS: `bash environments/install_flexiblas.sh`
-- For GLPK: `bash environments/install_glpk.sh`
+**Try verbose mode:**
+```bash
+source environments/load_envs.sh book_chapter --verbose
+```
 
-**Why this happens**: R packages compiled from source link against system libraries. If those libraries aren't available via the module system, you need to install them locally.
+**Common causes:**
+- R module not loaded
+- Wrong R version (need 4.4+)
+- Network issues downloading packages
 
-**Common missing libraries**:
-- `libflexiblas.so.3` - Required by: Matrix, S4Arrays, many linear algebra packages
-- `libglpk.so.40` - Required by: igraph (used by batchelor, network analysis)
+### Package compilation is slow
 
-### Compilation errors for specific packages
-Some Bioconductor packages may fail to compile due to missing dependencies:
-- Check the error message for missing `.so` files
-- Install the required system library (see above)
-- If the library isn't critical, comment out the package in `rproject.toml`
-- Failed packages can be installed manually later if required
+**This is normal** when using CRAN source fallback:
+- PPM binaries install in seconds
+- CRAN source compilation takes minutes per package
+- Matrix, S4Arrays compile from source (5-10 minutes each)
+- Other packages use PPM binaries (fast)
+
+**To speed up:**
+- Use multiple cores: rv uses all available cores by default
+- Be patient on first sync, subsequent syncs are fast
+- Consider using conda if compilation is too slow
+
+### FlexiBLAS errors (should not happen with current setup)
+
+If you see:
+```
+libflexiblas.so.3: cannot open shared object file
+```
+
+**This means:**
+- You're using old configuration with PPM-only
+- Update `rproject.toml` to include CRAN fallback:
+```toml
+repositories = [
+    { alias = "PPM", url = "https://packagemanager.posit.co/cran/latest" },
+    { alias = "CRAN", url = "https://cloud.r-project.org" },  # Add this
+    # ... rest of repos
+]
+```
 
 ## Performance Optimization for Many Jobs
 
@@ -173,7 +250,7 @@ The updated `load_envs.sh` and `create_rv_env.sh` scripts now:
 ### Advantages:
 - **Speed**: 10-100x faster package installation and environment activation
 - **Native ecosystems**: Direct access to PyPI (500k+ packages) and CRAN/Bioconductor (20k+ packages)
-- **Disk space**: 10-50 MB per environment vs 500MB-2GB for conda
+-  Why r space**: 10-50 MB per environment vs 500MB-2GB for conda
 - **HPC-friendly**: Works with module system, doesn't require nested user namespaces
 - **Modern tooling**: Better dependency resolution, cleaner lock files
 
@@ -183,35 +260,5 @@ The updated `load_envs.sh` and `create_rv_env.sh` scripts now:
 - **Two tools**: Separate Python and R package managers
 
 Once system libraries are installed, you get much faster workflows and access to the latest packages.
-
-## Module System Commands
-
-```bash
-# List all available R modules
-module avail r/
-
-# Load a specific R version
-module load r/4.4.0-ncfmhh4
-
-# Check loaded modules
-module list
-
-# Unload a module
-module unload r/4.4.0-ncfmhh4
-
-# Get detailed info about a module
-module spider r/4.4.0-ncfmhh4
-```
-
-## Installed System Libraries
-
-The following libraries are installed to `~/.local` and automatically found via `LD_LIBRARY_PATH`:
-
-- **FlexiBLAS** (`libflexiblas.so.3`) - BLAS/LAPACK wrapper for linear algebra
-- **GLPK** (`libglpk.so.40`) - GNU Linear Programming Kit for optimization
-
-To verify installation:
-```bash
-ls ~/.local/lib/libflexiblas* ~/.local/lib/libglpk*
-echo $LD_LIBRARY_PATH  # Should include ~/.local/lib
-```
+## Advantages:
+- **Speed**: 10-100x fast

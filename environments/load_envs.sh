@@ -143,7 +143,7 @@ activate_r_env() {
     # Extract R version from rproject.toml
     local r_version_spec=$(grep -E '^\s*r_version\s*=' "$abs_project_path/rproject.toml" | sed -E 's/.*=\s*"([^"]+)".*/\1/')
     [[ -z "$r_version_spec" ]] && r_version_spec="4.5.1"
-    [[ "$r_version_spec" == "4.5.1" ]] && r_version_spec="4.5.1-5sqddv2"
+    [[ "$r_version_spec" == "4.5.1" ]] && r_version_spec="4.5.1-264p7tz"
     
     # Load R from module system
     # Find matching R module
@@ -175,9 +175,8 @@ activate_r_env() {
     fi
     
     
-    # Check for rv directory (could be .rv or rv depending on rv version)
+    # Check for rv directory
     local rv_dir="$abs_project_path/rv"
-    [[ ! -d "$rv_dir" ]] && rv_dir="$abs_project_path/.rv"
     
     local needs_sync=false
     [[ ! -d "$rv_dir" ]] && needs_sync=true && [[ "$VERBOSE" == true ]] && echo "  rv/ missing, sync required"
@@ -186,14 +185,17 @@ activate_r_env() {
     [[ "$needs_sync" == false ]] && echo "  ⚡ R environment up-to-date, skipping sync"
     if [[ "$needs_sync" == true ]]; then
         echo "  Syncing R dependencies..."
-        export R_COMPILE_AND_INSTALL_PACKAGES=never
         (cd "$abs_project_path" && rv sync) || { echo -e "\nERROR: rv sync failed\n"; return 1; }
     fi
 
-    # Find the library path
-    local rv_lib_path="$rv_dir/library"
-    [[ ! -d "$rv_lib_path" ]] && rv_lib_path="$rv_dir"
-    [[ ! -d "$rv_lib_path" ]] && echo -e "\nERROR: R library directory not found at $rv_lib_path\n" && return 1
+    # Find the library path (try rv/library)
+    local rv_lib_path=""
+    if [[ -d "$rv_dir/library" ]]; then
+        rv_lib_path="$rv_dir/library"
+    else
+        echo -e "\nERROR: R library directory not found, checked: $abs_project_path/rv/library"
+        return 1
+    fi
     export R_LIBS_USER="$rv_lib_path"
     [[ "$VERBOSE" == true ]] && echo "  Set R_LIBS_USER=$R_LIBS_USER"
     local r_version=$(R --version 2>&1 | head -n 1)
