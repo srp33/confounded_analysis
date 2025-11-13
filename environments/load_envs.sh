@@ -72,7 +72,16 @@ list_available_projects() {
 
 deactivate_existing_environments() {
     [[ "$VERBOSE" == true ]] && echo "[VERBOSE] Checking for existing environments to deactivate..."
-    [[ "$VERBOSE" == true ]] && echo "[DEBUG] R before python deactivate: $(command -v R)"
+    [[ "$VERBOSE" == true ]] && echo "[DEBUG] R before cleanup: $(command -v R)"
+    
+    # Unload any R modules (they interfere with conda R)
+    if module list 2>&1 | grep -q "^r/"; then
+        local r_modules=$(module -t list 2>&1 | grep "^r/")
+        for r_mod in $r_modules; do
+            [[ "$VERBOSE" == true ]] && echo "  Unloading R module: $r_mod"
+            module unload "$r_mod" 2>/dev/null || true
+        done
+    fi
     
     # Deactivate Python/virtualenv
     if [[ -n "$VIRTUAL_ENV" ]]; then
@@ -83,26 +92,10 @@ deactivate_existing_environments() {
         unset VIRTUAL_ENV
     fi
     
-    [[ "$VERBOSE" == true ]] && echo "[DEBUG] R before after python deactivate, before conda deactivate: $(command -v R)"
-    # Deactivate Conda
-    if [[ -n "$CONDA_DEFAULT_ENV" ]]; then
-        [[ "$VERBOSE" == true ]] && echo "  Deactivating Conda environment: $CONDA_DEFAULT_ENV"
-        if command -v conda &> /dev/null; then
-            conda deactivate 2>/dev/null || true
-        fi
-        unset CONDA_DEFAULT_ENV
-        unset CONDA_PREFIX
-        unset CONDA_PYTHON_EXE
-        unset CONDA_SHLVL
-    fi
-
-    [[ "$VERBOSE" == true ]] && echo "[DEBUG] R after conda deactivate: $(command -v R)"
+    [[ "$VERBOSE" == true ]] && echo "[DEBUG] R after cleanup: $(command -v R)"
     
-    # Do not clear R environment
-    # if [[ -n "$R_LIBS_USER" ]]; then
-    #     [[ "$VERBOSE" == true ]] && echo "  Clearing existing R environment: $R_LIBS_USER"
-    #     unset R_LIBS_USER
-    # fi
+    # Note: We don't deactivate conda here because we might need it for R
+    # The activate_r_env function will handle conda activation
     
     [[ "$VERBOSE" == true ]] && echo "  ✓ Environment cleanup complete"
 }
@@ -134,19 +127,12 @@ activate_python_env() {
     PYTHON_ACTIVATED=true
 }
 
-activate_r_env() {
-    [[ "$VERBOSE" == true ]] && echo "[VERBOSE] Activating R environment..."
-    [[ "$VERBOSE" == true ]] && echo "[DEBUG] R before module load: $(command -v R)"
-
-    local abs_project_path="$(cd "$PROJECT_PATH" && pwd)" || { echo "ERROR: Failed to resolve $PROJECT_PATH"; return 1; }
+load_r_from_modules() {
+    local r_version_spec="$1"
     
-    # Extract R version from rproject.toml
-    local r_version_spec=$(grep -E '^\s*r_version\s*=' "$abs_project_path/rproject.toml" | sed -E 's/.*=\s*"([^"]+)".*/\1/')
-    [[ -z "$r_version_spec" ]] && r_version_spec="4.5.1"
+    # Try exact match first, then fuzzy match
     [[ "$r_version_spec" == "4.5.1" ]] && r_version_spec="4.5.1-5sqddv2"
     
-    # Load R from module system
-    # Find matching R module
     local r_module=$(module -t avail r/ 2>&1 | grep -E "^r/${r_version_spec}" | head -n1)
     
     if [[ -z "$r_module" ]]; then
@@ -156,13 +142,98 @@ activate_r_env() {
         return 1
     fi
 
-    # Run `module load` in the CURRENT shell. 
-    # Redirecting output causes module load to fail.
     echo "  Loading module: $r_module"
     module load "$r_module"
     
     local loaded_r_version=$(R --version 2>&1 | grep -oP 'R version \K[0-9]+\.[0-9]+' | head -n1)
     [[ "$VERBOSE" == true ]] && echo "  ✓ R successfully loaded: version $loaded_r_version"
+    echo "  ✓ R ${loaded_r_version} (module)"
+}
+
+activate_r_env() {
+    [[ "$VERBOSE" == true ]] && echo "[VERBOSE] Activating R environment..."
+    [[ "$VERBOSE" == true ]] && echo "[DEBUG] R before activation: $(command -v R)"
+
+    local abs_project_path="$(cd "$PROJECT_PATH" && pwd)" || { echo "ERROR: Failed to resolve $PROJECT_PATH"; return 1; }
+    
+    # Extract R version from rproject.toml
+    local r_version_spec=$(grep -E '^\s*r_version\s*=' "$abs_project_path/rproject.toml" | sed -E 's/.*=\s*"([^"]+)".*/\1/')
+    [[ -z "$r_version_spec" ]] && r_version_spec="4.5"
+    
+    # Normalize to major.minor (4.4.0 -> 4.4)
+    local r_version_short=$(echo "$r_version_spec" | cut -d. -f1,2)
+    local conda_env_name="rv-r${r_version_short}-syslibs"
+    
+    # Try to load conda if not available
+    if ! command -v conda &> /dev/null; then
+        [[ "$VERBOSE" == true ]] && echo "  Conda not found, attempting to load from modules..."
+        
+        # Try common conda module names
+        for conda_module in miniconda3 anaconda3 conda; do
+            if module -t avail "$conda_module" 2>&1 | grep -q "^${conda_module}"; then
+                [[ "$VERBOSE" == true ]] && echo "  Loading module: $conda_module"
+                module load "$conda_module" 2>/dev/null || true
+                
+                if command -v conda &> /dev/null; then
+                    echo "  ✓ Loaded conda from module: $conda_module"
+                    break
+                fi
+            fi
+        done
+    fi
+    
+    # Strategy 1: Try conda environment first (preferred)
+    if command -v conda &> /dev/null; then
+        if conda env list | grep -q "^${conda_env_name} "; then
+            [[ "$VERBOSE" == true ]] && echo "  Found conda environment: ${conda_env_name}"
+            echo "  Activating conda environment: ${conda_env_name}"
+            
+            # Activate conda environment
+            eval "$(conda shell.bash hook)"
+            conda activate "${conda_env_name}"
+            
+            if [[ "$CONDA_DEFAULT_ENV" == "${conda_env_name}" ]]; then
+                local loaded_r_version=$(R --version 2>&1 | grep -oP 'R version \K[0-9]+\.[0-9]+\.[0-9]+' | head -n1)
+                [[ "$VERBOSE" == true ]] && echo "  ✓ R from conda: version $loaded_r_version"
+                echo "  ✓ R ${loaded_r_version} (conda) + system libraries"
+            else
+                echo "  ERROR: Failed to activate conda environment"
+                return 1
+            fi
+        else
+            echo "  ⚠ Conda environment '${conda_env_name}' not found"
+            echo ""
+            read -p "  Create it now? (Y/n): " -n 1 -r
+            echo
+            if [[ $REPLY =~ ^[Nn]$ ]]; then
+                echo "  Falling back to module system..."
+                load_r_from_modules "$r_version_spec" || return 1
+            else
+                echo "  Creating conda environment for R ${r_version_short}..."
+                bash "$ENVIRONMENTS_DIR/create_conda_r_env.sh" "${r_version_short}" || {
+                    echo "  ERROR: Failed to create conda environment"
+                    echo "  Falling back to module system..."
+                    load_r_from_modules "$r_version_spec" || return 1
+                }
+                
+                # Now activate the newly created environment
+                echo "  Activating newly created environment..."
+                eval "$(conda shell.bash hook)"
+                conda activate "${conda_env_name}"
+                
+                if [[ "$CONDA_DEFAULT_ENV" == "${conda_env_name}" ]]; then
+                    local loaded_r_version=$(R --version 2>&1 | grep -oP 'R version \K[0-9]+\.[0-9]+\.[0-9]+' | head -n1)
+                    echo "  ✓ R ${loaded_r_version} (conda) + system libraries"
+                else
+                    echo "  ERROR: Failed to activate newly created conda environment"
+                    return 1
+                fi
+            fi
+        fi
+    else
+        [[ "$VERBOSE" == true ]] && echo "  Conda not available, using module system"
+        load_r_from_modules "$r_version_spec" || return 1
+    fi
     
     # Check for multiple R installations in PATH (warn only, not an error)
     if [[ "$VERBOSE" == true ]]; then
@@ -173,7 +244,6 @@ activate_r_env() {
             echo "    Using: $(which R)"
         fi
     fi
-    
     
     # Check for rv directory (could be .rv or rv depending on rv version)
     local rv_dir="$abs_project_path/rv"

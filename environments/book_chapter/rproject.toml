@@ -1,6 +1,6 @@
 [project]
 name = "book_chapter"
-r_version = "4.4.0"
+r_version = "4.4"
 
 # Use Posit Package Manager to get fast binary installs on Linux
 # Include Bioconductor repository for bioinformatics packages
