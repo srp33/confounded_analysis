@@ -3,7 +3,7 @@
 # Usage: source load_envs.sh <project_name> [options]
 
 PROJECT_NAME="" VERBOSE=false FORCE_SYNC=false LIST_PROJECTS=false SHOW_HELP=false
-HAS_UV=false HAS_RIG=false HAS_RV=false HAS_PYTHON_ENV=false HAS_R_ENV=false PYTHON_ACTIVATED=false R_ACTIVATED=false 
+HAS_UV=false HAS_RV=false HAS_PYTHON_ENV=false HAS_R_ENV=false PYTHON_ACTIVATED=false R_ACTIVATED=false 
 PROJECT_PATH="" 
 ENVIRONMENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ORIGINAL_DIR="$(pwd)"
@@ -142,11 +142,10 @@ activate_r_env() {
     
     # Extract R version from rproject.toml
     local r_version_spec=$(grep -E '^\s*r_version\s*=' "$abs_project_path/rproject.toml" | sed -E 's/.*=\s*"([^"]+)".*/\1/')
-    [[ -z "$r_version_spec" ]] && r_version_spec="4.5"
-    
+    [[ -z "$r_version_spec" ]] && r_version_spec="4.5.1"
+    [[ "$r_version_spec" == "4.5.1" ]] && r_version_spec="4.5.1-5sqddv2"
     
     # Load R from module system
-    
     # Find matching R module
     local r_module=$(module -t avail r/ 2>&1 | grep -E "^r/${r_version_spec}" | head -n1)
     
@@ -156,54 +155,11 @@ activate_r_env() {
         module -t avail r/ 2>&1 | grep "^r/"
         return 1
     fi
-    
-    echo "  Loading module: $r_module"
-    
-    # Load the module - capture output to show warnings but don't fail on them
-    local module_output
-    local module_exit
-    local err_file
-    
-    # Create a temporary file to hold stderr output
-    err_file=$(mktemp) || { echo "ERROR: Failed to create temp file"; return 1; }
 
     # Run `module load` in the CURRENT shell. 
     # Redirecting output causes module load to fail.
+    echo "  Loading module: $r_module"
     module load "$r_module"
-
-    # Verify R is accessible - if not, try to fix PATH using module info
-    if ! command -v R &> /dev/null; then
-        [[ "$VERBOSE" == true ]] && echo "[DEBUG] No R after load module: $(command -v R)"
-
-        [[ "$VERBOSE" == true ]] && echo "  R command not in PATH, attempting to locate it..."
-        return 1
-        
-        # Get the R module that's loaded (must start with "r/" and have version 4.x or 3.x)
-        local current_r_module=$(module list 2>&1 | grep -oP "\br/[34]\.[0-9.]+[-.][a-z0-9]+" | head -n1)
-        
-        if [[ -n "$current_r_module" ]]; then
-            # Try to find R using module show (Lmod uses prepend_path, not prepend-path)
-            local r_path=$(module show "$current_r_module" 2>&1 | grep -oP 'prepend_path\("PATH","?\K[^"]+' | head -n1)
-            
-            if [[ -n "$r_path" && -d "$r_path" ]]; then
-                [[ "$VERBOSE" == true ]] && echo "  Found R path from module: $r_path"
-                export PATH="$r_path:$PATH"
-            fi
-        fi
-        
-        # Final check
-        if ! command -v R &> /dev/null; then
-            echo -e "\nERROR: R not accessible even though module is loaded"
-            echo "This can happen when Python venv modifies PATH."
-            echo ""
-            echo "Loaded R module: ${current_r_module:-none}"
-            echo ""
-            echo "Workaround: Load R module manually before sourcing this script:"
-            echo "  module load r/${r_version_spec}"
-            echo "  source environments/load_envs.sh book_chapter"
-            return 1
-        fi
-    fi
     
     local loaded_r_version=$(R --version 2>&1 | grep -oP 'R version \K[0-9]+\.[0-9]+' | head -n1)
     [[ "$VERBOSE" == true ]] && echo "  ✓ R successfully loaded: version $loaded_r_version"
@@ -230,6 +186,7 @@ activate_r_env() {
     [[ "$needs_sync" == false ]] && echo "  ⚡ R environment up-to-date, skipping sync"
     if [[ "$needs_sync" == true ]]; then
         echo "  Syncing R dependencies..."
+        export R_COMPILE_AND_INSTALL_PACKAGES=never
         (cd "$abs_project_path" && rv sync) || { echo -e "\nERROR: rv sync failed\n"; return 1; }
     fi
 
@@ -254,13 +211,8 @@ activate_environments() {
     echo -e "\nActivating environments for project: $PROJECT_NAME\n=================================================="
     local activation_failed=false
     
-    # --- START FIX ---
-    # Activate R *first* to let 'module load' modify the base PATH
     [[ "$HAS_R_ENV" == true ]] && ! activate_r_env && activation_failed=true
-    
-    # Activate Python *second* to prepend its venv to the PATH
     [[ "$HAS_PYTHON_ENV" == true ]] && ! activate_python_env && activation_failed=true
-    # --- END FIX ---
 
     [[ "$activation_failed" == true ]] && echo -e "\nEnvironment activation completed with errors" && return 1
     if [[ "$HAS_PYTHON_ENV" == true && "$HAS_R_ENV" == true ]]; then
@@ -390,14 +342,11 @@ check_sourced() {
 main() {
     check_sourced || return 1
     parse_arguments "$@" || return 1
-    [[ "$VERBOSE" == true ]] && echo "[DEBUG] R after argument parsing: $(command -v R)"
     [[ "$SHOW_HELP" == true ]] && display_help && return 0
     [[ "$LIST_PROJECTS" == true ]] && list_available_projects && return 0
     [[ -z "$PROJECT_NAME" ]] && echo -e "\nERROR: No project name provided\nUsage: source load_envs.sh <project_name>\nRun 'source load_envs.sh --list' to see projects\n" >&2 && return 1
     check_prerequisites
-    [[ "$VERBOSE" == true ]] && echo "[DEBUG] R after check_prerequisites: $(command -v R)"
     detect_environments || return 3
-    [[ "$VERBOSE" == true ]] && echo "[DEBUG] R after detect_environments: $(command -v R)"
     activate_environments || return 4
     display_status
 }

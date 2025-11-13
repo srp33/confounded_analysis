@@ -1,6 +1,6 @@
 [project]
 name = "book_chapter"
-r_version = "4.5.1"
+r_version = "4.4.0"
 
 # Use Posit Package Manager to get fast binary installs on Linux
 # Include Bioconductor repository for bioinformatics packages
@@ -15,9 +15,10 @@ repositories = [
 dependencies = [
     # === Core Infrastructure ===
     "Rcpp", "RcppArmadillo", "RcppEigen", "BH", 
-    "data.table", "Matrix", "matrixStats",
+    "data.table", "matrixStats",
     "foreach", "doParallel", "future",
     "remotes", "pak",
+    "Matrix", 
     
     # === Tidyverse Ecosystem ===
     "tidyverse",  # Includes dplyr, ggplot2, tidyr, purrr, readr, stringr, etc.
@@ -37,11 +38,13 @@ dependencies = [
     "SummarizedExperiment", "limma", "vsn",
     "AnnotationDbi", "biomaRt", "ExperimentHub",
     "ComplexHeatmap",
-    "Biostrings", "IRanges", "S4Vectors", "zlibbioc",
+    "Biostrings", "IRanges", "zlibbioc",
+    "S4Vectors", 
+    "S4Arrays",
     
     # === Batch Correction ===
     "sva",        # ComBat and other batch correction methods
-    # "batchelor",  # Bioconductor batch correction methods
+    "batchelor",  # Bioconductor batch correction methods
     "RUVSeq",     # Remove Unwanted Variation
     
     # === Machine Learning ===
@@ -67,5 +70,5 @@ dependencies = [
     # === Original Packages ===
     "rmarkdown",
     "shiny",
-    # "BiocSingular",
+    "BiocSingular",
 ]
