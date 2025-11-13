@@ -64,6 +64,10 @@ dependencies = [
     "seqgendiff",   # RNA-seq simulation (alternative to polyester)
     "logspline",    # For polyester dependency
     
+    # === GitHub Packages ===
+    # polyester - RNA-seq simulation (not in Bioconductor 3.20+)
+    { name = "polyester", git = "https://github.com/alyssafrazee/polyester", branch = "master" }
+    
     # === VS Code Integration ===
     "languageserver", # REQUIRED for VS Code R extension
     
