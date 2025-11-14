@@ -9,14 +9,31 @@ All environments are managed with [pixi](https://pixi.sh) - a fast, modern packa
 curl -fsSL https://pixi.sh/install.sh | bash
 source ~/.bashrc
 
-pixi config set --local run-post-link-scripts insecure # Might need this 
+# Read pixi documentation on this. I have a config.toml in ~/.pixi
+pixi config set --local run-post-link-scripts insecure
 ```
 
-### 2. Set up an environment
+### 2. Create a pixi.toml file in your project folder.
+Check out the one in book_chapter or example_env.
+I have one in ~/confounded_analysis/scripts/evaluations/book_chapter
+
+
+### 3. Install packages. 
 ```bash
-cd environments/book_chapter
+cd your_project_folder
 
 pixi install
+```
+
+### 3. Install extras if needed (If packages are not in conda)
+This is in my pixi.toml:
+```toml
+extra-install = "Rscript --vanilla install_github.R"
+```
+
+So I can run this in bash:
+```
+pixi run extra-install
 ```
 
 ### 3. Use the environment
@@ -25,40 +42,10 @@ pixi install
 pixi shell
 
 # Or run commands directly
-pixi run r
-pixi run python
-pixi run test  # Run tests
-```
-
-## Available Environments
-
-### book_chapter
-Full Bioconductor environment for batch correction analysis.
-
-**Includes:**
-- R 4.4 + Bioconductor packages
-- Python 3.12 + scientific stack
-- System libraries (OpenBLAS, GLPK, etc.)
-
-**Usage:**
-```bash
-cd environments/book_chapter
-pixi install
-pixi shell
-```
-
-### example_env
-Basic example environment with minimal dependencies.
-
-**Includes:**
-- R 4.4 + tidyverse
-- Python 3.12 + numpy, pandas
-
-**Usage:**
-```bash
-cd environments/example_env
-pixi install
-pixi shell
+pixi run R
+pixi run python my_python_script.py
+pixi run sbatch my_sbatch_script.sh
+pixi run sbatch --mem=1G --time=5m python my_python_script.py
 ```
 
 ## Why Pixi?
@@ -84,41 +71,21 @@ pixi shell
 # Install environment
 pixi install
 
-# Enter shell
-pixi shell
-
-# Run R
-pixi run r
-
-# Run Python
 pixi run python
 
 # Run tests
-pixi run test
+pixi run <test_name>
 
-# Add a package
+# Run tool
+pixi run <tool_name>
+
+# Add a package—this appends it to the dependencies in the toml file
 pixi add r-newpackage
 pixi add python-package
-
-# Update packages
-pixi update
-
-# Clean cache
-pixi clean
-```
-
-## Project Structure
+pixi remove r-newpackage
 
 ```
-environments/
-├── book_chapter/
-│   ├── pixi.toml          # Dependencies
-│   ├── pixi.lock          # Locked versions (auto-generated)
-│   └── .pixi/             # Environment (auto-generated)
-├── pixi_test/
-│   └── pixi.toml
-└── README.md
-```
+
 
 ## Adding Packages
 
@@ -136,17 +103,11 @@ pixi install
 
 ## Troubleshooting
 
-### pixi not found
-```bash
-curl -fsSL https://pixi.sh/install.sh | bash
-source ~/.bashrc
-```
-
 ### Package not available
-Check if it exists in conda-forge:
+Check if it exists in conda-forge or the other available channels (r, bioconda)
 - https://anaconda.org/conda-forge
 
-For GitHub R packages, create an install script (see `book_chapter/install_github.R`):
+If not there, check again:) Then create an install script (see `book_chapter/install_github.R`):
 ```r
 if (!requireNamespace("remotes", quietly = TRUE)) {
   install.packages("remotes")
