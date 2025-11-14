@@ -19,7 +19,7 @@ if [ -z "$SLURM_ARRAY_TASK_ID" ]; then
 fi
 
 # --- Adjuster logic ---
-ADJUSTERS=("gmm" "log_combat" "min_mean" "mnn")
+ADJUSTERS=("gmm" "log_combat" "min_mean" "mnn" "log_transformed")
 ADJ_FOLDER="${ADJUSTERS[$SLURM_ARRAY_TASK_ID]}"
 CSV_DIR="$DATA_DIR/$ADJ_FOLDER"
 OUT_SUBDIR="$OUTPUT_DIR/$ADJ_FOLDER"

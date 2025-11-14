@@ -36,7 +36,7 @@ apply_adjustment <- function(df, method, test_source) {
   cat("  [apply_adjustment] Value summary (pre-transform):\n")
   print(summary(as.vector(as.matrix(num_cols))[1:min(1000, length(as.matrix(num_cols)))]))
   
-  if (method != "gmm") {
+  if (method != "gmm" ) {
     if (any(num_cols < 0, na.rm = TRUE)) {
       warning("Negative values found in numeric columns; consider shifting data.")
     }
@@ -63,6 +63,7 @@ apply_adjustment <- function(df, method, test_source) {
     log_combat = adjust_log_combat(num_cols_matrix_t, batch = batch_vec, design = design),
     mnn = adjust_mnn(df_ = num_cols_matrix_t, batch = batch_vec, test_source=test_source, data_are_counts = FALSE, debug = FALSE),
     gmm = adjust_gmm(matrix_ = num_cols_matrix_t, batch = batch_vec, debug = FALSE),
+    log_transformed = num_cols_matrix_t,
     stop("Unknown adjuster: ", method)
   )
 
