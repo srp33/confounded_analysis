@@ -4,7 +4,7 @@
 Nextflow workflow for breast cancer batch-effect analysis:
 1. Combine gold unadjusted datasets
 2. Subset combined data into 2–14 dataset groups
-3. Apply batch effect adjusters (gmm, log_combat, min_mean, mnn) + unadjusted
+3. Apply batch effect adjusters (gmm, log_combat, min_mean, mnn, log_transformed)
 4. Run classifier
 5. Aggregate classifier outputs
 6. Generate performance plots
@@ -40,7 +40,7 @@ workflow {
     subsets_ch = SUBSET(combined_ch)
 
     // 3️⃣ Run classifiers for each adjuster
-    adjusters = ['gmm', 'log_combat', 'min_mean', 'mnn']
+    adjusters = ['gmm', 'log_combat', 'min_mean', 'mnn', 'log_transformed']
     adjuster_results_ch = Channel.empty()
 
     adjusters.each { adjuster ->
@@ -50,18 +50,13 @@ workflow {
         adjuster_results_ch = adjuster_results_ch.merge(classifier_ch)
     }
 
-    // 4️⃣ Run classifier on unadjusted datasets
-    unadjusted_ch = Channel.fromPath("${params.gold_dir}/*/unadjusted.csv")
-        .map { file -> tuple(file, 'unadjusted') } | RUN_CLASSIFIER_UNADJUSTED
-    AGGREGATE_PER_ADJUSTER(unadjusted_ch, 'unadjusted')
-
     // 5️⃣ Aggregate all adjusters into a single CSV
     all_csvs = Channel.fromPath([
         "${params.output_dir}/gmm.csv",
         "${params.output_dir}/log_combat.csv",
         "${params.output_dir}/min_mean.csv",
         "${params.output_dir}/mnn.csv",
-        "${params.output_dir}/unadjusted.csv"
+        "${params.output_dir}/log_transformed.csv"
     ])
     AGGREGATE_ALL(all_csvs, "${params.output_dir}/all_adjusters_metrics.csv")
 
@@ -90,35 +85,34 @@ process COMBINE {
 
 process SUBSET {
     input:
-        path combined_csv
+        path combined_csv  // ignored by your script but required for chaining
+
     output:
-        path "data/adjusted_datasets/*", emit: adjusted_subsets
+        path "data/all_combined_subsets/subset_*.csv", emit: adjusted_subsets
+
     script:
         """
-        mkdir -p data/adjusted_datasets
-        Rscript scripts/evaluations/classify_er_all_datasets/subset_combined_data.R \
-            --input $combined_csv \
-            --output data/adjusted_datasets
+        mkdir -p data/all_combined_subsets
+
+        # Loop over target subset sizes (2–14)
+        for k in \$(seq 2 14); do
+            out_file="data/all_combined_subsets/subset_\${k}studies.csv"
+            if [ ! -f "\$out_file" ]; then
+                echo "Creating missing subset file: \$out_file"
+                Rscript /scripts/evaluations/classify_er_all_datasets/subset_combined_data.R
+            else
+                echo "Skipping existing subset file: \$out_file"
+            fi
+        done
         """
 }
+
 
 process CLASSIFIER {
     input:
         tuple path(csv_file), val(adjuster)
     output:
         path "${params.output_dir}/${adjuster}.csv", emit: classifier_output
-    script:
-        """
-        mkdir -p ${params.output_dir}
-        bash scripts/run_in_apptainer.sh $csv_file
-        """
-}
-
-process RUN_CLASSIFIER_UNADJUSTED {
-    input:
-        tuple path(csv_file), val(adjuster)
-    output:
-        path "${params.output_dir}/unadjusted.csv", emit: unadjusted_output
     script:
         """
         mkdir -p ${params.output_dir}
