@@ -1,10 +1,10 @@
 rm(list=ls())
 sapply(c("GEOquery", "annotate", "hugene11sttranscriptcluster.db",
-         "SummarizedExperiment", "limma", "BatchQC", "ggplot2"), require, character.only=TRUE, quietly=TRUE)
+         "SummarizedExperiment", "limma", "BatchQC", "ggplot2"), library, character.only=TRUE, quietly=TRUE)
 set.seed(123)
 
 ##  Download data from GEO
-gse <- getGEO("GSE73408", GSEMatrix=TRUE)[[1]]
+gse <- getGEO("GSE73408", destdir="data", GSEMatrix=TRUE)[[1]]
 
 ##  Annotation
 # annotate genes
@@ -22,7 +22,7 @@ dat <- exprs(gse)
 rownames(dat) <- gene_symbols
 
 # annotate samples and create group
-sample_info <- read.csv("/scripts/evaluations/robustifying/data/new_data_info.csv", as.is=TRUE)
+sample_info <- read.csv("data/new_data_info.csv", as.is=TRUE)
 identical(sample_info$ID, colnames(dat))
 colnames(dat) <- sample_info$Label
 
@@ -32,7 +32,7 @@ group[grep("_TB_", colnames(dat))] <- 1
 
 
 ##  Clean together with the other studies
-rds_obj <- readRDS("/scripts/evaluations/robustifying/data/combined.rds")
+rds_obj <- readRDS("data/combined.rds")
 overlapping_genes <- intersect(rownames(rds_obj), rownames(dat))
 length(overlapping_genes)
 
