@@ -114,6 +114,10 @@ bioconductor-zlibbioc = "*"
 bioconductor-genefilter = ">=1.88.0,<2"
 bioconductor-genomeinfodb = ">=1.42.0,<2"
 bioconductor-genomeinfodbdata = ">=1.2.13,<2"
+snakemake = ">=9.13.7,<10"
+
+[pypi-dependencies]
+sklearn-rvm = ">=0.1.1, <0.2"
 
 [tasks]
 test-r-core = "R --vanilla -e 'library(Matrix); library(data.table); library(tidyverse); cat(\"✓ R core packages loaded successfully\\n\")'"
@@ -131,3 +135,6 @@ test-github-packages = "R --vanilla -e 'if(requireNamespace(\"polyester\", quiet
 test-r = { depends-on = ["test-r-core", "test-r-bioc", "test-r-ml", "test-r-viz"] }
 test-python = { depends-on = ["test-python-core", "test-python-viz"] }
 test-all = { depends-on = ["extra-install", "test-r", "test-python", "test-github-packages"] }
+
+[activation]
+env={RETICULATE_PYTHON = ".pixi/envs/default/bin/python"}
