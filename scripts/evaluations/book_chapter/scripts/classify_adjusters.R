@@ -327,7 +327,7 @@ main_analysis_function <- function() {
       })
       
       # Apply MNN correction with test set last in merge order
-      mnn_result <- do.call(fastMNN, c(batch_list, list(merge.order = seq_along(unique_batches))))
+      mnn_result <- do.call(mnnCorrect, c(batch_list, list(merge.order = seq_along(unique_batches))))
       
       # Extract corrected data (handle different batchelor versions)
       if("corrected" %in% assayNames(mnn_result)) {

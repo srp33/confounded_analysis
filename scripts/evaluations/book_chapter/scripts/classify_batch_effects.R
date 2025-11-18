@@ -147,9 +147,8 @@ This script extracts single job functionality from 1_simpipe.R for parallel exec
 # Parse command line arguments
 params <- parse_arguments()
 
-# Set working directory and load dependencies
-setwd("/scripts/evaluations/book_chapter")
-source("/scripts/evaluations/book_chapter/scripts/helper.R")
+# Load dependencies
+source("scripts/helper.R")
 
 # Validate RVC dependencies if RVC classifier is requested
 if (params$classifier == "rvc" && (is.null(RVC_py) || is.null(np_py))) {
@@ -163,7 +162,7 @@ if (params$classifier == "rvc" && (is.null(RVC_py) || is.null(np_py))) {
 #' Load and prepare training/test data with gene selection
 prepare_data <- function() {
   # Load the combined dataset
-  load("/scripts/evaluations/book_chapter/data/combined_sub.RData")
+  load("data/combined_sub.RData")
   
   # Select 1000 genes with largest variance in training set (Africa)
   var_trn <- rowVars(train_expr)
@@ -635,8 +634,8 @@ main_execution <- function() {
     
     # Check input file existence
     input_files <- c(
-      "/scripts/evaluations/book_chapter/data/combined_sub.RData",
-      "/scripts/evaluations/book_chapter/scripts/helper.R"
+      "data/combined_sub.RData",
+      "scripts/helper.R"
     )
     
     cat(sprintf("[ERROR] Input file status:\n"), file = stderr())
