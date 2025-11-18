@@ -4,9 +4,9 @@
 output_folder: "/outputs/book_chapter"
 
 # Folder containing input data
-data_folder: "/scripts/evaluations/book_chapter/data"
+data_folder: "data"
 
-scripts_folder: "/scripts/evaluations/book_chapter/scripts"
+scripts_folder: "scripts"
 
 batch_effect_variances: [1, 3, 5]
 batch_effect_means: [0.1, 3, 5, 10]
