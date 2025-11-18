@@ -41,14 +41,17 @@ workflow {
 
     // 3️⃣ Run classifiers for each adjuster
     adjusters = ['gmm', 'log_combat', 'min_mean', 'mnn', 'log_transformed']
-    adjuster_results_ch = Channel.empty()
 
+    adjuster_dirs_ch = Channel.from(adjusters).map { adj ->
+        tuple(adj, file("${params.adjusted_dir}/${adj}"))
+    }
+    
     adjusters.each { adjuster ->
         csv_files_ch = Channel.fromPath("${params.adjusted_dir}/${adjuster}/*.csv")
         classifier_ch = csv_files_ch.map { file -> tuple(file, adjuster) } | CLASSIFIER
-        AGGREGATE_PER_ADJUSTER(classifier_ch, adjuster)
-        adjuster_results_ch = adjuster_results_ch.merge(classifier_ch)
     }
+
+    adjuster_dirs_ch | AGGREGATE_PER_ADJUSTER
 
     // 5️⃣ Aggregate all adjusters into a single CSV
     all_csvs = Channel.fromPath([
@@ -61,7 +64,7 @@ workflow {
     AGGREGATE_ALL(all_csvs, "${params.output_dir}/all_adjusters_metrics.csv")
 
     // 6️⃣ Plot performance
-    PLOT_PERFORMANCE("${params.output_dir}/all_adjusters_metrics.csv", "${params.output_dir}/plots")
+    PLOT_PERFORMANCE(file("${params.output_dir}/all_adjusters_metrics.csv"), "${params.output_dir}/plots")
 }
 
 
@@ -109,35 +112,43 @@ process SUBSET {
 
 
 process CLASSIFIER {
+    publishDir params.output_dir, mode: 'copyNoOverwrite'
     input:
         tuple path(csv_file), val(adjuster)
+    when: 
+        !file("${params.output_dir}/${adjuster}.csv").exists()
     output:
-        path "${params.output_dir}/${adjuster}.csv", emit: classifier_output
+        path "${adjuster}.csv"
     script:
         """
-        mkdir -p ${params.output_dir}
-        bash scripts/run_in_apptainer.sh $csv_file
+        bash scripts/run_in_apptainer.sh $csv_file > ${adjuster}.csv
         """
 }
 
 process AGGREGATE_PER_ADJUSTER {
+    publishDir params.output_dir, mode: 'copyNoOverwrite'
+
     input:
-        path results
-        val adjuster
+        tuple val(adjuster), path(adjuster_dir)
+    when: 
+        !file("${params.output_dir}/${adjuster}.csv").exists()
     output:
-        path "${params.output_dir}/${adjuster}.csv"
+        path "${adjuster}.csv"
     script:
         """
         python scripts/aggregate_adjuster_results.py \
-            --input-dir $results \
-            --output ${params.output_dir}/${adjuster}.csv
+            --input-dir $adjuster_dir \
+            --output ${adjuster}.csv
         """
 }
 
 process AGGREGATE_ALL {
+    publishDir params.output_dir, mode: 'copyNoOverwrite'
     input:
         path csv_files
         val output_file
+    when:
+        !file(output_file).exists()
     output:
         path output_file
     script:
@@ -149,16 +160,23 @@ process AGGREGATE_ALL {
 }
 
 process PLOT_PERFORMANCE {
+    publishDir params.output_dir + "/plots", mode: 'copyNoOverwrite'
     input:
         path metrics_csv
         val output_dir
+    when: 
+        !file("${output_dir}/performance_overview.png").exists()
     output:
-        path "${output_dir}/*"
+        path "*"
     script:
         """
-        mkdir -p ${output_dir}
+        tmpdir="plots_tmp"
+        mkdir -p $tmpdir
+
         Rscript scripts/plot_classifier_performance.R \
             --metrics $metrics_csv \
-            --output ${output_dir}
+            --output $tmpdir
+
+        cp \$tmpdir/* .
         """
 }

@@ -3,10 +3,11 @@ import pandas as pd
 import argparse
 from pathlib import Path
 
-def main(adjuster_dirs, output_file):
+def main(metrics_dir, output_file):
     dfs = []
+    metrics_dir = Path(metrics_dir)
 
-    for adj_dir in adjuster_dirs:
+    for adj_dir in metrics_dir.iterdir():
         adj_path = Path(adj_dir)
         if not adj_path.exists() or not adj_path.is_dir():
             print(f"⚠️  Adjuster directory {adj_dir} does not exist, skipping.")
@@ -30,8 +31,8 @@ def main(adjuster_dirs, output_file):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Aggregate classifier metrics across adjusters.")
-    parser.add_argument("--adjuster-dirs", nargs="+", required=True, help="Directories for each adjuster containing *_metrics.csv")
+    parser.add_argument("--metrics-dir", required=True, help="Directory for folders containing *_metrics.csv")
     parser.add_argument("--output", required=True, help="Output CSV file path")
 
     args = parser.parse_args()
-    main(args.adjuster_dirs, args.output)
+    main(args.metrics_dir, args.output)
