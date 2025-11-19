@@ -17,7 +17,7 @@
 #   ./run_in_apptainer.sh [--image-path <path>] <script.R> [args...]
 #   ./run_in_apptainer.sh [--image-path <path>] <script.py> [args...]
 #   ./run_in_apptainer.sh [--image-path <path>] <script.sh> [args...]
-#   ./run_in_apptainer.sh [--image-path <path>] --sbatch [sbatch-flags] <script> [script-args...]
+#   ./run_in_apptainer.sh [--image-path <path>] --app-sbatch [sbatch-flags] <script> [script-args...]
 
 set -euo pipefail
 

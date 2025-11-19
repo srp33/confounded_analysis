@@ -1,0 +1,51 @@
+No, this script does not use the exact same data topology as the Zhang et al. (2020) paper.While it uses valid TB datasets, it represents a "Proxy Strategy" (Path 1) rather than a "Strict Replication" (Path 2).The "Gap Analysis"Here is the specific breakdown of where your current script deviates from the paper's design (Table S1 & Figure 2).Dataset RoleOriginal Paper SourceYour Current Script SourceStatusTrain Batch AZak et al. (South Africa)GSE79362 (South Africa)✅ MatchTrain Batch BSweeney et al. (India)GSE107994 (Leicester, UK)❌ Mismatch (Proxy used)ValidationWalter et al. (USA)GSE73408 (USA)⚠️ Used for TrainingValidationKaforou/Berry (SA/Malawi)GSE37250 (SA/Malawi)✅ MatchWhy This MattersThe Paper's Argument: The paper claims their method works across distinct continents (Africa vs. Asia vs. N. America).Your Script's Reality: You are currently training on Africa, UK (South Asian ethnicity), and USA.Note: You elevated the USA dataset (Walter) to the "Training" block, whereas the paper typically held it out for validation. This is fine for a "Demonstration," but it changes the experiment.How to Fix It (Strict Replication)To make this script true to the original study, you need to replace Section 3 (The Leong/Leicester Excel parsing) with a download of GSE119370 (The actual India cohort used by Sweeney).Replace "Section 3" in your script with this code block:R# ==============================================================================
+# 3. Process Batch 3: TRUE India (GSE119370 - Sweeney et al.)
+# ==============================================================================
+cat("\n--- Processing Batch 3: TRUE India (GSE119370) ---\n")
+
+# Note: GSE119370 is an Illumina HT-12 v4 study (same as Validation sets)
+# We need the illuminaHumanv4.db library loaded at the top
+library(illuminaHumanv4.db)
+
+# Download Series Matrix
+gse_ind <- getGEO("GSE119370", destdir="data", GSEMatrix=TRUE)
+
+# Handle list return
+if(length(gse_ind) > 0) gse_ind <- gse_ind[[1]]
+
+# Extract Data
+dat_india_raw <- exprs(gse_ind)
+
+# Annotate Probes (Illumina IDs -> Gene Symbols)
+# This is critical because Sweeney is Illumina, but Walter (USA) was Affymetrix
+mapped_probes <- mapIds(illuminaHumanv4.db, keys=rownames(dat_india_raw), 
+                        column="SYMBOL", keytype="PROBEID", multiVals="first")
+
+# Filter NAs
+keep_probes <- !is.na(mapped_probes)
+dat_india <- dat_india_raw[keep_probes, ]
+rownames(dat_india) <- mapped_probes[keep_probes]
+
+# Metadata Cleaning
+pheno_ind <- pData(gse_ind)
+# Inspect columns to find disease group (usually 'characteristics_ch1.1')
+# Sweeney labels: "Group: Active TB", "Group: LTBI", "Group: Healthy"
+dis_stat <- pheno_ind$characteristics_ch1.1 
+
+is_active <- grepl("Active TB", dis_stat, ignore.case=TRUE)
+is_control <- grepl("LTBI|Healthy", dis_stat, ignore.case=TRUE)
+
+# Filter Samples
+keep_ind <- is_active | is_control
+dat_india <- dat_india[, keep_ind]
+group_india <- as.numeric(is_active[keep_ind])
+
+# Log Transform Check
+# Illumina data is often not logged in GEO Series Matrix
+if(max(dat_india, na.rm=TRUE) > 50) {
+  cat("  > Detected linear scale. Applying Log2(x+1)...\n")
+  dat_india <- log2(dat_india + 1)
+}
+
+cat(sprintf("  > Retained %d samples (%d TB, %d Control)\n", 
+            ncol(dat_india), sum(group_india==1), sum(group_india==0)))
