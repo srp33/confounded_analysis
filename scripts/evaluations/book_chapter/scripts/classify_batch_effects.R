@@ -31,12 +31,12 @@ np_py <- NULL
 
 tryCatch({
   cat("Attempting to import Python modules for RVC...\n")
-  rvm_module <- import("scikit_rvm")
+  rvm_module <- import("sklearn_rvm")
   RVC_py <<- rvm_module$RVC
   np_py <<- import("numpy")
-  cat("Successfully imported scikit_rvm and numpy.\n")
+  cat("Successfully imported sklearn_rvm and numpy.\n")
 }, error = function(e) {
-  cat("[WARNING] Could not import Python modules 'scikit_rvm' or 'numpy'.\n")
+  cat("[WARNING] Could not import Python modules 'sklearn_rvm' or 'numpy'.\n")
   cat("[WARNING] The 'rvc' classifier will be unavailable.\n")
   cat(sprintf("[WARNING] Python Error: %s\n", e$message))
 })
