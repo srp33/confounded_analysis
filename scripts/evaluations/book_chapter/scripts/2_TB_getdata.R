@@ -132,17 +132,6 @@ dat_india <- dat_india_raw[, valid_cols]
 matched_meta <- meta_data[match(colnames(dat_india), meta_data$title), ]
 group_india <- as.numeric(grepl("Active_TB", matched_meta$group))
 
-# --- CRITICAL SCALE CHECK ---
-# RNA-seq counts might be linear. Batch correction requires log-normal distributions.
-# Check 99th percentile. If > 50, it's likely linear counts -> Log Transform.
-q99 <- quantile(dat_india, 0.99)
-if (q99 > 50) {
-  cat(sprintf("  > Detected linear scale (99th percentile = %.1f). Applying Log2(x+1)...\n", q99))
-  dat_india <- log2(dat_india + 1)
-} else {
-  cat(sprintf("  > Data appears log-transformed (99th percentile = %.1f).\n", q99))
-}
-
 cat(sprintf("  > Retained %d samples (%d TB, %d Control)\n", 
             ncol(dat_india), sum(group_india==1), sum(group_india==0)))
 
