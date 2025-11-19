@@ -29,17 +29,19 @@ suppressMessages(suppressWarnings({
 RVC_py <- NULL
 np_py <- NULL
 
-tryCatch({
-  cat("Attempting to import Python modules for RVC...\n")
-  rvm_module <- import("sklearn_rvm")
-  RVC_py <<- rvm_module$RVC
-  np_py <<- import("numpy")
-  cat("Successfully imported sklearn_rvm and numpy.\n")
-}, error = function(e) {
-  cat("[WARNING] Could not import Python modules 'sklearn_rvm' or 'numpy'.\n")
-  cat("[WARNING] The 'rvc' classifier will be unavailable.\n")
-  cat(sprintf("[WARNING] Python Error: %s\n", e$message))
-})
+import_reticulate <- function() {
+  tryCatch({
+    cat("Attempting to import Python modules for RVC...\n")
+    rvm_module <- import("sklearn_rvm")
+    RVC_py <<- rvm_module$em_rvm$EMRVC
+    np_py <<- import("numpy")
+    cat("Successfully imported sklearn_rvm and numpy.\n")
+  }, error = function(e) {
+    cat("[WARNING] Could not import Python modules 'sklearn_rvm' or 'numpy'.\n")
+    cat("[WARNING] The 'rvc' classifier will be unavailable.\n")
+    cat(sprintf("[WARNING] Python Error: %s\n", e$message))
+  })
+}
 
 ####  Command Line Interface  ####
 
@@ -151,10 +153,13 @@ params <- parse_arguments()
 source("scripts/helper.R")
 
 # Validate RVC dependencies if RVC classifier is requested
-if (params$classifier == "rvc" && (is.null(RVC_py) || is.null(np_py))) {
-  cat("Error: Classifier 'rvc' was requested, but Python dependencies 'scikit-sklearn_rvm' or 'numpy' could not be imported.\n", file=stderr())
-  cat("Please install them using: pip install sklearn_rvm numpy\n", file=stderr())
-  quit(status = 1)
+if (params$classifier == "rvc"){
+  import_reticulate()
+  if (is.null(RVC_py) || is.null(np_py)) {
+    cat("Error: Classifier 'rvc' was requested, but Python dependencies 'sklearn_rvm' or 'numpy' could not be imported.\n", file=stderr())
+    cat("Please install them using: pip install sklearn_rvm numpy\n", file=stderr())
+    quit(status = 1)
+  }
 }
 
 #### Data Preparation Logic (Extracted from 1_simpipe.R) ####
@@ -409,11 +414,24 @@ train_and_evaluate_classifier <- function(classifier_type, normalized_data, corr
     # Standard R classifiers
     learner_fit <- getPredFunctions(classifier_type)
     
-    predictions <- map(training_configs, ~{
-      pred_res <- trainPipe(train_set = .x$train, train_label = y_train, 
-                           test_set = .x$test, lfit = learner_fit)
-      pred_res$pred_tst_prob
-    })
+    predictions <- list()
+    for(config_name in names(training_configs)) {
+      tryCatch({
+        cat(sprintf("  Training on %s configuration...\n", config_name))
+        config <- training_configs[[config_name]]
+        pred_res <- trainPipe(train_set = config$train, train_label = y_train, 
+                             test_set = config$test, lfit = learner_fit)
+        predictions[[config_name]] <- pred_res$pred_tst_prob
+        cat(sprintf("  %s configuration complete\n", config_name))
+      }, error = function(e) {
+        cat(sprintf("[ERROR] Failed on %s configuration\n", config_name), file = stderr())
+        cat(sprintf("[ERROR] Error: %s\n", e$message), file = stderr())
+        cat(sprintf("[ERROR] Error class: %s\n", paste(class(e), collapse = ", ")), file = stderr())
+        cat("[ERROR] Detailed traceback:\n", file = stderr())
+        print(e, file = stderr())
+        stop(sprintf("Training failed on %s configuration: %s", config_name, e$message))
+      })
+    }
   }
   
   # Calculate performance metrics

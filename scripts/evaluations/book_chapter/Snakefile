@@ -9,6 +9,15 @@ SCRIPTS_FOLDER = config["scripts_folder"]
 # Generate the list of seeds based on the config parameters. [count] seeds, starting at [start]
 split_seeds = list(range(config["split_seed_start"], config["split_seed_start"] + config["split_seed_count"]))
 
+wildcard_constraints:
+    seed=r"\d+",
+    n_datasets=r"\d+",
+    mean=r"[\d\.\-]+",          # Pending, might fix SyntaxWarning: invalid escape sequence
+    variance=r"[\d\.]+",        # Matches numbers and dots
+    classifier=r"[a-zA-Z0-9]+", # Assumes no underscores in classifier names
+    adjuster=r"[a-zA-Z0-9]+"    # Assumes no underscores in adjuster names
+
+
 # --- Error Reporting ---
 import os
 from pathlib import Path
@@ -152,7 +161,7 @@ rule classify_batch_effects:
     threads: 1
     resources:
         mem_mb=2000,
-        runtime=10
+        runtime=4
     shell:
         """
         Rscript {input.script} -o {output} \

@@ -1,5 +1,7 @@
 #!/bin/bash
 
+# sbatch --mem=4G --time=23:59:59 -c 8 -o snake.out run_snakefile.sh
+
 BOOK_CHAPTER_DIR="$HOME/confounded_analysis/scripts/evaluations/book_chapter"
 
 # Cleanup old logs and temporary files to prevent space issues
@@ -16,12 +18,12 @@ echo "Changing permissions"
 # For all subfolders, give all new files group ownership by default
 find -L "$OUTPUT_DIR" -type d -exec chmod g+s {} + 
 
-SIMUL=100
+SIMUL=2500
 
 echo "Starting Snakemake"
-snakemake -s $BOOK_CHAPTER_DIR/Snakefile \
+pixi run snakemake -s $BOOK_CHAPTER_DIR/Snakefile \
     --configfile $BOOK_CHAPTER_DIR/config.yaml \
-    --rerun-incomplete --printshellcmds --keep-going \
+    --rerun-incomplete --keep-going \
     --executor slurm --jobs $SIMUL \
     --envvars PATH CONDA_PREFIX
 
