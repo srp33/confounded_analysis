@@ -115,14 +115,6 @@ def main():
         
         config = load_config(config_file)
         output_folder = config.get("output_folder", "outputs/book_chapter")
-        
-        # Handle apptainer paths - convert container paths to host paths
-        # Container paths like /outputs/book_chapter map to grp_batch_effects/outputs/book_chapter
-        if output_folder.startswith("/"):
-            # Find the repo root (where this script is run from)
-            repo_root = Path.cwd()
-            # Map container path to host path
-            output_folder = str(repo_root / "grp_batch_effects" / output_folder.lstrip("/"))
     
     output_folder = Path(output_folder)
     

@@ -1,12 +1,6 @@
 #!/bin/bash
 
-#SBATCH --job-name=snakemake
-#SBATCH --nodes=1
-#SBATCH --ntasks-per-node=1
-#SBATCH --cpus-per-task=128
-#SBATCH --mem-per-cpu=2G
-#SBATCH --time=04:00:00
-#SBATCH --output=/grphome/grp_batch_effects/outputs/book_chapter/logs/snakemake_%j.out
+# sbatch --mem=4G --time=23:59:59 -c 8 -o snake.out run_snakefile.sh
 
 BOOK_CHAPTER_DIR="$HOME/confounded_analysis/scripts/evaluations/book_chapter"
 
@@ -24,14 +18,14 @@ echo "Changing permissions"
 # For all subfolders, give all new files group ownership by default
 find -L "$OUTPUT_DIR" -type d -exec chmod g+s {} + 
 
-SLURM_CPUS_PER_TASK=${SLURM_CPUS_PER_TASK:-16}
-SIMUL=$((SLURM_CPUS_PER_TASK-1))
-
-echo "SLURM_CPUS_PER_TASK $SLURM_CPUS_PER_TASK"
-echo  "SIMUL $SIMUL"
+SIMUL=2500
 
 echo "Starting Snakemake"
-snakemake -s $BOOK_CHAPTER_DIR/Snakefile --configfile $BOOK_CHAPTER_DIR/config.yaml -p --cores $SLURM_CPUS_PER_TASK --jobs $SIMUL --rerun-incomplete --printshellcmds --keep-going
+pixi run snakemake -s $BOOK_CHAPTER_DIR/Snakefile \
+    --configfile $BOOK_CHAPTER_DIR/config.yaml \
+    --rerun-incomplete --keep-going \
+    --executor slurm --jobs $SIMUL \
+    --envvars PATH CONDA_PREFIX
 
 echo "Changing permissions"
 # Give the group read and write access to all files and directories

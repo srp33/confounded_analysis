@@ -698,8 +698,9 @@ predKNN_pp <- function(trn_set, tst_set=NULL, y_trn){
 predXGBoost_pp <- function(trn_set, tst_set=NULL, y_trn){
   library(xgboost, quietly = TRUE)
   
-  # Prepare data
-  train_matrix <- xgb.DMatrix(data = t(trn_set), label = as.numeric(as.character(y_trn)))
+  # Prepare data - ensure labels are 0/1
+  y_numeric <- as.numeric(as.factor(y_trn)) - 1  # Convert to 0/1 regardless of input format
+  train_matrix <- xgb.DMatrix(data = t(trn_set), label = y_numeric)
   
   # Parameters for binary classification
   params <- list(
@@ -728,7 +729,17 @@ predXGBoost_pp <- function(trn_set, tst_set=NULL, y_trn){
       verbose = 0,
       showsd = FALSE
     )
-    best_nrounds <- cv_result$best_iteration
+    # Check if best_iteration exists and is valid
+    if(!is.null(cv_result$best_iteration) && length(cv_result$best_iteration) > 0 && !is.na(cv_result$best_iteration)) {
+      best_nrounds <- cv_result$best_iteration
+    } else {
+      # Fallback: use the iteration with minimum test error
+      if(!is.null(cv_result$evaluation_log) && nrow(cv_result$evaluation_log) > 0) {
+        best_nrounds <- which.min(cv_result$evaluation_log$test_logloss_mean)
+      } else {
+        best_nrounds <- min(50, nrounds)
+      }
+    }
   } else {
     best_nrounds <- min(30, nrounds)
   }
