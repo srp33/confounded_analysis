@@ -102,6 +102,10 @@ rule make_fig1:
         OUTPUT_FOLDER + "/batch_on_classifiers.png"
     log:
         OUTPUT_FOLDER + "/logs/plot_batch_on_classifiers.log"
+    threads: 1
+    resources:
+        mem_mb=4000,
+        runtime=15
     shell:
         """
         Rscript {input.script} -i {input.data} -o {output} > {log} 2>&1
@@ -123,6 +127,10 @@ rule aggregate_batch_effects:
         OUTPUT_FOLDER + "/batch_on_classifiers.csv"
     log:
         OUTPUT_FOLDER + "/logs/aggregate_batch_effects.log"
+    threads: 1
+    resources:
+        mem_mb=8000,
+        runtime=20
     params:
         input_dir=OUTPUT_FOLDER + "/results/batch_effects/individual"
     shell:
@@ -144,7 +152,7 @@ rule classify_batch_effects:
     threads: 1
     resources:
         mem_mb=2000,
-        runtime=30
+        runtime=10
     shell:
         """
         Rscript {input.script} -o {output} \
@@ -164,6 +172,10 @@ rule make_fig2:
         OUTPUT_FOLDER + "/adjusters_on_classifiers.png"
     log:
         OUTPUT_FOLDER + "/logs/plot_adjusters_on_classifiers.log"
+    threads: 1
+    resources:
+        mem_mb=4000,
+        runtime=10
     shell:
         """
         Rscript {input.script} -i {input.data} -o {output} > {log} 2>&1
@@ -185,6 +197,10 @@ rule aggregate_adjusters:
         OUTPUT_FOLDER + "/adjusters_on_classifiers.csv"
     log:
         OUTPUT_FOLDER + "/logs/aggregate_adjusters.log"
+    threads: 1
+    resources:
+        mem_mb=8000,
+        runtime=20
     params:
         input_dir=OUTPUT_FOLDER + "/results/adjusters/individual"
     shell:
@@ -208,7 +224,7 @@ rule classify_adjusters:
     threads: 1
     resources:
         mem_mb=2000,
-        runtime=60
+        runtime=10
     shell:
         """
         Rscript {input.script} -o {output} \

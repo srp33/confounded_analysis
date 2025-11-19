@@ -28,13 +28,13 @@ np_py <- NULL
 
 tryCatch({
   cat("Attempting to import Python modules for RVC...\n")
-  # [RVC MODIFICATION] Import the scikit-rvm RVC class and numpy
-  rvm_module <- import("scikit_rvm")
+  # [RVC MODIFICATION] Import the sklearn_rvm RVC class and numpy
+  rvm_module <- import("sklearn_rvm")
   RVC_py <<- rvm_module$RVC
   np_py <<- import("numpy")
-  cat("Successfully imported scikit_rvm and numpy.\n")
+  cat("Successfully imported sklearn_rvm and numpy.\n")
 }, error = function(e) {
-  cat("[WARNING] Could not import Python modules 'scikit_rvm' or 'numpy'.\n")
+  cat("[WARNING] Could not import Python modules 'sklearn_rvm' or 'numpy'.\n")
   cat("[WARNING] The 'rvc' classifier will be unavailable.\n")
   cat(sprintf("[WARNING] Python Error: %s\n", e$message))
 })
@@ -180,7 +180,7 @@ main_analysis_function <- function() {
   source("/scripts/evaluations/book_chapter/scripts/helper.R")
   
   if (classifier == "rvc" && (is.null(RVC_py) || is.null(np_py))) {
-    stop("Classifier 'rvc' was requested, but Python dependencies 'scikit-rvm' or 'numpy' could not be imported. Please install them.")
+    stop("Classifier 'rvc' was requested, but Python dependencies 'sklearn_rvm' or 'numpy' could not be imported. Please install them.")
   }
   
   # Set seed for reproducibility

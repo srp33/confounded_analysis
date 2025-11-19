@@ -120,6 +120,7 @@ bioconductor-geoquery = { version = ">=2.74.0,<3", channel = "bioconda" }
 
 # === NCBI/SRA Tools ===
 r-rentrez = "*"
+snakemake-executor-plugin-slurm = ">=1.9.2,<2"
 
 [pypi-dependencies]
 sklearn-rvm = ">=0.1.1, <0.2"

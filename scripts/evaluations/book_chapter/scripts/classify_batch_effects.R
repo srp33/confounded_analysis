@@ -152,8 +152,8 @@ source("scripts/helper.R")
 
 # Validate RVC dependencies if RVC classifier is requested
 if (params$classifier == "rvc" && (is.null(RVC_py) || is.null(np_py))) {
-  cat("Error: Classifier 'rvc' was requested, but Python dependencies 'scikit-rvm' or 'numpy' could not be imported.\n", file=stderr())
-  cat("Please install them using: pip install scikit-rvm numpy\n", file=stderr())
+  cat("Error: Classifier 'rvc' was requested, but Python dependencies 'scikit-sklearn_rvm' or 'numpy' could not be imported.\n", file=stderr())
+  cat("Please install them using: pip install sklearn_rvm numpy\n", file=stderr())
   quit(status = 1)
 }
 
