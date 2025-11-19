@@ -54,13 +54,13 @@ workflow {
     adjuster_dirs_ch | AGGREGATE_PER_ADJUSTER
 
     // 5️⃣ Aggregate all adjusters into a single CSV
-    all_csvs = Channel.fromPath([
-        "${params.output_dir}/gmm.csv",
-        "${params.output_dir}/log_combat.csv",
-        "${params.output_dir}/min_mean.csv",
-        "${params.output_dir}/mnn.csv",
-        "${params.output_dir}/log_transformed.csv"
-    ])
+    all_csvs = Channel.of(
+        file("${params.output_dir}/gmm.csv"),
+        file("${params.output_dir}/log_combat.csv"),
+        file("${params.output_dir}/min_mean.csv"),
+        file("${params.output_dir}/mnn.csv"),
+        file("${params.output_dir}/log_transformed.csv")
+    )
     AGGREGATE_ALL(all_csvs, "${params.output_dir}/all_adjusters_metrics.csv")
 
     // 6️⃣ Plot performance

@@ -12,9 +12,16 @@ def combine_gold_unadjusted_files(gold_dir: Path, output_file: Path):
     Each file gets a 'meta_source' column from its parent folder (e.g., GSE1234).
     Saves combined file to 'output_file'.
     """
-    unadjusted_files = list(gold_dir.glob("gse*/unadjusted.csv"))
+
+    # Collect GSE folders
+    gse_files = list(gold_dir.glob("gse*/unadjusted.csv"))
+
+    metabric_file = list(gold_dir.glob("metabric/unadjusted.csv"))
     drop_files = ['gse115577', 'gse123845', 'gse163882']
-    unadjusted_files = [x for x in unadjusted_files if x.parent.name not in drop_files]
+    gse_files = [x for x in gse_files if x.parent.name not in drop_files]
+
+    unadjusted_files = gse_files + metabric_file
+    
     if not unadjusted_files:
         raise FileNotFoundError(f"No unadjusted.csv files found in {gold_dir}/GSE*/")
 
