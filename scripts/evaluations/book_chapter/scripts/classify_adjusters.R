@@ -145,8 +145,8 @@ main_job_wrapper <- function() {
     cat(sprintf("[ERROR] Output file: %s\n", output_file), file = stderr())
     
     # Check input files
-    data_path <- "/scripts/evaluations/book_chapter/data/TB_real_data.RData"
-    helper_path <- "/scripts/evaluations/book_chapter/scripts/helper.R"
+    data_path <- "data/TB_real_data.RData"
+    helper_path <- "scripts/helper.R"
     
     cat(sprintf("[ERROR] Data file exists: %s\n", file.exists(data_path)), file = stderr())
     cat(sprintf("[ERROR] Helper file exists: %s\n", file.exists(helper_path)), file = stderr())
@@ -172,13 +172,13 @@ main_job_wrapper <- function() {
 
 main_analysis_function <- function() {
   # Load data and dependencies
-  data_path <- "/scripts/evaluations/book_chapter/data/TB_real_data.RData"
+  data_path <- "data/TB_real_data.RData"
   if (!file.exists(data_path)) {
     stop(sprintf("Data file not found: %s", data_path))
   }
   
   load(data_path)
-  source("/scripts/evaluations/book_chapter/scripts/helper.R")
+  source("scripts/helper.R")
   
   if (classifier == "rvc"){
     import_reticulate()
