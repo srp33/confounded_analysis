@@ -162,7 +162,7 @@ rule classify_batch_effects:
     threads: 1
     resources:
         mem_mb=2000,
-        runtime=30
+        runtime=4
     shell:
         """
         Rscript {input.script} -o {output} \
@@ -235,7 +235,7 @@ rule classify_adjusters:
     threads: 1
     resources:
         mem_mb=2000,
-        runtime=30
+        runtime=10
     shell:
         """
         Rscript {input.script} -o {output} \
