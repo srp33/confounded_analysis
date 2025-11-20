@@ -158,10 +158,11 @@ rule classify_batch_effects:
         OUTPUT_FOLDER + "/results/batch_effects/individual/{classifier}_{mean}_{variance}_{seed}.csv"
     log:
         OUTPUT_FOLDER + "/logs/classify_batch_effects/{classifier}_{mean}_{variance}_{seed}.log"
+    group: "batch_simulation_group"
     threads: 1
     resources:
         mem_mb=2000,
-        runtime=4
+        runtime=30
     shell:
         """
         Rscript {input.script} -o {output} \
@@ -230,10 +231,11 @@ rule classify_adjusters:
         OUTPUT_FOLDER + "/results/adjusters/individual/{adjuster}_{classifier}_{n_datasets}_{seed}.csv"
     log:
         OUTPUT_FOLDER + "/logs/classify_adjusters/{adjuster}_{classifier}_{n_datasets}_{seed}.log"
+    group: "batch_real_group"
     threads: 1
     resources:
         mem_mb=2000,
-        runtime=10
+        runtime=30
     shell:
         """
         Rscript {input.script} -o {output} \
