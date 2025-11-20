@@ -26,18 +26,19 @@ suppressMessages(suppressWarnings({
 RVC_py <- NULL
 np_py <- NULL
 
-tryCatch({
-  cat("Attempting to import Python modules for RVC...\n")
-  # [RVC MODIFICATION] Import the sklearn_rvm RVC class and numpy
-  rvm_module <- import("sklearn_rvm")
-  RVC_py <<- rvm_module$RVC
-  np_py <<- import("numpy")
-  cat("Successfully imported sklearn_rvm and numpy.\n")
-}, error = function(e) {
-  cat("[WARNING] Could not import Python modules 'sklearn_rvm' or 'numpy'.\n")
-  cat("[WARNING] The 'rvc' classifier will be unavailable.\n")
-  cat(sprintf("[WARNING] Python Error: %s\n", e$message))
-})
+import_reticulate <- function() {
+  tryCatch({
+    cat("Attempting to import Python modules for RVC...\n")
+    rvm_module <- import("sklearn_rvm")
+    RVC_py <<- rvm_module$em_rvm$EMRVC
+    np_py <<- import("numpy")
+    cat("Successfully imported sklearn_rvm and numpy.\n")
+  }, error = function(e) {
+    cat("[WARNING] Could not import Python modules 'sklearn_rvm' or 'numpy'.\n")
+    cat("[WARNING] The 'rvc' classifier will be unavailable.\n")
+    cat(sprintf("[WARNING] Python Error: %s\n", e$message))
+  })
+}
 
 # ====================================================================
 # COMMAND-LINE ARGUMENT PARSING
@@ -179,8 +180,11 @@ main_analysis_function <- function() {
   load(data_path)
   source("/scripts/evaluations/book_chapter/scripts/helper.R")
   
-  if (classifier == "rvc" && (is.null(RVC_py) || is.null(np_py))) {
-    stop("Classifier 'rvc' was requested, but Python dependencies 'sklearn_rvm' or 'numpy' could not be imported. Please install them.")
+  if (classifier == "rvc"){
+    import_reticulate()
+    if (is.null(RVC_py) || is.null(np_py)) {
+      stop("Classifier 'rvc' was requested, but Python dependencies 'sklearn_rvm' or 'numpy' could not be imported. Please install them.")
+    }
   }
   
   # Set seed for reproducibility
