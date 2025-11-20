@@ -13,7 +13,7 @@ gse76275,Affymetrix Human Genome U133 Plus 2.0 Array,microarray,265,breast,breas
 gse81538,Illumina HiSeq 2000 (Homo sapiens),RNA-seq,405,breast,breast cancer,2018
 gse96058_hiseq,Illumina HiSeq 2000 (Homo sapiens),RNA-seq,2969,breast,breast cancer,2018
 gse96058_nextseq,Illumina NextSeq 500 (Homo sapiens),RNA-seq,304,breast,breast cancer,2018
-gse115577,Affymetrix Human Transcriptome Array 2.0 [probe set (exon) version] / Custom,RNA-seq,1110,breast,breast cancer,2019
+gse115577,Affymetrix Human Transcriptome Array 2.0 [probe set (exon) version] / Custom,microarray,1110,breast,breast cancer,2019
 gse123845,Illumina HiSeq 2500 (Homo sapiens),RNA-seq,227,breast,breast cancer,2020
 gse163882,Illumina NextSeq 500 (Homo sapiens),RNA-seq,222,breast,breast cancer,2021
 metabric, Illumina HumanHT-12 V3.0 expression beadchip,microarray,1980,breast,breast cancer,
