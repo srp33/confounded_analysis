@@ -1,8 +1,8 @@
 gse_id,platform,data_type,sample_size,tissue_type,disease,year
 gse19615,Affymetrix Human Genome U133 Plus 2.0 Array,microarray,115,breast,breast cancer,2010
-gse20194,Affymetrix Human Genome U133A Array,microarray,251,breast,breast cancer,2010
+gse20194,Affymetrix Human Genome U133A Array,microarray,230,breast,breast cancer,2010
 gse20271,Affymetrix Human Genome U133A Array,microarray,156,breast,breast cancer,2010
-gse23720,Affymetrix Human Genome U133 Plus 2.0 Array,microarray,197,breast, breast cancer, 2011
+gse23720,Affymetrix Human Genome U133 Plus 2.0 Array,microarray,197,breast,breast cancer,2011
 gse25055,Affymetrix Human Genome U133A Array,microarray,310,breast,breast cancer,2011
 gse25065,Affymetrix Human Genome U133A Array,microarray,184,breast,breast cancer,2011
 gse31448,Affymetrix Human Genome U133 Plus 2.0 Array,microarray,357,breast,breast cancer,2011
@@ -16,4 +16,4 @@ gse96058_nextseq,Illumina NextSeq 500 (Homo sapiens),RNA-seq,304,breast,breast c
 gse115577,Affymetrix Human Transcriptome Array 2.0 [probe set (exon) version] / Custom,microarray,1110,breast,breast cancer,2019
 gse123845,Illumina HiSeq 2500 (Homo sapiens),RNA-seq,227,breast,breast cancer,2020
 gse163882,Illumina NextSeq 500 (Homo sapiens),RNA-seq,222,breast,breast cancer,2021
-metabric, Illumina HumanHT-12 V3.0 expression beadchip,microarray,1980,breast,breast cancer,
+metabric, Illumina HumanHT-12 V3.0 expression beadchip,microarray,1980,breast,breast cancer,NA
