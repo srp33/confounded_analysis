@@ -27,16 +27,6 @@ def combine_gold_unadjusted_files(gold_dir: Path, output_file: Path):
 
     dfs = []
 
-    # DEBUG: Printing first columns to see if Sample_ID is included
-    for f in unadjusted_files:
-        df = pd.read_csv(f, nrows=1)
-        print(f.parent, df.columns.tolist())
-        if 'Unnamed: 0' in df.columns:
-            print("Printing unique values of unnamed:0 columns...")
-            col = df['Unnamed: 0']
-            print("Unique values:", col.is_unique)
-            print("Example values:", col.head())
-
     for f in unadjusted_files:
         df = pd.read_csv(f, low_memory=False)
         # if 'meta_Sample_ID' in df.columns and 'meta_sample_id' not in df.columns:

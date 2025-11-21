@@ -9,11 +9,11 @@ library(argparse)
 # Parse command-line arguments
 parser <- ArgumentParser(description = "Create a subset of all_combined.csv using the top-K studies by sample count")
 
-parser$add_argument('--input', required=True, help='Path to all_combined.csv')
-parser$add_argument('--test',required=True, help='Test source name')
-parser$add_argumet('--order', required=True, help='Randomized, fixed vector of the order to add datasets')
-parser$add_argument('--k', required=True, type="integer", required=True, help='Number of studies to include (k)')
-parser$add_argument('--output', type=Path, required=True, help='Output CSV path for the subset')
+parser$add_argument('--input', required=TRUE, help='Path to all_combined.csv')
+parser$add_argument('--test',required=TRUE, help='Test source name')
+parser$add_argument('--order', required=TRUE, help='Randomized, fixed vector of the order to add datasets')
+parser$add_argument('--k', required=TRUE, type="integer", help='Number of studies to include (k)')
+parser$add_argument('--output', required=TRUE, help='Output CSV path for the subset')
 args <- parser$parse_args()
 
 input_path <- args$input
@@ -24,7 +24,7 @@ output_path <- args$output
 
 message(">>> Input combined file: ", input_path)
 message(">>> Test source: ", test_source)
-message(">>> Training order: ", dataset_order)
+message(">>> Order file: ", order_file)
 message(">>> Requested K = ", k)
 message(">>> Output subset file: ", output_path)
 
@@ -37,25 +37,9 @@ if (!"meta_source" %in% colnames(combined)) {
         stop("The file must have a 'meta_source' column with study identifiers.")
 }
 
-# Load dataset metadata
-metadata_path <- "/scripts/evaluations/geo_metadata.csv"
-
-if (!file.exists(metadata_path)) {
-    stop("Metadata file not found at: ", metadata_path)
-}
-
-metadata <- read_csv(metadata_path, show_col_types = FALSE)
-
-if (!all(c("gse_id", "sample_size") %in% colnames(metadata))) {
-        stop("Metadata file must have columns: ", paste(required_cols, collapse=", "))
-}
-
-# Drop specific rows
-metadata <- metadata %>%
-        filter(!gse_id %in% c('gse115577', 'gse123845', 'gse163882'))
-
 # Create order vector from the order file
-order_vector <- readLines(order_file)
+order_df <- read_csv(order_file, col_types = cols())
+order_vector <- order_df$train_source
 
 # Check that 
 if (k < 1 || k > length(order_vector)) {
@@ -63,7 +47,7 @@ if (k < 1 || k > length(order_vector)) {
 }
 
 # ---- Create subset ----
-selected_studies <- order_vector[0:k]
+selected_studies <- order_vector[1:k]
 
 message(">>> Selected studies (k=", k, "): ", paste(selected_studies, collapse=", "))
 

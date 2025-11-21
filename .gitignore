@@ -25,3 +25,4 @@ scripts/evaluations/book_chapter/tests
 scripts/evaluations/book_chapter/.snakemake
 scripts/evaluations/classify_er_all_datasets/.nextflow
 scripts/evaluations/classify_er_all_datasets/work
+scripts/evaluations/classify_er_all_datasets/.nextflow*

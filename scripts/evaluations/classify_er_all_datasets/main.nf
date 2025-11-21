@@ -46,33 +46,52 @@ process COMBINE {
     """
 }
 
+/************************************************
+ * 2. ORDER
+ ************************************************/
+process ORDER {
+    tag "$combined_csv"
 
-// /************************************************
-//  * 2. SUBSET
-//  ************************************************/
-// process SUBSET {
-//     container = '/apptainer/remove-batch-effects.sif'
-//     input:
-//         path combined_csv
-//     output:
-//         path "/data/all_combined_subsets/subset_*studies.csv", emit: subsets
-//     script:
-//     """
-//     mkdir -p /data/all_combined_subsets
+    input: 
+        path combined_csv
 
-//     # Loop over target subset sizes (2–15)
-//     for k in \$(seq 2 15); do
-//         out="/data/all_combined_subsets/subset_\${k}studies.csv"
-//         if [ ! -f "\$out" ]; then
-//             echo "Creating missing subset file: \$out"
-//             Rscript /scripts/evaluations/classify_er_all_datasets/subset_combined_data.R \\
-//                 --input $combined_csv --k \$k --output \$out
-//         else
-//             echo "Skipping existing subset file: \$out"
-//         fi
-//     done
-//     """
-// }
+    output: 
+        path "*_order.txt", emit: order_files
+
+    script: 
+    """
+    mkdir -p /data/all_combined/gse_order_files
+
+    python /scripts/evaluations/classify_er_all_datasets/make_order_files.py \
+        --input ${combined_csv} \
+        --output-dir /data/all_combined/gse_order_files
+
+    cp /data/all_combined/gse_order_files/*_order.txt .
+    """
+}
+
+
+/************************************************
+ * 3. SUBSET
+ ************************************************/
+process SUBSET {
+    input:
+        tuple path(order_file), val(k), val(test_source)
+
+    output:
+        path "${k}studies_test_${test_source}.csv"
+    script:
+    """
+    mkdir -p /data/all_combined_subsets
+
+    Rscript /scripts/evaluations/classify_er_all_datasets/subset_prep.R \
+        --input ${combined_csv} \
+        --order-file ${order_file} \
+        --k ${k} \
+        --test-source ${test_source} \
+        --output /data/all_combined_subsets/${k}studies_test_${test_source}.csv
+    """
+}
 
 // /************************************************
 //  * 3. ADJUST
@@ -204,7 +223,19 @@ process COMBINE {
 workflow {
     combined_ch = Channel.of(params.gold_dir) | COMBINE
     combined_ch.subscribe { println "Combined CSV path: $it" }
+
+    order_ch = combined_ch | ORDER
+
+    subsets_ch = order_ch.flatMap { order_file ->
+        (2..15).collect { k ->
+            def test_source = order_file.getName().replaceFirst('_order\\.txt$', '')
+            tuple(order_file, k, test_source)
+        }
+    }
+
+    subsets_ch | SUBSET
 }
+
 // workflow {
 
 //     /* 1–2 */
