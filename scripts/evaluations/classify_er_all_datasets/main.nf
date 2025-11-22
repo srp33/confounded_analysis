@@ -32,41 +32,40 @@ process COMBINE {
     input:
         val gold_dir
 
-    // OUTPUT MUST BE RELATIVE
     output:
         path "all_combined.csv", emit: combined_csv
 
-    // PUBLISH to external directory
     publishDir "/data/all_combined_data", mode: 'copy'
 
     script:
-    def cmd = run_in_apptainer("/scripts/evaluations/classify_er_all_datasets/combine_all.py", "--input-dir ${gold_dir} --output-file /data/all_combined/all_combined.csv")
+    def cmd = run_in_apptainer("/scripts/evaluations/classify_er_all_datasets/combine_all.py", "--input-dir ${gold_dir} --output-file all_combined.csv")
     """
     ${cmd}
     """
+
 }
 
 /************************************************
  * 2. ORDER
  ************************************************/
 process ORDER {
-    tag "$combined_csv"
-
-    input: 
+    // input combined CSV file
+    input:
         path combined_csv
 
-    output: 
+    // output order files
+    output:
         path "*_order.txt", emit: order_files
 
-    script: 
+    script:
     """
-    mkdir -p /data/all_combined/gse_order_files
+    mkdir -p gse_order_files
 
     python /scripts/evaluations/classify_er_all_datasets/make_order_files.py \
-        --input ${combined_csv} \
-        --output-dir /data/all_combined/gse_order_files
+        --input "\$combined_csv" \
+        --output-dir gse_order_files
 
-    cp /data/all_combined/gse_order_files/*_order.txt .
+    cp gse_order_files/*_order.txt .
     """
 }
 
@@ -75,23 +74,24 @@ process ORDER {
  * 3. SUBSET
  ************************************************/
 process SUBSET {
+
     input:
-        tuple path(order_file), val(k), val(test_source)
+        tuple(path(order_file), val(k), val(test_source), path(combined_csv))
 
     output:
         path "${k}studies_test_${test_source}.csv"
+
     script:
     """
-    mkdir -p /data/all_combined_subsets
-
     Rscript /scripts/evaluations/classify_er_all_datasets/subset_prep.R \
-        --input ${combined_csv} \
-        --order-file ${order_file} \
-        --k ${k} \
-        --test-source ${test_source} \
-        --output /data/all_combined_subsets/${k}studies_test_${test_source}.csv
+        --input "\$combined_csv" \
+        --order-file "\$order_file" \
+        --k \$k \
+        --test-source \$test_source \
+        --output "${k}studies_test_${test_source}.csv"
     """
 }
+
 
 // /************************************************
 //  * 3. ADJUST
@@ -221,20 +221,28 @@ process SUBSET {
  * WORKFLOW DEFINITION
  ************************************************/
 workflow {
-    combined_ch = Channel.of(params.gold_dir) | COMBINE
-    combined_ch.subscribe { println "Combined CSV path: $it" }
 
+    combined_ch = Channel.of(params.gold_dir) | COMBINE
     order_ch = combined_ch | ORDER
 
     subsets_ch = order_ch.flatMap { order_file ->
         (2..15).collect { k ->
-            def test_source = order_file.getName().replaceFirst('_order\\.txt$', '')
-            tuple(order_file, k, test_source)
+            def test_source = file(order_file).getName().replaceFirst('_order\\.txt$', '')
+            tuple(file(order_file), k, test_source)
         }
     }
 
-    subsets_ch | SUBSET
+    subsets_ch_with_csv = subsets_ch
+        .cross(combined_ch)
+        .map { subset_tuple, combined_csv ->
+            def (order_file, k, test_source) = subset_tuple
+            tuple(order_file, k, test_source, combined_csv)
+        }
+
+    subsets_ch_with_csv | SUBSET
 }
+
+
 
 // workflow {
 
