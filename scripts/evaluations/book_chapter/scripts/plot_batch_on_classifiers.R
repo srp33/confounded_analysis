@@ -63,10 +63,17 @@ metric_data <- data[data$metric == metric, ]
 
 cat("Filtered to", nrow(metric_data), " observations\n")
 
+classifier_levels = c("logistic", "elasticnet", "svm", "rf", "knn", "xgboost", "nnet", "rvc")
+classifier_labels = c("Logistic", "ElasticNet", "SVM", "Random Forest", "KNN", "XGBoost", "Neural Net", "RVC")
+
 # Create better labels and groupings
 metric_data$classifier_label <- factor(metric_data$classifier,
-  levels = c("logistic", "elasticnet", "svm", "rf", "knn", "xgboost", "nn", "rvc"),
-  labels = c("Logistic", "ElasticNet", "SVM", "Random Forest", "KNN", "XGBoost", "Neural Net", "RVC"))
+  levels = classifier_levels,
+  labels = classifier_labels)
+
+# Remove unlisted classifiers from metric data
+metric_data <- metric_data[metric_data$classifier %in% classifier_levels, ]
+
 
 # Create batch effect intensity labels
 metric_data$batch_intensity <- paste("Mean:", metric_data$mean, "Var:", metric_data$variance)
@@ -155,7 +162,7 @@ baseline_data <- sumstats %>%
 degradation_data <- sumstats %>%
   left_join(baseline_data, by = "classifier_label") %>%
   mutate(
-    degradation = (Avg - baseline_avg) / baseline_avg * 100,
+    degradation = -(Avg - baseline_avg) / baseline_avg * 100,
     degradation_label = sprintf("%.1f%%", degradation)
   )
 
@@ -197,8 +204,6 @@ combined_plot <- ggarrange(
 # Add overall title and caption
 final_plot <- annotate_figure(
   combined_plot,
-  top = text_grob("Batch Effects Impact on Machine Learning Classifiers", 
-                  face = "bold", size = 18),
   bottom = text_grob("Panel A: Performance trends across batch effect intensities. Panel B: Relative degradation from baseline (no batch effects).",
                      size = 10, color = "grey40")
 )

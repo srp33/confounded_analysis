@@ -306,8 +306,7 @@ main_analysis_function <- function() {
       combined_labels <- c(group, rep(max(group) + 1, ncol(dat_test)))
       
       # Apply ComBat correction
-      combat_combined <- ComBat(combined_dat, batch=combined_batch, 
-                               mod=model.matrix(~combined_labels), ref.batch=ref_batch)
+      combat_combined <- ComBat(combined_dat, batch=combined_batch, ref.batch=ref_batch)
       
       # Split back into training and test
       dat_corrected <- combat_combined[, 1:ncol(dat)]

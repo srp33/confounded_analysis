@@ -524,34 +524,27 @@ predNnet_pp <- function(trn_set, tst_set=NULL, y_trn){
   n_samples <- nrow(data)
   network_size <- min(10, max(2, n_samples %/% 3))
   
-  # Train neural network with fallback
-  tryCatch({
-    mod <- nnet(y ~ ., data = data, size = network_size, MaxNWts = 10000, 
-                linout = FALSE, trace = FALSE, maxit = 200)
-    
-    pred_trn_prob <- as.vector(predict(mod, newdata = data[,-1]))
-    pred_trn_class <- as.vector(predict(mod, newdata = data[,-1], type="class"))
-    
-    # Test predictions only if test set provided
-    if(!is.null(tst_set)) {
-      tst_transposed <- t(tst_set)
-      rownames(tst_transposed) <- NULL  # Remove potentially problematic row names
-      newdata <- data.frame(tst_transposed)
-      pred_tst_prob <- as.vector(predict(mod, newdata = newdata))
-      pred_tst_class <- as.vector(predict(mod, newdata = newdata, type="class"))
-    } else {
-      pred_tst_prob <- NULL
-      pred_tst_class <- NULL
-    }
-    
-    return(list(mod=mod, pred_trn_prob=pred_trn_prob, pred_tst_prob=pred_tst_prob,
-                pred_trn_class=pred_trn_class, pred_tst_class=pred_tst_class))
-                
-  }, error = function(e) {
-    # Fallback to logistic regression
-    warning(sprintf("ERROR Neural network failed, using logistic regression: %s", e$message))
-    return(predLogistic_pp(trn_set, tst_set, y_trn))
-  })
+  # Train neural network
+  mod <- nnet(y ~ ., data = data, size = network_size, MaxNWts = 10000, 
+              linout = FALSE, trace = FALSE, maxit = 200)
+  
+  pred_trn_prob <- as.vector(predict(mod, newdata = data[,-1]))
+  pred_trn_class <- as.vector(predict(mod, newdata = data[,-1], type="class"))
+  
+  # Test predictions only if test set provided
+  if(!is.null(tst_set)) {
+    tst_transposed <- t(tst_set)
+    rownames(tst_transposed) <- NULL  # Remove potentially problematic row names
+    newdata <- data.frame(tst_transposed)
+    pred_tst_prob <- as.vector(predict(mod, newdata = newdata))
+    pred_tst_class <- as.vector(predict(mod, newdata = newdata, type="class"))
+  } else {
+    pred_tst_prob <- NULL
+    pred_tst_class <- NULL
+  }
+  
+  return(list(mod=mod, pred_trn_prob=pred_trn_prob, pred_tst_prob=pred_tst_prob,
+              pred_trn_class=pred_trn_class, pred_tst_class=pred_tst_class))
 }
 
 # Logistic Regression with no regularization

@@ -94,10 +94,27 @@ onerror:
     print("\n❌ Snakemake encountered an error during execution.\n")
 
 # --- Final Target ---
+# Define all available studies
+ALL_STUDIES = ["GSE37250_SA", "USA", "India", "GSE37250_M", "Africa", "GSE39941_M"]
+
+# Helper function to get valid test studies for a given n_datasets
+def get_test_studies_for_n(n):
+    return ALL_STUDIES[:n]
+
+# Generate all valid combinations
+VIZ_TARGETS = []
+for n in config["num_datasets"]:
+    for test_study in get_test_studies_for_n(n):
+        for method in ["pca", "lda", "umap"]:
+            VIZ_TARGETS.append(
+                f"{OUTPUT_FOLDER}/visualizations/unreduced/grids/{method}_n{n}_test{test_study}.png"
+            )
+
 rule all:
     input:
         OUTPUT_FOLDER + "/batch_on_classifiers.png",
-        OUTPUT_FOLDER + "/adjusters_on_classifiers.png"
+        OUTPUT_FOLDER + "/adjusters_on_classifiers.png",
+        VIZ_TARGETS
 
 
 ## Figure 1 Pipeline: How does each classifier respond to batch effects?
@@ -235,10 +252,72 @@ rule classify_adjusters:
     threads: 1
     resources:
         mem_mb=2000,
-        runtime=10
+        runtime=5
     shell:
         """
         Rscript {input.script} -o {output} \
             --adjuster {wildcards.adjuster} --classifier {wildcards.classifier} --num-datasets {wildcards.n_datasets} --seed {wildcards.seed} \
+            > {log} 2>&1
+        """
+
+
+## Visualization Pipeline: Visualize batch adjustment effects
+
+# Step 3.1: Generate individual visualizations for each adjuster
+rule visualize_batch_adjustment:
+    input:
+        data=DATA_FOLDER + "/TB_real_data.RData",
+        script=SCRIPTS_FOLDER + "/visualize_batch_adjustment.R",
+        helper=SCRIPTS_FOLDER + "/helper.R"
+    output:
+        pca=OUTPUT_FOLDER + "/visualizations/unreduced/individual/pca/{adjuster}_n{n_datasets}_test{test_study}.png",
+        lda=OUTPUT_FOLDER + "/visualizations/unreduced/individual/lda/{adjuster}_n{n_datasets}_test{test_study}.png",
+        umap=OUTPUT_FOLDER + "/visualizations/unreduced/individual/umap/{adjuster}_n{n_datasets}_test{test_study}.png"
+    log:
+        OUTPUT_FOLDER + "/logs/visualize_batch_adjustment/{adjuster}_n{n_datasets}_test{test_study}.log"
+    threads: 1
+    resources:
+        mem_mb=4000,
+        runtime=10
+    params:
+        output_dir=OUTPUT_FOLDER + "/visualizations/unreduced/individual"
+    shell:
+        """
+        Rscript {input.script} \
+            --adjuster {wildcards.adjuster} \
+            --num-datasets {wildcards.n_datasets} \
+            --test-study {wildcards.test_study} \
+            --output-dir {params.output_dir} \
+            --reduce 0 \
+            > {log} 2>&1
+        """
+
+
+# Step 3.2: Create comparison grids
+rule create_visualization_grid:
+    input:
+        plots=expand(
+            OUTPUT_FOLDER + "/visualizations/unreduced/individual/{{method}}/{adjuster}_n{{n_datasets}}_test{{test_study}}.png",
+            adjuster=config["adjusters"]
+        ),
+        script=SCRIPTS_FOLDER + "/create_visualization_grid.R"
+    output:
+        OUTPUT_FOLDER + "/visualizations/unreduced/grids/{method}_n{n_datasets}_test{test_study}.png"
+    log:
+        OUTPUT_FOLDER + "/logs/visualization_grids/{method}_n{n_datasets}_test{test_study}.log"
+    threads: 1
+    resources:
+        mem_mb=2000,
+        runtime=5
+    params:
+        input_dir=OUTPUT_FOLDER + "/visualizations/unreduced/individual"
+    shell:
+        """
+        Rscript {input.script} \
+            --input-dir {params.input_dir} \
+            --output-file {output} \
+            --method {wildcards.method} \
+            --num-datasets {wildcards.n_datasets} \
+            --test-study {wildcards.test_study} \
             > {log} 2>&1
         """
