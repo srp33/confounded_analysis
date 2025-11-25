@@ -16,6 +16,10 @@ def main():
     all_combined_csv = sys.argv[1]
     output_dir = sys.argv[2]
 
+    if not os.path.exists(output_dir):
+        os.makedirs(output_dir)
+        print(f"Created directory: {output_dir}")
+        
     if not os.path.exists(all_combined_csv):
         print(f"File not found: {all_combined_csv}")
         sys.exit(1)

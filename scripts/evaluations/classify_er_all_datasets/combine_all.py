@@ -12,7 +12,11 @@ def combine_gold_unadjusted_files(gold_dir: Path, output_file: Path):
     Each file gets a 'meta_source' column from its parent folder (e.g., GSE1234).
     Saves combined file to 'output_file'.
     """
-
+    # Check if file already exists
+    if output_file.exists():
+        print_now(f"{output_file} already exists, skipping combination.")
+        return
+    
     # Collect GSE folders
     gse_files = list(gold_dir.glob("gse*/unadjusted.csv"))
 

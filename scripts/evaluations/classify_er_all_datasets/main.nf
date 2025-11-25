@@ -32,17 +32,13 @@ process COMBINE {
     input:
         val gold_dir
 
-    output:
-        path "all_combined.csv", emit: combined_csv
-
-    publishDir "/data/all_combined_data", mode: 'copy'
-
     script:
-    def cmd = run_in_apptainer("/scripts/evaluations/classify_er_all_datasets/combine_all.py", "--input-dir ${gold_dir} --output-file all_combined.csv")
     """
-    ${cmd}
+    ${run_in_apptainer(
+         "/scripts/evaluations/classify_er_all_datasets/combine_all.py",
+         "--input-dir ${gold_dir} --output-file /data/all_combined_data/all_combined.csv"
+    )}
     """
-
 }
 
 /************************************************
@@ -60,12 +56,10 @@ process ORDER {
     script:
     """
     mkdir -p gse_order_files
-
-    python /scripts/evaluations/classify_er_all_datasets/make_order_files.py \
-        --input "\$combined_csv" \
-        --output-dir gse_order_files
-
-    cp gse_order_files/*_order.txt .
+    ${run_in_apptainer(
+        "/scripts/evaluations/classify_er_all_datasets/make_order_files.py", 
+        "${combined_csv} gse_order_files"
+    )}
     """
 }
 
@@ -221,10 +215,26 @@ process SUBSET {
  * WORKFLOW DEFINITION
  ************************************************/
 workflow {
+        // Fixed path to the combined CSV
+    def combined_csv_path = file("/data/all_combined_data/all_combined.csv")
 
-    combined_ch = Channel.of(params.gold_dir) | COMBINE
-    order_ch = combined_ch | ORDER
+    /*
+     * 1. COMBINE
+     * Run Python script to generate combined CSV
+     * Skips recomputation if file already exists
+     */
+    COMBINE(params.gold_dir)
 
+    /*
+     * 2. ORDER
+     * Generate order files from the combined CSV
+     */
+    order_ch = Channel.fromPath(combined_csv_path) | ORDER
+
+    /*
+     * 3. SUBSET
+     * Generate subsets using order files and the combined CSV
+     */
     subsets_ch = order_ch.flatMap { order_file ->
         (2..15).collect { k ->
             def test_source = file(order_file).getName().replaceFirst('_order\\.txt$', '')
@@ -232,12 +242,9 @@ workflow {
         }
     }
 
-    subsets_ch_with_csv = subsets_ch
-        .cross(combined_ch)
-        .map { subset_tuple, combined_csv ->
-            def (order_file, k, test_source) = subset_tuple
-            tuple(order_file, k, test_source, combined_csv)
-        }
+    subsets_ch_with_csv = subsets_ch.map { order_file, k, test_source ->
+        tuple(order_file, k, test_source, combined_csv_path)
+    }
 
     subsets_ch_with_csv | SUBSET
 }
