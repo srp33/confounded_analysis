@@ -1,39 +1,32 @@
 #!/bin/bash
 
-# sbatch --mem=4G --time=23:59:59 -c 2 -o snake.out run_snakefile.sh
-
 BOOK_CHAPTER_DIR="$HOME/confounded_analysis/scripts/evaluations/book_chapter"
+OUTPUT_DIR="$HOME/confounded_analysis/grp_batch_effects/outputs/book_chapter"
 
 # Cleanup old logs and temporary files to prevent space issues
 echo "Cleaning up old logs and temporary files..."
 find $HOME/.snakemake -type f -mtime +7 -delete 2>/dev/null || true
 
-echo "Making directory"
-
-OUTPUT_DIR="$HOME/confounded_analysis/grp_batch_effects/outputs/book_chapter"
-
+# Setup output directory with group permissions
+echo "Setting up output directory..."
 mkdir -p "$OUTPUT_DIR"
-
-echo "Changing permissions"
-# For all subfolders, give all new files group ownership by default
 find -L "$OUTPUT_DIR" -type d -exec chmod g+s {} + 
 
-SIMUL=2500
 
+# The slurm account and slurm partition are essential for grouping
+# Choosing the solver helps snakemake find it
+# The resources and runtime are tuned to marylou, and help snakemake know what size of jobs it can schedule
 echo "Starting Snakemake"
 pixi run snakemake -s $BOOK_CHAPTER_DIR/Snakefile \
     --configfile $BOOK_CHAPTER_DIR/config.yaml \
-    --max-jobs-per-second 5 \
+    --scheduler-ilp-solver COIN_CMD \
+    --executor slurm \
+    --default-resources slurm_account=srp33 slurm_partition="(auto)" \
+    --jobs 2500 \
+    --group-components batch_real_group=20 batch_simulation_group=20 \
+    --resources mem_mb=100000 runtime=4320 \
+    --max-jobs-per-second 20 \
     --max-status-checks-per-second 10 \
-    --groups batch_simulation_group=20 \
-    --groups batch_real_group=20 \
-    --latency-wait 60 \
-    --rerun-incomplete --keep-going \
-    --executor slurm --jobs $SIMUL \
-    --envvars PATH CONDA_PREFIX
-
-echo "Changing permissions"
-# Give the group read and write access to all files and directories
-find -L "$OUTPUT_DIR" -exec chmod g+wr {} +
-# Give the group ownership over files and directories
-chown -R :grp_batch_effects "$OUTPUT_DIR"
+    --latency-wait 120 \
+    --rerun-incomplete \
+    --keep-going

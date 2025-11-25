@@ -78,7 +78,7 @@ if (na_count > 0) {
 
 # Create better labels and groupings
 mxe_data$classifier_label <- factor(mxe_data$classifier,
-  levels = c("logistic", "elasticnet", "svm", "rf", "knn", "xgboost", "nn", "rvc"),
+  levels = c("logistic", "elasticnet", "svm", "rf", "knn", "xgboost", "nnet", "rvc"),
   labels = c("Logistic", "ElasticNet", "SVM", "Random Forest", "KNN", "XGBoost", "Neural Net", "RVC"))
 
 mxe_data$adjuster_label <- factor(mxe_data$adjuster,
@@ -234,7 +234,7 @@ for (classifier in classifiers_with_data) {
     ) +
     labs(
       y = "Matthews Correlation Coefficient",
-      title = paste("Adjuster Effectiveness -", classifier)
+      title = classifier
     )
   
   plot_list[[as.character(classifier)]] <- p

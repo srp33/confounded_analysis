@@ -195,7 +195,7 @@ main_analysis_function <- function() {
   # ====================================================================
   
   filter_studies <- function(dat_lst, label_lst, n_studies) {
-    all_studies <- c("GSE37250_SA", "US", "India", "GSE37250_M", "Africa", "GSE39941_M")
+    all_studies <- c("GSE37250_SA", "USA", "India", "GSE37250_M", "Africa", "GSE39941_M")
     selected_studies <- all_studies[1:n_studies]
     
     # Filter data and labels to keep only selected studies
@@ -295,8 +295,9 @@ main_analysis_function <- function() {
         dat_test_corrected = dat_test
       ))
     } else if (method == "combat") {
-      # ComBat with reference batch (use first batch as reference)
-      ref_batch <- min(batch)
+      # ComBat with reference batch (use batch with largest sample size as reference)
+      ref_batch <- names(which.max(table(batch)))
+      if (is.numeric(batch)) ref_batch <- as.numeric(ref_batch)
       
       # Apply ComBat to combined training and test data
       combined_dat <- cbind(dat, dat_test)
@@ -305,8 +306,7 @@ main_analysis_function <- function() {
       combined_labels <- c(group, rep(max(group) + 1, ncol(dat_test)))
       
       # Apply ComBat correction
-      combat_combined <- ComBat(combined_dat, batch=combined_batch, 
-                               mod=model.matrix(~combined_labels), ref.batch=ref_batch)
+      combat_combined <- ComBat(combined_dat, batch=combined_batch, ref.batch=ref_batch)
       
       # Split back into training and test
       dat_corrected <- combat_combined[, 1:ncol(dat)]
@@ -317,43 +317,48 @@ main_analysis_function <- function() {
         dat_test_corrected = dat_test_corrected
       ))
     } else if (method == "mnn") {
-      # MNNcorrect - merge order with test set last
       library(batchelor, quietly = TRUE)
-      
-      # Combine training and test data for MNN correction
+      library(SummarizedExperiment, quietly = TRUE)
+
+      # Combine data (Preserves original column order)
       combined_dat <- cbind(dat, dat_test)
-      combined_batch <- c(batch, rep(max(batch) + 1, ncol(dat_test)))  # Test set gets highest batch ID
       
-      # Create batch list for MNN (each batch as separate matrix), sorted by batch label
-      unique_batches <- sort(unique(combined_batch))
-      batch_list <- lapply(unique_batches, function(b) {
-        combined_dat[, combined_batch == b]
+      # Create batch vector (Test set gets a new unique ID)
+      test_id <- max(batch) + 1
+      combined_batch <- c(batch, rep(test_id, ncol(dat_test)))
+      
+      # Determine merge order: Training batches by size (descending), Test set last.
+      u_batches <- sort(unique(batch))
+      train_sizes <- table(batch)[as.character(u_batches)]
+      train_ord <- order(train_sizes, decreasing = TRUE)
+      # merge.order needs actual batch IDs, not indices
+      merge_ord <- c(u_batches[train_ord], test_id)
+      
+      cat(sprintf("DEBUG MNN: batch range [%s], test_id=%s\n", paste(range(batch), collapse="-"), test_id))
+      cat(sprintf("DEBUG MNN: unique batches: %s\n", paste(u_batches, collapse=",")))
+      cat(sprintf("DEBUG MNN: merge order: %s\n", paste(merge_ord, collapse=",")))
+      cat(sprintf("DEBUG MNN: combined_batch length=%d, unique values: %s\n", 
+                  length(combined_batch), paste(unique(combined_batch), collapse=",")))
+      cat(sprintf("DEBUG MNN: combined_dat dims: %d x %d\n", nrow(combined_dat), ncol(combined_dat)))
+      
+      tryCatch({
+        mnn_object <- batchelor::mnnCorrect(combined_dat, batch = combined_batch, merge.order = merge_ord)
+        mnn_matrix <- SummarizedExperiment::assay(mnn_object)
+      }, error = function(e) {
+        cat(sprintf("[ERROR] mnnCorrect failed: %s\n", e$message), file = stderr())
+        cat(sprintf("[ERROR] Error class: %s\n", paste(class(e), collapse=", ")), file = stderr())
+        cat(sprintf("[ERROR] Batch info: unique=%s, length=%d\n", 
+                    paste(unique(combined_batch), collapse=","), length(combined_batch)), file = stderr())
+        cat(sprintf("[ERROR] Merge order: %s (class: %s)\n", 
+                    paste(merge_ord, collapse=","), class(merge_ord)), file = stderr())
+        stop(sprintf("MNN correction failed: %s", e$message))
       })
       
-      # Apply MNN correction with test set last in merge order
-      mnn_result <- do.call(mnnCorrect, c(batch_list, list(merge.order = seq_along(unique_batches))))
+      # Split result
+      dat_corrected <- mnn_matrix[, 1:ncol(dat)]
+      dat_test_corrected <- mnn_matrix[, (ncol(dat) + 1):ncol(mnn_matrix)]
       
-      # Extract corrected data (handle different batchelor versions)
-      if("corrected" %in% assayNames(mnn_result)) {
-        corrected_combined <- assay(mnn_result, "corrected")
-      } else if("reconstructed" %in% assayNames(mnn_result)) {
-        corrected_combined <- assay(mnn_result, "reconstructed")
-      } else {
-        # Fallback to first assay
-        corrected_combined <- assay(mnn_result, 1)
-      }
-      
-      # Split back into training and test
-      n_train <- ncol(dat)
-      dat_corrected <- corrected_combined[, 1:n_train]
-      dat_test_corrected <- corrected_combined[, (n_train + 1):ncol(corrected_combined)]
-      
-      return(list(
-        dat_corrected = dat_corrected,
-        dat_test_corrected = dat_test_corrected
-      ))
-    } else {
-      stop(sprintf("Unknown batch correction method: %s", method))
+      return(list(dat_corrected = dat_corrected, dat_test_corrected = dat_test_corrected))
     }
   }
   
