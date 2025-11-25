@@ -47,13 +47,13 @@ import_reticulate <- function() {
 parser <- ArgumentParser(description = "Execute single adjuster comparison job for batch correction analysis")
 
 parser$add_argument("--adjuster", type = "character", required = TRUE,
-                   help = "Batch correction method: unadjusted, combat, or mnn")
+                   help = "Batch correction method: unadjusted, combat, combat_sup, or mnn")
 parser$add_argument("--classifier", type = "character", required = TRUE,
                    help = "Classifier type: logistic, elnet, elasticnet, svm, rf, nnet, knn, xgboost, or rvc")
 parser$add_argument("--num-datasets", type = "integer", required = TRUE,
                    help = "Number of datasets to include: 3, 4, 5, or 6")
-parser$add_argument("--seed", type = "integer", required = TRUE,
-                   help = "Random seed for reproducibility")
+parser$add_argument("--test-study", type = "character", required = TRUE,
+                   help = "Test study name (e.g., GSE37250_SA, USA, India, etc.)")
 parser$add_argument("-o", "--output", type = "character", required = TRUE,
                    help = "Output CSV file path")
 
@@ -63,7 +63,7 @@ args <- parser$parse_args()
 # Arguments are automatically validated as required by argparse
 
 # Parameter validation
-valid_adjusters <- c("unadjusted", "combat", "mnn")
+valid_adjusters <- c("unadjusted", "combat", "combat_sup", "mnn")
 valid_classifiers <- c("logistic", "elnet", "elasticnet", "svm", "rf", "nnet", "knn", "xgboost", "rvc")
 valid_num_datasets <- c(3, 4, 5, 6)
 
@@ -85,16 +85,11 @@ if (!args$num_datasets %in% valid_num_datasets) {
   quit(status=1)
 }
 
-if (args$seed < 1 || args$seed > 1000) {
-  cat("Error: Seed must be between 1 and 1000\n")
-  quit(status=1)
-}
-
 # Extract validated parameters
 adjuster <- args$adjuster
 classifier <- args$classifier
 num_datasets <- args$num_datasets
-seed <- args$seed
+test_study <- args$test_study
 output_file <- args$output
 
 # Validate output directory exists
@@ -109,7 +104,7 @@ if (!dir.exists(output_dir)) {
 # ====================================================================
 
 # Create job ID for logging
-job_id <- sprintf("adjuster_%s_%s_%d_%d", adjuster, classifier, num_datasets, seed)
+job_id <- sprintf("adjuster_%s_%s_%d_%s", adjuster, classifier, num_datasets, test_study)
 
 # Main job wrapper with comprehensive error handling
 main_job_wrapper <- function() {
@@ -120,7 +115,7 @@ main_job_wrapper <- function() {
     cat(sprintf("Adjuster: %s\n", adjuster))
     cat(sprintf("Classifier: %s\n", classifier))
     cat(sprintf("Num datasets: %d\n", num_datasets))
-    cat(sprintf("Seed: %d\n", seed))
+    cat(sprintf("Test study: %s\n", test_study))
     cat(sprintf("Output: %s\n", output_file))
     cat(sprintf("Start time: %s\n", Sys.time()))
     cat("===============================\n\n")
@@ -137,8 +132,8 @@ main_job_wrapper <- function() {
     # Detailed error logging
     cat(sprintf("[ERROR] Job %s failed at %s\n", job_id, Sys.time()), file = stderr())
     cat(sprintf("[ERROR] Error: %s\n", e$message), file = stderr())
-    cat(sprintf("[ERROR] Parameters: adjuster=%s, classifier=%s, num_datasets=%d, seed=%d\n", 
-                adjuster, classifier, num_datasets, seed), file = stderr())
+    cat(sprintf("[ERROR] Parameters: adjuster=%s, classifier=%s, num_datasets=%d, test_study=%s\n", 
+                adjuster, classifier, num_datasets, test_study), file = stderr())
     
     # Additional debugging information
     cat(sprintf("[ERROR] Working directory: %s\n", getwd()), file = stderr())
@@ -186,9 +181,6 @@ main_analysis_function <- function() {
       stop("Classifier 'rvc' was requested, but Python dependencies 'sklearn_rvm' or 'numpy' could not be imported. Please install them.")
     }
   }
-  
-  # Set seed for reproducibility
-  set.seed(seed)
   
   # ====================================================================
   # REAL DATA PREPARATION LOGIC
@@ -246,14 +238,14 @@ main_analysis_function <- function() {
   label_lst_filtered <- filtered_data$label_lst
   study_names <- filtered_data$study_names
   
-  # For single job execution, we need to select one test study
-  # Use seed to deterministically select test study
-  set.seed(seed)
-  test_study_index <- ((seed - 1) %% length(study_names)) + 1
-  test_name <- study_names[test_study_index]
+  # Validate test study is in the filtered list
+  if (!test_study %in% study_names) {
+    stop(sprintf("Test study '%s' not found in selected studies: %s", 
+                 test_study, paste(study_names, collapse=", ")))
+  }
   
-  cat(sprintf("Selected test study: %s (index %d based on seed %d)\n", 
-              test_name, test_study_index, seed))
+  test_name <- test_study
+  cat(sprintf("Using test study: %s\n", test_name))
   
   # Prepare datasets
   datasets <- prepare_datasets(dat_lst_filtered, label_lst_filtered, test_name, study_names)
@@ -295,22 +287,48 @@ main_analysis_function <- function() {
         dat_test_corrected = dat_test
       ))
     } else if (method == "combat") {
-      # ComBat with reference batch (use batch with largest sample size as reference)
-      ref_batch <- names(which.max(table(batch)))
-      if (is.numeric(batch)) ref_batch <- as.numeric(ref_batch)
+      # ComBat correction without labels (unsupervised)
+      # Step 1: Correct batch effects within training data without using labels
+      dat_corrected <- ComBat(dat, batch=batch, mod=NULL)
       
-      # Apply ComBat to combined training and test data
-      combined_dat <- cbind(dat, dat_test)
-      # Test set gets its own batch label
-      combined_batch <- c(batch, rep(max(batch) + 1, ncol(dat_test)))  
-      combined_labels <- c(group, rep(max(group) + 1, ncol(dat_test)))
+      # Step 2: Adjust test data to match corrected training distribution
+      # Use entire corrected training set as reference batch
+      combined_dat <- cbind(dat_corrected, dat_test)
+      ref_batch_id <- 1  # Training data batch ID
+      test_batch_id <- 2  # Test data batch ID
+      combined_batch <- c(rep(ref_batch_id, ncol(dat_corrected)), 
+                         rep(test_batch_id, ncol(dat_test)))
       
-      # Apply ComBat correction
-      combat_combined <- ComBat(combined_dat, batch=combined_batch, ref.batch=ref_batch)
+      # Apply ComBat with training as reference (no mod matrix)
+      combat_combined <- ComBat(combined_dat, batch=combined_batch, 
+                               mod=NULL, ref.batch=ref_batch_id)
       
-      # Split back into training and test
-      dat_corrected <- combat_combined[, 1:ncol(dat)]
-      dat_test_corrected <- combat_combined[, (ncol(dat) + 1):ncol(combat_combined)]
+      # Extract corrected test data (training data unchanged as it's the reference)
+      dat_test_corrected <- combat_combined[, (ncol(dat_corrected) + 1):ncol(combat_combined)]
+      
+      return(list(
+        dat_corrected = dat_corrected,
+        dat_test_corrected = dat_test_corrected
+      ))
+    } else if (method == "combat_sup") {
+      # ComBat correction with labels (supervised)
+      # Step 1: Correct batch effects within training data while preserving biological signal
+      dat_corrected <- ComBat(dat, batch=batch, mod=model.matrix(~group))
+      
+      # Step 2: Adjust test data to match corrected training distribution
+      # Use entire corrected training set as reference batch
+      combined_dat <- cbind(dat_corrected, dat_test)
+      ref_batch_id <- 1  # Training data batch ID
+      test_batch_id <- 2  # Test data batch ID
+      combined_batch <- c(rep(ref_batch_id, ncol(dat_corrected)), 
+                         rep(test_batch_id, ncol(dat_test)))
+      
+      # Apply ComBat with training as reference (no mod matrix to avoid using test labels)
+      combat_combined <- ComBat(combined_dat, batch=combined_batch, 
+                               mod=NULL, ref.batch=ref_batch_id)
+      
+      # Extract corrected test data (training data unchanged as it's the reference)
+      dat_test_corrected <- combat_combined[, (ncol(dat_corrected) + 1):ncol(combat_combined)]
       
       return(list(
         dat_corrected = dat_corrected,
@@ -584,14 +602,14 @@ main_analysis_function <- function() {
   # ====================================================================
   
   #' Create output data frame with required columns
-  create_output_dataframe <- function(adjuster, classifier, n_datasets, seed, performance_metrics) {
+  create_output_dataframe <- function(adjuster, classifier, n_datasets, test_study, performance_metrics) {
     # Create one row per metric
     output_rows <- lapply(names(performance_metrics), function(metric) {
       data.frame(
         adjuster = adjuster,
         classifier = classifier,
         n_datasets = n_datasets,
-        seed = seed,
+        test_study = test_study,
         metric = metric,
         value = performance_metrics[metric],
         stringsAsFactors = FALSE
@@ -614,15 +632,36 @@ main_analysis_function <- function() {
     adjuster = adjuster,
     classifier = classifier,
     n_datasets = num_datasets,
-    seed = seed,
+    test_study = test_study,
     performance_metrics = result$performance
   )
   
-  # Write to CSV file
-  write.csv(output_df, file = output_file, row.names = FALSE)
-  
-  cat(sprintf("Results written to: %s\n", output_file))
-  cat(sprintf("Output contains %d rows (one per metric)\n", nrow(output_df)))
+  # Write to CSV file with error handling
+  tryCatch({
+    write.csv(output_df, file = output_file, row.names = FALSE)
+    
+    # Verify file was created
+    if (!file.exists(output_file)) {
+      stop(sprintf("File was not created: %s", output_file))
+    }
+    
+    # Verify file has content
+    file_size <- file.info(output_file)$size
+    if (is.na(file_size) || file_size == 0) {
+      stop(sprintf("File was created but is empty: %s", output_file))
+    }
+    
+    cat(sprintf("Results written to: %s\n", output_file))
+    cat(sprintf("Output contains %d rows (one per metric)\n", nrow(output_df)))
+    cat(sprintf("File size: %d bytes\n", file_size))
+    
+  }, error = function(e) {
+    cat(sprintf("[ERROR] Failed to write output file: %s\n", e$message), file = stderr())
+    cat(sprintf("[ERROR] Output file path: %s\n", output_file), file = stderr())
+    cat(sprintf("[ERROR] Output directory exists: %s\n", dir.exists(dirname(output_file))), file = stderr())
+    cat(sprintf("[ERROR] Output directory writable: %s\n", file.access(dirname(output_file), 2) == 0), file = stderr())
+    stop(sprintf("Failed to write output file: %s", e$message))
+  })
   
   # Display output for verification
   cat("\nOutput preview:\n")
@@ -632,7 +671,7 @@ main_analysis_function <- function() {
   cat(sprintf("Adjuster: %s\n", adjuster))
   cat(sprintf("Classifier: %s\n", classifier))
   cat(sprintf("Datasets: %d\n", num_datasets))
-  cat(sprintf("Seed: %d\n", seed))
+  cat(sprintf("Test study: %s\n", test_study))
   cat(sprintf("Output: %s\n", output_file))
   cat("==================================\n")
   
@@ -644,4 +683,5 @@ main_analysis_function <- function() {
 # ====================================================================
 
 # Run the main job with error handling
-main_job_wrapper()
+# Suppress automatic printing of return value
+invisible(main_job_wrapper())

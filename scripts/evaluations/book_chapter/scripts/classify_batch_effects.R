@@ -299,29 +299,44 @@ normalize_datasets <- function(train_expr, test_expr, train_expr_batch, batches_
   )
 }
 
-#' Apply batch correction methods
-#' @param train_expr_batch Training data with batch effects
-#' @param test_expr Test expression data
+#' Apply ComBat correction to training data
+#' @param train_data Training expression data
 #' @param batch Batch assignments
-#' @param y_train Training labels
-apply_batch_corrections <- function(train_expr_batch, test_expr, batch, y_train) {
+#' @param labels Optional training labels (NULL for unsupervised)
+#' @return Batch-corrected training data
+apply_combat_train <- function(train_data, batch, labels = NULL) {
+  mod_matrix <- if (is.null(labels)) NULL else model.matrix(~labels)
+  ComBat(train_data, batch = batch, mod = mod_matrix)
+}
+
+#' Adjust test data to match corrected training distribution
+#' @param train_corrected Corrected training data
+#' @param test_data Test expression data
+#' @return Batch-corrected test data
+adjust_test_to_train <- function(train_corrected, test_data) {
+  combined_dat <- cbind(train_corrected, test_data)
+  ref_batch_id <- 1  # Training data batch ID
+  test_batch_id <- 2  # Test data batch ID
+  combined_batch <- c(rep(ref_batch_id, ncol(train_corrected)), 
+                     rep(test_batch_id, ncol(test_data)))
   
-  # ComBat with reference batch (use first batch as reference)
-  ref_batch <- min(batch)
-  combined_dat <- cbind(train_expr_batch, test_expr)
-  combined_batch <- c(batch, rep(ref_batch, ncol(test_expr)))  # Test set uses reference batch
-  combined_labels <- c(y_train, rep(0, ncol(test_expr)))  # Use dummy labels for test
-  train_expr_combat <- ComBat(combined_dat, batch = combined_batch, 
-                             mod = model.matrix(~combined_labels), ref.batch = ref_batch)
+  combat_combined <- ComBat(combined_dat, batch = combined_batch, 
+                           mod = NULL, ref.batch = ref_batch_id)
   
-  # Split back into training and test
-  train_expr_combat_adj <- train_expr_combat[, 1:ncol(train_expr_batch)]
-  test_expr_combat_adj <- train_expr_combat[, (ncol(train_expr_batch) + 1):ncol(train_expr_combat)]
-  
-  # MNN correction with test set last in merge order
+  # Extract corrected test data (training data unchanged as it's the reference)
+  combat_combined[, (ncol(train_corrected) + 1):ncol(combat_combined)]
+}
+
+#' Apply MNN correction to combined training and test data
+#' @param train_data Training expression data
+#' @param test_data Test expression data
+#' @param batch Batch assignments for training data
+#' @return List with corrected training and test data
+apply_mnn_correction <- function(train_data, test_data, batch) {
   library(batchelor, quietly = TRUE)
-  combined_dat <- cbind(train_expr_batch, test_expr)
-  combined_batch <- c(batch, rep(max(batch) + 1, ncol(test_expr)))  # Test set gets new batch ID
+  
+  combined_dat <- cbind(train_data, test_data)
+  combined_batch <- c(batch, rep(max(batch) + 1, ncol(test_data)))
   
   # Create batch list for MNN (each batch as separate matrix)
   unique_batches <- sort(unique(combined_batch))
@@ -333,24 +348,47 @@ apply_batch_corrections <- function(train_expr_batch, test_expr, batch, y_train)
   mnn_result <- do.call(fastMNN, c(batch_list, list(merge.order = seq_along(unique_batches))))
   
   # Get corrected data (handle different batchelor versions)
-  if("corrected" %in% assayNames(mnn_result)) {
+  if ("corrected" %in% assayNames(mnn_result)) {
     corrected_combined <- assay(mnn_result, "corrected")
-  } else if("reconstructed" %in% assayNames(mnn_result)) {
+  } else if ("reconstructed" %in% assayNames(mnn_result)) {
     corrected_combined <- assay(mnn_result, "reconstructed")
   } else {
-    # Fallback to first assay
     corrected_combined <- assay(mnn_result, 1)
   }
   
   # Split back into training and test
-  train_expr_mnn_adj <- corrected_combined[, 1:ncol(train_expr_batch)]
-  test_expr_mnn_adj <- corrected_combined[, (ncol(train_expr_batch) + 1):ncol(corrected_combined)]
+  list(
+    train = corrected_combined[, 1:ncol(train_data)],
+    test = corrected_combined[, (ncol(train_data) + 1):ncol(corrected_combined)]
+  )
+}
+
+#' Apply all batch correction methods
+#' @param train_expr_batch Training data with batch effects
+#' @param test_expr Test expression data
+#' @param batch Batch assignments
+#' @param y_train Training labels
+#' @return List with all corrected datasets
+apply_batch_corrections <- function(train_expr_batch, test_expr, batch, y_train) {
+  
+  # ComBat unsupervised (without labels)
+  train_combat <- apply_combat_train(train_expr_batch, batch, labels = NULL)
+  test_combat <- adjust_test_to_train(train_combat, test_expr)
+  
+  # ComBat supervised (with labels)
+  train_combat_sup <- apply_combat_train(train_expr_batch, batch, labels = y_train)
+  test_combat_sup <- adjust_test_to_train(train_combat_sup, test_expr)
+  
+  # MNN correction
+  mnn_result <- apply_mnn_correction(train_expr_batch, test_expr, batch)
   
   list(
-    train_combat = train_expr_combat_adj,
-    test_combat = test_expr_combat_adj,
-    train_mnn = train_expr_mnn_adj,
-    test_mnn = test_expr_mnn_adj
+    train_combat = train_combat,
+    test_combat = test_combat,
+    train_combat_sup = train_combat_sup,
+    test_combat_sup = test_combat_sup,
+    train_mnn = mnn_result$train,
+    test_mnn = mnn_result$test
   )
 }
 
@@ -375,6 +413,10 @@ train_and_evaluate_classifier <- function(classifier_type, normalized_data, corr
     ComBat = list(
       train = normalizeData(corrected_data$train_combat),
       test = normalizeData(corrected_data$test_combat)
+    ),
+    ComBat_Sup = list(
+      train = normalizeData(corrected_data$train_combat_sup),
+      test = normalizeData(corrected_data$test_combat_sup)
     ),
     MNNcorrect = list(
       train = normalizeData(corrected_data$train_mnn),

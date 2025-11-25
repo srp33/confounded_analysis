@@ -193,25 +193,24 @@ apply_batch_correction <- function(dat, batch, group, dat_test, method) {
   if (method == "combat") {
     library(sva, quietly = TRUE)
     
-    # Use batch with largest sample size as reference
-    ref_batch <- names(which.max(table(batch)))
+    # ComBat correction on training data only (no data leakage)
+    # Step 1: Correct batch effects within training data while preserving biological signal
+    dat_corrected <- ComBat(dat, batch=batch, mod=model.matrix(~group))
     
-    # Combine training and test data
-    combined_dat <- cbind(dat, dat_test)
-    # Test set gets a unique batch ID
-    combined_batch <- c(batch, rep("TEST_SET", ncol(dat_test)))
-    combined_labels <- c(group, rep(max(group) + 1, ncol(dat_test)))
+    # Step 2: Adjust test data to match corrected training distribution
+    # Use entire corrected training set as reference batch
+    combined_dat <- cbind(dat_corrected, dat_test)
+    ref_batch_id <- 1  # Training data batch ID
+    test_batch_id <- 2  # Test data batch ID
+    combined_batch <- c(rep(ref_batch_id, ncol(dat_corrected)), 
+                       rep(test_batch_id, ncol(dat_test)))
     
-    # Apply ComBat
-    combat_combined <- ComBat(
-      combined_dat, 
-      batch = combined_batch,
-      ref.batch = ref_batch
-    )
+    # Apply ComBat with training as reference (no mod matrix to avoid using test labels)
+    combat_combined <- ComBat(combined_dat, batch=combined_batch, 
+                             mod=NULL, ref.batch=ref_batch_id)
     
-    # Split back
-    dat_corrected <- combat_combined[, 1:ncol(dat)]
-    dat_test_corrected <- combat_combined[, (ncol(dat) + 1):ncol(combat_combined)]
+    # Extract corrected test data (training data unchanged as it's the reference)
+    dat_test_corrected <- combat_combined[, (ncol(dat_corrected) + 1):ncol(combat_combined)]
     
     return(list(
       dat_corrected = dat_corrected,
@@ -292,65 +291,84 @@ normalize_within_batches <- function(dat, batch, batch_names) {
 # DIMENSIONALITY REDUCTION (Single Responsibility: Transformation)
 # ====================================================================
 
-#' Perform PCA on data
-#' @param dat Data matrix (genes x samples)
+#' Perform PCA on training data and project test data
+#' @param dat_train Training data matrix (genes x samples)
+#' @param dat_test Test data matrix (genes x samples)
 #' @return List with PCA results
-compute_pca <- function(dat) {
-  cat("Computing PCA...\n")
+compute_pca <- function(dat_train, dat_test) {
+  cat("Computing PCA (fit on training, project test)...\n")
   
+  # Fit PCA on training data only
   # Transpose: PCA expects samples x features
-  pca_result <- prcomp(t(dat), center = TRUE, scale. = TRUE)
+  pca_fit <- prcomp(t(dat_train), center = TRUE, scale. = TRUE)
+  
+  # Project training data
+  train_coords <- pca_fit$x[, 1:2]
+  
+  # Project test data using the same transformation
+  test_coords <- predict(pca_fit, newdata = t(dat_test))[, 1:2]
+  
+  # Combine coordinates
+  combined_coords <- rbind(train_coords, test_coords)
   
   # Calculate variance explained
-  var_explained <- pca_result$sdev^2 / sum(pca_result$sdev^2)
+  var_explained <- pca_fit$sdev^2 / sum(pca_fit$sdev^2)
   
   list(
-    coords = pca_result$x[, 1:2],
+    coords = combined_coords,
     var_explained = var_explained[1:2],
     method = "PCA"
   )
 }
 
-#' Perform LDA on data with combined label and batch grouping
-#' @param dat Data matrix (genes x samples)
-#' @param labels Sample labels
-#' @param batch Batch assignments
+#' Perform LDA on training data and project test data
+#' @param dat_train Training data matrix (genes x samples)
+#' @param dat_test Test data matrix (genes x samples)
+#' @param labels_train Training sample labels
+#' @param batch_train Training batch assignments
 #' @return List with LDA results
-compute_lda <- function(dat, labels, batch) {
-  cat("Computing LDA...\n")
+compute_lda <- function(dat_train, dat_test, labels_train, batch_train) {
+  cat("Computing LDA (fit on training, project test)...\n")
   
   library(MASS, quietly = TRUE)
   
   # Transpose: LDA expects samples x features
-  dat_t <- t(dat)
+  dat_train_t <- t(dat_train)
+  dat_test_t <- t(dat_test)
   
-  # Create combined grouping: label + batch
+  # Create combined grouping for training: label + batch
   # This creates groups like "0_1", "0_2", "1_1", "1_2" etc.
-  combined_group <- paste(labels, batch, sep = "_")
+  combined_group_train <- paste(labels_train, batch_train, sep = "_")
   
   # LDA requires at least 2 classes
-  if (length(unique(combined_group)) < 2) {
+  if (length(unique(combined_group_train)) < 2) {
     warning("LDA requires at least 2 classes. Skipping.")
     return(NULL)
   }
   
-  # Perform LDA on combined grouping
-  lda_result <- lda(dat_t, grouping = as.factor(combined_group))
+  # Fit LDA on training data only
+  lda_fit <- lda(dat_train_t, grouping = as.factor(combined_group_train))
   
-  # Project data
-  lda_coords <- predict(lda_result, dat_t)$x
+  # Project training data
+  train_coords <- predict(lda_fit, dat_train_t)$x
+  
+  # Project test data using the same transformation
+  test_coords <- predict(lda_fit, dat_test_t)$x
+  
+  # Combine coordinates
+  combined_coords <- rbind(train_coords, test_coords)
   
   # Handle 1D case (only 1 discriminant)
-  if (is.null(dim(lda_coords))) {
-    lda_coords <- cbind(lda_coords, rep(0, length(lda_coords)))
-    colnames(lda_coords) <- c("LD1", "LD2")
-  } else if (ncol(lda_coords) == 1) {
-    lda_coords <- cbind(lda_coords, rep(0, nrow(lda_coords)))
-    colnames(lda_coords) <- c("LD1", "LD2")
+  if (is.null(dim(combined_coords))) {
+    combined_coords <- cbind(combined_coords, rep(0, length(combined_coords)))
+    colnames(combined_coords) <- c("LD1", "LD2")
+  } else if (ncol(combined_coords) == 1) {
+    combined_coords <- cbind(combined_coords, rep(0, nrow(combined_coords)))
+    colnames(combined_coords) <- c("LD1", "LD2")
   }
   
   list(
-    coords = lda_coords[, 1:2],
+    coords = combined_coords[, 1:2],
     method = "LDA"
   )
 }
@@ -505,8 +523,8 @@ create_all_visualizations <- function(dat_train, dat_test, batch_train,
   
   base_name <- sprintf("%s_n%d_test%s", adjuster, num_datasets, test_study)
   
-  # PCA
-  pca_result <- compute_pca(dat_combined)
+  # PCA (fit on training, project test)
+  pca_result <- compute_pca(dat_train, dat_test)
   pca_plot <- create_reduction_plot(
     coords = pca_result$coords,
     batch = batch_combined,
@@ -522,8 +540,8 @@ create_all_visualizations <- function(dat_train, dat_test, batch_train,
     file.path(output_dir, "pca", paste0(base_name, ".png"))
   )
   
-  # LDA (uses both labels and batches for separation)
-  lda_result <- compute_lda(dat_combined, labels_combined, batch_combined)
+  # LDA (fit on training, project test)
+  lda_result <- compute_lda(dat_train, dat_test, labels_train, batch_train)
   if (!is.null(lda_result)) {
     lda_plot <- create_reduction_plot(
       coords = lda_result$coords,
@@ -540,7 +558,8 @@ create_all_visualizations <- function(dat_train, dat_test, batch_train,
     )
   }
   
-  # UMAP
+  # UMAP (still uses combined data - cannot project separately)
+  dat_combined <- cbind(dat_train, dat_test)
   umap_result <- compute_umap(dat_combined)
   umap_plot <- create_reduction_plot(
     coords = umap_result$coords,
