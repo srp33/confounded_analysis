@@ -12,6 +12,7 @@ split_seeds = list(range(config["split_seed_start"], config["split_seed_start"] 
 wildcard_constraints:
     seed=r"\d+",
     n_datasets=r"\d+",
+    test_study=r"[a-zA-Z0-9_]+",  # Study names like GSE37250_SA, USA, India
     mean=r"[\d\.\-]+",          # Pending, might fix SyntaxWarning: invalid escape sequence
     variance=r"[\d\.]+",        # Matches numbers and dots
     classifier=r"[a-zA-Z0-9]+", # Assumes no underscores in classifier names
@@ -26,7 +27,7 @@ def check_for_failures():
     """Check for jobs that have logs but no outputs"""
     failures = []
     
-    # Check classify_adjusters
+    # Check classify_adjusters (now uses test_study instead of seed)
     log_dir = Path(OUTPUT_FOLDER) / "logs" / "classify_adjusters"
     result_dir = Path(OUTPUT_FOLDER) / "results" / "adjusters" / "individual"
     
@@ -40,7 +41,7 @@ def check_for_failures():
                     "rule": "classify_adjusters"
                 })
     
-    # Check classify_batch_effects
+    # Check classify_batch_effects (still uses seed for simulation)
     log_dir = Path(OUTPUT_FOLDER) / "logs" / "classify_batch_effects"
     result_dir = Path(OUTPUT_FOLDER) / "results" / "batch_effects" / "individual"
     
@@ -112,7 +113,7 @@ for n in config["num_datasets"]:
 
 rule all:
     input:
-        OUTPUT_FOLDER + "/batch_on_classifiers.png",
+        # OUTPUT_FOLDER + "/batch_on_classifiers.png",
         OUTPUT_FOLDER + "/adjusters_on_classifiers.png",
         VIZ_TARGETS
 
@@ -179,7 +180,7 @@ rule classify_batch_effects:
     threads: 1
     resources:
         mem_mb=2000,
-        runtime=4
+        runtime=9
     shell:
         """
         Rscript {input.script} -o {output} \
@@ -209,16 +210,23 @@ rule make_fig2:
         """
 
 
+# Helper to generate all valid adjuster combinations
+def get_adjuster_combinations():
+    """Generate all valid adjuster × classifier × n_datasets × test_study combinations"""
+    combinations = []
+    for adjuster in config["adjusters"]:
+        for classifier in config["classifiers"]:
+            for n in config["num_datasets"]:
+                for test_study in get_test_studies_for_n(n):
+                    combinations.append(
+                        f"{OUTPUT_FOLDER}/results/adjusters/individual/{adjuster}_{classifier}_{n}_{test_study}.csv"
+                    )
+    return combinations
+
 # Step 2.2: Aggregate all individual adjuster results
 rule aggregate_adjusters:
     input:
-        data=expand(
-            OUTPUT_FOLDER + "/results/adjusters/individual/{adjuster}_{classifier}_{n_datasets}_{seed}.csv",
-            adjuster=config["adjusters"],
-            classifier=config["classifiers"],
-            n_datasets=config["num_datasets"],
-            seed=split_seeds
-        ),
+        data=get_adjuster_combinations(),
         script=SCRIPTS_FOLDER + "/aggregate_results.R"
     output:
         OUTPUT_FOLDER + "/adjusters_on_classifiers.csv"
@@ -245,9 +253,9 @@ rule classify_adjusters:
         script=SCRIPTS_FOLDER + "/classify_adjusters.R",
         helper=SCRIPTS_FOLDER + "/helper.R",
     output:
-        OUTPUT_FOLDER + "/results/adjusters/individual/{adjuster}_{classifier}_{n_datasets}_{seed}.csv"
+        OUTPUT_FOLDER + "/results/adjusters/individual/{adjuster}_{classifier}_{n_datasets}_{test_study}.csv"
     log:
-        OUTPUT_FOLDER + "/logs/classify_adjusters/{adjuster}_{classifier}_{n_datasets}_{seed}.log"
+        OUTPUT_FOLDER + "/logs/classify_adjusters/{adjuster}_{classifier}_{n_datasets}_{test_study}.log"
     group: "batch_real_group"
     threads: 1
     resources:
@@ -256,7 +264,7 @@ rule classify_adjusters:
     shell:
         """
         Rscript {input.script} -o {output} \
-            --adjuster {wildcards.adjuster} --classifier {wildcards.classifier} --num-datasets {wildcards.n_datasets} --seed {wildcards.seed} \
+            --adjuster {wildcards.adjuster} --classifier {wildcards.classifier} --num-datasets {wildcards.n_datasets} --test-study {wildcards.test_study} \
             > {log} 2>&1
         """
 
