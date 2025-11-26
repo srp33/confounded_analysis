@@ -222,10 +222,9 @@ normalizeData <- function(dat){
 }
 
 
-#### Train pipeline: ref combat test with train, and fit learner
-#train_set=train_expr_norm; train_label=y_train; test_set=test_expr_norm; lfit=learner_fit
-trainPipe <- function(train_set, test_set, train_label, lfit=learner_fit){
-  pred_res <- lfit(trn_set=train_set, y_trn=train_label, tst_set=test_set)
+#### Train pipeline: fit learner on training data only (no test data to prevent leakage)
+trainPipe <- function(train_set, train_label, lfit=learner_fit){
+  pred_res <- lfit(trn_set=train_set, y_trn=train_label)
   return(pred_res)
 }
 
@@ -264,70 +263,11 @@ AccuracyBinary <- function(actual, predicted) {
 
 
 ####  Prediction functions
-# lasso
-predLasso <- function(
-  trn_set,
-  # gene-by-sample expression matrix for training
-  tst_set,
-  # gene-by-sample expression matrix for test
-  y_trn
-  # response of training set, binary & numeric
-){
-  library(glmnet, quietly = TRUE)
-  obj <- cv.glmnet(x=t(trn_set), y=factor(y_trn), family="binomial", alpha=1,
-                   lambda=10^(seq(from=-4, to=4, by=0.1)),
-                   type.measure="mse", nfolds=10)#, intercept=FALSE)
-  best_lambda <- obj$lambda.1se
-  mod_logit <- glmnet(x=t(trn_set), y=factor(y_trn), family="binomial", alpha=1,
-                      lambda=best_lambda)#, intercept=FALSE)
 
-  # predictions
-  pred_train_prob <- predict(mod_logit, t(trn_set), type="response")[,1]
-  pred_test_prob <-  predict(mod_logit, t(tst_set), type="response")[,1]
-  #type "response" gives the fitted probabilities for "binomial",
-  #type "class" produces the class label corresponding to the maximum probability
-
-  res <- list(beta=c(mod_logit$a0, mod_logit$beta[,1]),
-              pred_trn_prob=pred_train_prob, pred_tst_prob=pred_test_prob)#,
-              #pred_trn_class=pred_train_class, pred_tst_class=pred_test_class)
-  return(res)
-}
-
-# elastic net
-# predElnet <- function(
-#   trn_set,
-#   # gene-by-sample expression matrix for training
-#   tst_set, 
-#   # gene-by-sample expression matrix for test
-#   y_trn 
-#   # response of training set, binary & numeric
-# ){
-#   library(caret)
-#   parGrid <- expand.grid(lambda=exp(seq(from=-10, to=10, by=1)),
-#                          alpha=seq(from=0, to=1, by=0.1))
-#   ctrl <- trainControl(method = "cv", number=4)
-#   mod_elnet <- train(x=t(trn_set), y=as.factor(y_trn), family = "binomial",
-#                      method="glmnet",
-#                      trControl=ctrl,
-#                      tuneGrid=parGrid)
-#   pred_train_elnet <- predict(mod_elnet, t(trn_set), type="prob")[,"1"] 
-#   pred_test_elnet <- predict(mod_elnet, t(tst_set), type="prob")[,"1"] 
-#   # either "raw" or "prob", for the number/class predictions or class probabilities
-#   res <- list(pred_trn=pred_train_elnet, pred_tst=pred_test_elnet)
-#   return(res)
-# }
-
-# SVM
-predSVM <- function(
-  trn_set,
-  # gene-by-sample expression matrix for training
-  tst_set = NULL, 
-  # gene-by-sample expression matrix for test
-  y_trn
-  # response of training set, binary & numeric
-){
+# SVM (training only - no test data leakage)
+predSVM <- function(trn_set, y_trn){
   library(e1071, quietly = TRUE)
-  tune_ctrl <- tune.control(sampling="cross", cross=4)#, error.fun=LogLossBinary)
+  tune_ctrl <- tune.control(sampling="cross", cross=4)
   obj <- tune(svm, train.x=t(trn_set), train.y=as.factor(y_trn),
               tunecontrol=tune_ctrl,
               ranges=list(type="C-classification",
@@ -339,219 +279,76 @@ predSVM <- function(
                  cost=best_cost, probability=TRUE)
   pred_train_svm <- predict(mod_svm, t(trn_set), probability=TRUE)
   pred_train_svm <- attr(pred_train_svm, "probabilities")[,"1"]
-  if(!is.null(tst_set)){
-    pred_test_svm <- predict(mod_svm, t(tst_set), probability=TRUE)
-    pred_test_svm <- attr(pred_test_svm, "probabilities")[,"1"]
-  }else{
-    pred_test_svm <- NULL
-  }
-  res <- list(mod=mod_svm, pred_trn_prob=pred_train_svm, pred_tst_prob=pred_test_svm)
+  
+  res <- list(mod=mod_svm, pred_trn_prob=pred_train_svm, pred_tst_prob=NULL,
+              pred_trn_class=NULL, pred_tst_class=NULL)
   return(res)
 }
 
-# random forest
-predRF <- function(
-  trn_set,
-  # gene-by-sample expression matrix for training
-  tst_set, 
-  # gene-by-sample expression matrix for test
-  y_trn
-  # response of training set, binary & numeric
-){
-  library(caret, quietly = TRUE)
-  
-  trn_transposed <- t(trn_set)
-  rownames(trn_transposed) <- NULL
-  training_df <- data.frame(trn_transposed, as.factor(y_trn))
-  colnames(training_df) <- c(paste("gene", 1:nrow(trn_set), sep=""), "response")
-  rownames(training_df) <- 1:ncol(trn_set)
-  
-  tst_transposed <- t(tst_set)
-  rownames(tst_transposed) <- NULL
-  test_df <- data.frame(tst_transposed)
-  colnames(test_df) <- paste("gene", 1:nrow(tst_set), sep="")
-  rownames(test_df) <- 1:ncol(tst_set)
-  
-  ctrl <- trainControl(method="cv", number=10)
-  f <- as.formula(paste("response ~ ", paste(colnames(training_df)[-ncol(training_df)], collapse= "+",sep="")))
-  mod_rf <- train(form=f, data=training_df, 
-                  method="rf", metric="Accuracy", 
-                  tuneLength=5, trControl=ctrl)
-  
-  pred_train_rf <- predict(mod_rf, training_df, type="prob")[,"1"]
-  pred_test_rf <- predict(mod_rf, test_df, type="prob")[,"1"]
-  
-  res <- list(pred_trn_prob=pred_train_rf, pred_tst_prob=pred_test_rf)
-  return(res)
-}
-
-# neural net 
-predNnet <- function(
-  trn_set,
-  # gene-by-sample expression matrix for training
-  tst_set, 
-  # gene-by-sample expression matrix for test
-  y_trn
-  # response of training set, binary & numeric
-){
-  library(caret, quietly = TRUE)
-  parGrid <- expand.grid(size=seq(from=2, to=3, by=1),
-                         decay=10^seq(from=-4, to=-1, by=0.5))
-  ctrl <- trainControl(method = "cv", number=10)
-  
-  # Fix row names for training
-  trn_transposed <- t(trn_set)
-  rownames(trn_transposed) <- NULL
-  
-  mod_nnet <- train(x=trn_transposed, y=as.factor(y_trn), maxit=1000, MaxNWts=50000,
-                    method="nnet", trace=FALSE,
-                    trControl=ctrl, softmat=TRUE,
-                    tuneGrid=parGrid)
-  pred_train_nnet <- predict(mod_nnet, trn_transposed, type="prob")[,"1"]
-  
-  # Fix row names for test
-  tst_transposed <- t(tst_set)
-  rownames(tst_transposed) <- NULL
-  pred_test_nnet <- predict(mod_nnet, tst_transposed, type="prob")[,"1"] 
-  
-  res <- list(pred_trn_prob=pred_train_nnet, pred_tst_prob=pred_test_nnet)
-  return(res)
-}
-
-# mas-o-menos 
-predMas <- function(
-  trn_set,
-  # gene-by-sample expression matrix for training
-  tst_set, 
-  # gene-by-sample expression matrix for test
-  y_trn
-  # response of training set, binary & numeric
-){
-  trn_set_norm <- t(scale(t(trn_set), center=TRUE, scale=TRUE))
-  tst_set_norm <- t(scale(t(tst_set), center=TRUE, scale=TRUE))
-  
-  trn_norm_transposed <- t(trn_set_norm)
-  rownames(trn_norm_transposed) <- NULL
-  training_df_norm <- data.frame(trn_norm_transposed, as.factor(y_trn))
-  colnames(training_df_norm) <- c(paste("gene", 1:nrow(trn_set_norm), sep=""), "response")
-  rownames(training_df_norm) <- 1:ncol(trn_set_norm)
-  
-  alpha <- rep(0, nrow(trn_set_norm))
-  for(j in 1:nrow(trn_set_norm)){
-    f <- as.formula(paste("response ~ 0 +", paste(colnames(training_df_norm)[j], 
-                                                  collapse= "+",sep="")))
-    ctr <- glm.control(maxit=1000)
-    mod_tmp <- glm(f, data=training_df_norm, family=binomial, control=ctr)
-    alpha[j] <- coef(mod_tmp)
-  }
-  v <- (2*(alpha>0)-1)/sqrt(nrow(trn_set))
-  
-  pred_train_plusminus <- as.numeric(t(trn_set_norm) %*% as.matrix(v))
-  pred_train_plusminus <- 1/(1+exp(- pred_train_plusminus))
-  pred_test_plusminus <- as.numeric(t(tst_set_norm) %*% as.matrix(v))
-  pred_test_plusminus <- 1/(1+exp(- pred_test_plusminus))
-  
-  res <- list(pred_trn_prob=pred_train_plusminus, pred_tst_prob=pred_test_plusminus)
-  return(res)
-}
-
-
-####  Prediction functions slightly organized from Prasad Patil's github
-predLasso_pp <- function(trn_set, tst_set=NULL, y_trn, ...){
+####  Prediction functions (training only - use predWrapper for test predictions)
+predLasso_pp <- function(trn_set, y_trn, ...){
   mod <- glmnet::cv.glmnet(x=t(trn_set), y=as.numeric(as.character(y_trn)), family="binomial", ...)
   pred_trn_prob <- as.vector(predict(mod, newx=t(trn_set), s="lambda.1se", type="response"))
   pred_trn_class <- as.vector(predict(mod, newx=t(trn_set), s="lambda.1se", type="class"))
-  if(!is.null(tst_set)){
-    pred_tst_prob <- as.vector(predict(mod, newx=t(tst_set), s="lambda.1se", type="response"))
-    pred_tst_class <- as.vector(predict(mod, newx=t(tst_set), s="lambda.1se", type="class"))
-  }else{
-    pred_tst_prob <- NULL; pred_tst_class <- NULL
-  }
-  return(list(mod=mod, pred_trn_prob=pred_trn_prob, pred_tst_prob=pred_tst_prob,
-              pred_trn_class=pred_trn_class, pred_tst_class=pred_tst_class))
+  return(list(mod=mod, pred_trn_prob=pred_trn_prob, pred_tst_prob=NULL,
+              pred_trn_class=pred_trn_class, pred_tst_class=NULL))
 }
 
-#trn_set=train_set; y_trn=train_label; tst_set=test_refadj
-predRF_pp <- function(trn_set, tst_set=NULL, y_trn){
-  # Create training data with proper row names
+predRF_pp <- function(trn_set, y_trn){
   trn_transposed <- t(trn_set)
-  rownames(trn_transposed) <- NULL  # Remove potentially problematic row names
+  rownames(trn_transposed) <- NULL
   data <- data.frame(y=as.factor(y_trn), trn_transposed)
   mod <- ranger::ranger(y ~ ., data = data, write.forest=TRUE)
   mod_prob <- ranger::ranger(y ~ ., data = data, write.forest=TRUE, probability=TRUE)
   
-  # For predictions, also fix row names
   trn_pred_data <- t(trn_set)
   rownames(trn_pred_data) <- NULL
   pred_trn_prob <- predict(mod_prob, data = data.frame(trn_pred_data))$predictions[, "1"]
   pred_trn_class <- predict(mod, data = data.frame(trn_pred_data))$predictions
-  if(!is.null(tst_set)){
-    tst_transposed <- t(tst_set)
-    rownames(tst_transposed) <- NULL  # Remove potentially problematic row names
-    newdata <- data.frame(tst_transposed)
-    pred_tst_prob <- predict(mod_prob, data = newdata)$predictions[, "1"]
-    pred_tst_class <- predict(mod, data = newdata)$predictions
-  }else{
-    pred_tst_prob <- NULL; pred_tst_class <- NULL
-  }
-  return(list(mod = mod_prob, pred_trn_prob=pred_trn_prob, pred_tst_prob=pred_tst_prob,
-              pred_trn_class=pred_trn_class, pred_tst_class=pred_tst_class))
+  
+  return(list(mod = mod_prob, pred_trn_prob=pred_trn_prob, pred_tst_prob=NULL,
+              pred_trn_class=pred_trn_class, pred_tst_class=NULL))
 }
 
-predRF_fs_pp <- function(trn_set, tst_set, y_trn){
+predRF_fs_pp <- function(trn_set, y_trn){
   data <- data.frame(y=as.factor(y_trn), t(trn_set))
-  newdata <- data.frame(t(tst_set))
   tout <- colttests(as.matrix(data[,-1]), data[,1], tstatOnly = TRUE)
   data <- data[, c("y",rownames(tout)[order(abs(tout[,1]), decreasing = T)[1:20]])]
   mod <- ranger(y ~ ., data = data, write.forest = TRUE, probability = T)
-  predict(mod, data=newdata)$predictions[,2]
+  pred_trn_prob <- predict(mod, data=data[,-1])$predictions[,2]
+  return(list(mod=mod, pred_trn_prob=pred_trn_prob, pred_tst_prob=NULL,
+              pred_trn_class=NULL, pred_tst_class=NULL))
 }
 
-predNnet_pp <- function(trn_set, tst_set=NULL, y_trn){
+predNnet_pp <- function(trn_set, y_trn){
   library(nnet, quietly = TRUE)
   
-  # Simple validation
   if(is.null(trn_set) || is.null(y_trn)) {
     stop("Training set or labels are NULL")
   }
   
-  # Create training data with proper row names
   trn_transposed <- t(trn_set)
-  rownames(trn_transposed) <- NULL  # Remove potentially problematic row names
+  rownames(trn_transposed) <- NULL
   data <- data.frame(y=as.factor(y_trn), trn_transposed)
   
-  # Adjust network size for dataset
   n_samples <- nrow(data)
   network_size <- min(10, max(2, n_samples %/% 3))
   
-  # Train neural network
-  mod <- nnet(y ~ ., data = data, size = network_size, MaxNWts = 10000, 
-              linout = FALSE, trace = FALSE, maxit = 200)
+  # Add weight decay regularization (decay parameter) similar to elastic net strength
+  # Typical elastic net lambda ~0.01-0.1, weight decay of 0.01 provides similar regularization
+  mod <- nnet(y ~ ., data = data, size = network_size, MaxNWts = 50000, 
+              decay = 0.01, linout = FALSE, trace = FALSE, maxit = 200)
   
   pred_trn_prob <- as.vector(predict(mod, newdata = data[,-1]))
   pred_trn_class <- as.vector(predict(mod, newdata = data[,-1], type="class"))
   
-  # Test predictions only if test set provided
-  if(!is.null(tst_set)) {
-    tst_transposed <- t(tst_set)
-    rownames(tst_transposed) <- NULL  # Remove potentially problematic row names
-    newdata <- data.frame(tst_transposed)
-    pred_tst_prob <- as.vector(predict(mod, newdata = newdata))
-    pred_tst_class <- as.vector(predict(mod, newdata = newdata, type="class"))
-  } else {
-    pred_tst_prob <- NULL
-    pred_tst_class <- NULL
-  }
-  
-  return(list(mod=mod, pred_trn_prob=pred_trn_prob, pred_tst_prob=pred_tst_prob,
-              pred_trn_class=pred_trn_class, pred_tst_class=pred_tst_class))
+  return(list(mod=mod, pred_trn_prob=pred_trn_prob, pred_tst_prob=NULL,
+              pred_trn_class=pred_trn_class, pred_tst_class=NULL))
 }
 
-# Logistic Regression with no regularization
-predLogistic_pp <- function(trn_set, tst_set=NULL, y_trn){
-  # Create training data with proper row names
+predLogistic_pp <- function(trn_set, y_trn){
   trn_transposed <- t(trn_set)
-  rownames(trn_transposed) <- NULL  # Remove potentially problematic row names
+  rownames(trn_transposed) <- NULL
   data <- data.frame(y=as.factor(y_trn), trn_transposed)
   
   mod <- glm(y ~ ., data = data, family = binomial())
@@ -559,43 +356,22 @@ predLogistic_pp <- function(trn_set, tst_set=NULL, y_trn){
   pred_trn_prob <- as.vector(predict(mod, newdata = data[,-1], type="response"))
   pred_trn_class <- as.vector(ifelse(pred_trn_prob >= 0.5, "1", "0"))
   
-  if(!is.null(tst_set)){
-    tst_transposed <- t(tst_set)
-    rownames(tst_transposed) <- NULL  # Remove potentially problematic row names
-    newdata <- data.frame(tst_transposed)
-    pred_tst_prob <- as.vector(predict(mod, newdata = newdata, type="response"))
-    pred_tst_class <- as.vector(ifelse(pred_tst_prob >= 0.5, "1", "0"))
-  } else {
-    pred_tst_prob <- NULL
-    pred_tst_class <- NULL
-  }
-  
-  return(list(mod=mod, pred_trn_prob=pred_trn_prob, pred_tst_prob=pred_tst_prob,
-              pred_trn_class=pred_trn_class, pred_tst_class=pred_tst_class))
+  return(list(mod=mod, pred_trn_prob=pred_trn_prob, pred_tst_prob=NULL,
+              pred_trn_class=pred_trn_class, pred_tst_class=NULL))
 }
 
-# ElasticNet (L1 + L2 regularization)
-predElnet_pp <- function(trn_set, tst_set=NULL, y_trn){
+predElnet_pp <- function(trn_set, y_trn){
   library(glmnet, quietly = TRUE)
-  # Use alpha=0.5 for equal mix of L1 and L2 regularization
   mod <- cv.glmnet(x=t(trn_set), y=as.numeric(as.character(y_trn)), family="binomial", alpha=0.5)
   pred_trn_prob <- as.vector(predict(mod, newx=t(trn_set), s="lambda.1se", type="response"))
   pred_trn_class <- as.vector(predict(mod, newx=t(trn_set), s="lambda.1se", type="class"))
-  if(!is.null(tst_set)){
-    pred_tst_prob <- as.vector(predict(mod, newx=t(tst_set), s="lambda.1se", type="response"))
-    pred_tst_class <- as.vector(predict(mod, newx=t(tst_set), s="lambda.1se", type="class"))
-  }else{
-    pred_tst_prob <- NULL; pred_tst_class <- NULL
-  }
-  return(list(mod=mod, pred_trn_prob=pred_trn_prob, pred_tst_prob=pred_tst_prob,
-              pred_trn_class=pred_trn_class, pred_tst_class=pred_tst_class))
+  return(list(mod=mod, pred_trn_prob=pred_trn_prob, pred_tst_prob=NULL,
+              pred_trn_class=pred_trn_class, pred_tst_class=NULL))
 }
 
-# K-Nearest Neighbors
-predKNN_pp <- function(trn_set, tst_set=NULL, y_trn){
+predKNN_pp <- function(trn_set, y_trn){
   library(class, quietly = TRUE)
   
-  # Determine optimal k using cross-validation
   n_samples <- ncol(trn_set)
   k_values <- c(3, 5, 7, 9, 11)
   k_values <- k_values[k_values < n_samples]
@@ -603,11 +379,8 @@ predKNN_pp <- function(trn_set, tst_set=NULL, y_trn){
   if(length(k_values) == 0) {
     k_opt <- min(3, n_samples - 1)
   } else {
-    # Simple cross-validation to find best k
     cv_accuracy <- sapply(k_values, function(k) {
-      # 5-fold CV or leave-one-out if too few samples
       if(n_samples < 10) {
-        # Leave-one-out CV
         correct <- 0
         for(i in 1:n_samples) {
           train_idx <- setdiff(1:n_samples, i)
@@ -615,14 +388,11 @@ predKNN_pp <- function(trn_set, tst_set=NULL, y_trn){
           tst_cv <- t(trn_set[, i, drop=FALSE])
           rownames(trn_cv) <- NULL
           rownames(tst_cv) <- NULL
-          pred <- knn(train = trn_cv, 
-                     test = tst_cv, 
-                     cl = y_trn[train_idx], k = k)
+          pred <- knn(train = trn_cv, test = tst_cv, cl = y_trn[train_idx], k = k)
           if(as.character(pred) == as.character(y_trn[i])) correct <- correct + 1
         }
         return(correct / n_samples)
       } else {
-        # 5-fold CV
         folds <- cut(seq(1, n_samples), breaks = 5, labels = FALSE)
         correct <- 0
         total <- 0
@@ -634,9 +404,7 @@ predKNN_pp <- function(trn_set, tst_set=NULL, y_trn){
             tst_fold <- t(trn_set[, test_idx])
             rownames(trn_fold) <- NULL
             rownames(tst_fold) <- NULL
-            pred <- knn(train = trn_fold, 
-                       test = tst_fold, 
-                       cl = y_trn[train_idx], k = k)
+            pred <- knn(train = trn_fold, test = tst_fold, cl = y_trn[train_idx], k = k)
             correct <- correct + sum(as.character(pred) == as.character(y_trn[test_idx]))
             total <- total + length(test_idx)
           }
@@ -647,7 +415,6 @@ predKNN_pp <- function(trn_set, tst_set=NULL, y_trn){
     k_opt <- k_values[which.max(cv_accuracy)]
   }
   
-  # Train predictions (using leave-one-out to avoid overfitting)
   pred_trn_class <- character(n_samples)
   for(i in 1:n_samples) {
     train_idx <- setdiff(1:n_samples, i)
@@ -655,47 +422,23 @@ predKNN_pp <- function(trn_set, tst_set=NULL, y_trn){
     tst_subset <- t(trn_set[, i, drop=FALSE])
     rownames(trn_subset) <- NULL
     rownames(tst_subset) <- NULL
-    pred_trn_class[i] <- as.character(knn(train = trn_subset, 
-                                         test = tst_subset, 
+    pred_trn_class[i] <- as.character(knn(train = trn_subset, test = tst_subset, 
                                          cl = y_trn[train_idx], k = k_opt))
   }
   
-  # Convert to probabilities (simple approach)
   pred_trn_prob <- as.numeric(pred_trn_class == "1")
-  
-  # Test predictions
-  if(!is.null(tst_set)) {
-    # Ensure proper matrix structure for KNN
-    trn_for_knn <- t(trn_set)
-    tst_for_knn <- t(tst_set)
-    rownames(trn_for_knn) <- NULL
-    rownames(tst_for_knn) <- NULL
-    
-    pred_tst_class <- as.character(knn(train = trn_for_knn, 
-                                      test = tst_for_knn, 
-                                      cl = y_trn, k = k_opt))
-    pred_tst_prob <- as.numeric(pred_tst_class == "1")
-  } else {
-    pred_tst_prob <- NULL
-    pred_tst_class <- NULL
-  }
-  
-  # Store model info (k value used)
   mod <- list(k = k_opt, train_data = t(trn_set), train_labels = y_trn)
   
-  return(list(mod=mod, pred_trn_prob=pred_trn_prob, pred_tst_prob=pred_tst_prob,
-              pred_trn_class=pred_trn_class, pred_tst_class=pred_tst_class))
+  return(list(mod=mod, pred_trn_prob=pred_trn_prob, pred_tst_prob=NULL,
+              pred_trn_class=pred_trn_class, pred_tst_class=NULL))
 }
 
-# XGBoost
-predXGBoost_pp <- function(trn_set, tst_set=NULL, y_trn){
+predXGBoost_pp <- function(trn_set, y_trn){
   library(xgboost, quietly = TRUE)
   
-  # Prepare data - ensure labels are 0/1
-  y_numeric <- as.numeric(as.factor(y_trn)) - 1  # Convert to 0/1 regardless of input format
+  y_numeric <- as.numeric(as.factor(y_trn)) - 1
   train_matrix <- xgb.DMatrix(data = t(trn_set), label = y_numeric)
   
-  # Parameters for binary classification
   params <- list(
     objective = "binary:logistic",
     eval_metric = "logloss",
@@ -706,13 +449,10 @@ predXGBoost_pp <- function(trn_set, tst_set=NULL, y_trn){
     verbose = 0
   )
   
-  # Adjust number of rounds based on dataset size
   n_samples <- ncol(trn_set)
   nrounds <- if(n_samples < 50) 50 else if(n_samples < 200) 100 else 200
   
-  # Train model with early stopping if enough samples
   if(n_samples >= 20) {
-    # Use cross-validation to determine optimal rounds
     cv_result <- xgb.cv(
       params = params,
       data = train_matrix,
@@ -722,11 +462,9 @@ predXGBoost_pp <- function(trn_set, tst_set=NULL, y_trn){
       verbose = 0,
       showsd = FALSE
     )
-    # Check if best_iteration exists and is valid
     if(!is.null(cv_result$best_iteration) && length(cv_result$best_iteration) > 0 && !is.na(cv_result$best_iteration)) {
       best_nrounds <- cv_result$best_iteration
     } else {
-      # Fallback: use the iteration with minimum test error
       if(!is.null(cv_result$evaluation_log) && nrow(cv_result$evaluation_log) > 0) {
         best_nrounds <- which.min(cv_result$evaluation_log$test_logloss_mean)
       } else {
@@ -737,30 +475,13 @@ predXGBoost_pp <- function(trn_set, tst_set=NULL, y_trn){
     best_nrounds <- min(30, nrounds)
   }
   
-  # Train final model
-  mod <- xgb.train(
-    params = params,
-    data = train_matrix,
-    nrounds = best_nrounds,
-    verbose = 0
-  )
+  mod <- xgb.train(params = params, data = train_matrix, nrounds = best_nrounds, verbose = 0)
   
-  # Training predictions
   pred_trn_prob <- predict(mod, train_matrix)
   pred_trn_class <- as.character(as.numeric(pred_trn_prob >= 0.5))
   
-  # Test predictions
-  if(!is.null(tst_set)) {
-    test_matrix <- xgb.DMatrix(data = t(tst_set))
-    pred_tst_prob <- predict(mod, test_matrix)
-    pred_tst_class <- as.character(as.numeric(pred_tst_prob >= 0.5))
-  } else {
-    pred_tst_prob <- NULL
-    pred_tst_class <- NULL
-  }
-  
-  return(list(mod=mod, pred_trn_prob=pred_trn_prob, pred_tst_prob=pred_tst_prob,
-              pred_trn_class=pred_trn_class, pred_tst_class=pred_tst_class))
+  return(list(mod=mod, pred_trn_prob=pred_trn_prob, pred_tst_prob=NULL,
+              pred_trn_class=pred_trn_class, pred_tst_class=NULL))
 }
 
 predWrapper <- function(mod, tst_set, function_name){
