@@ -13,86 +13,11 @@ wildcard_constraints:
     seed=r"\d+",
     n_datasets=r"\d+",
     test_study=r"[a-zA-Z0-9_]+",  # Study names like GSE37250_SA, USA, India
-    mean=r"[\d\.\-]+",          # Pending, might fix SyntaxWarning: invalid escape sequence
+    mean=r"[\d\.\-]+", 
     variance=r"[\d\.]+",        # Matches numbers and dots
     classifier=r"[a-zA-Z0-9]+", # Assumes no underscores in classifier names
-    adjuster=r"[a-zA-Z0-9]+"    # Assumes no underscores in adjuster names
+    adjuster=r"[a-zA-Z0-9_]+"    # Underscores allowed in adjuster names
 
-
-# --- Error Reporting ---
-import os
-from pathlib import Path
-
-def check_for_failures():
-    """Check for jobs that have logs but no outputs"""
-    failures = []
-    
-    # Check classify_adjusters (now uses test_study instead of seed)
-    log_dir = Path(OUTPUT_FOLDER) / "logs" / "classify_adjusters"
-    result_dir = Path(OUTPUT_FOLDER) / "results" / "adjusters" / "individual"
-    
-    if log_dir.exists():
-        for log_file in log_dir.glob("*.log"):
-            expected_output = result_dir / f"{log_file.stem}.csv"
-            if not expected_output.exists():
-                failures.append({
-                    "log": str(log_file),
-                    "expected_output": str(expected_output),
-                    "rule": "classify_adjusters"
-                })
-    
-    # Check classify_batch_effects (still uses seed for simulation)
-    log_dir = Path(OUTPUT_FOLDER) / "logs" / "classify_batch_effects"
-    result_dir = Path(OUTPUT_FOLDER) / "results" / "batch_effects" / "individual"
-    
-    if log_dir.exists():
-        for log_file in log_dir.glob("*.log"):
-            expected_output = result_dir / f"{log_file.stem}.csv"
-            if not expected_output.exists():
-                failures.append({
-                    "log": str(log_file),
-                    "expected_output": str(expected_output),
-                    "rule": "classify_batch_effects"
-                })
-    
-    return failures
-
-onsuccess:
-    failures = check_for_failures()
-    if failures:
-        report_file = OUTPUT_FOLDER + "/FAILED_JOBS.txt"
-        with open(report_file, "w") as f:
-            f.write(f"Snakemake Failure Report\n")
-            f.write(f"{'='*80}\n")
-            f.write(f"Found {len(failures)} failed jobs\n\n")
-            
-            # Group by rule
-            by_rule = {}
-            for fail in failures:
-                rule = fail['rule']
-                if rule not in by_rule:
-                    by_rule[rule] = []
-                by_rule[rule].append(fail)
-            
-            for rule, fails in by_rule.items():
-                f.write(f"\n{rule}: {len(fails)} failures\n")
-                f.write(f"{'-'*80}\n")
-                for fail in fails[:20]:  # Show first 20
-                    f.write(f"  Log: {fail['log']}\n")
-                if len(fails) > 20:
-                    f.write(f"  ... and {len(fails) - 20} more\n")
-            
-            f.write(f"\n{'='*80}\n")
-            f.write(f"To see detailed error messages, run:\n")
-            f.write(f"  python3 scripts/evaluations/book_chapter/check_failures.py\n")
-        
-        print(f"\n⚠️  WARNING: {len(failures)} jobs failed. See {report_file} for details.")
-        print(f"    Run: python3 scripts/evaluations/book_chapter/check_failures.py\n")
-    else:
-        print("\n✓ All jobs completed successfully!\n")
-
-onerror:
-    print("\n❌ Snakemake encountered an error during execution.\n")
 
 # --- Final Target ---
 # Define all available studies
@@ -113,9 +38,9 @@ for n in config["num_datasets"]:
 
 rule all:
     input:
-        # OUTPUT_FOLDER + "/batch_on_classifiers.png",
-        OUTPUT_FOLDER + "/adjusters_on_classifiers.png",
-        VIZ_TARGETS
+        # batch_fig=OUTPUT_FOLDER + "/batch_on_classifiers.png",
+        adjuster_fig=OUTPUT_FOLDER + "/adjusters_on_classifiers.png",
+        viz_figs=VIZ_TARGETS
 
 
 ## Figure 1 Pipeline: How does each classifier respond to batch effects?
@@ -135,7 +60,7 @@ rule make_fig1:
         runtime=15
     shell:
         """
-        Rscript {input.script} -i {input.data} -o {output} > {log} 2>&1
+        Rscript {input.script} -i {input.data} -o {output} &> {log}
         """
 
 
@@ -162,7 +87,7 @@ rule aggregate_batch_effects:
         input_dir=OUTPUT_FOLDER + "/results/batch_effects/individual"
     shell:
         """
-        Rscript {input.script} --input-dir {params.input_dir} -o {output} > {log} 2>&1
+        Rscript {input.script} --input-dir {params.input_dir} -o {output} &> {log}
         """
 
 
@@ -185,7 +110,7 @@ rule classify_batch_effects:
         """
         Rscript {input.script} -o {output} \
             --mean {wildcards.mean} --var {wildcards.variance} --classifier {wildcards.classifier} --seed {wildcards.seed} \
-            > {log} 2>&1
+            &> {log}
         """
 
 
@@ -206,7 +131,7 @@ rule make_fig2:
         runtime=10
     shell:
         """
-        Rscript {input.script} -i {input.data} -o {output} > {log} 2>&1
+        Rscript {input.script} -i {input.data} -o {output} &> {log}
         """
 
 
@@ -242,7 +167,7 @@ rule aggregate_adjusters:
         """
         Rscript {input.script} \
             --input-dir {params.input_dir} -o {output} \
-            > {log} 2>&1
+            &> {log}
         """
 
 
@@ -263,9 +188,14 @@ rule classify_adjusters:
         runtime=5
     shell:
         """
+        set -o pipefail
+        
         Rscript {input.script} -o {output} \
-            --adjuster {wildcards.adjuster} --classifier {wildcards.classifier} --num-datasets {wildcards.n_datasets} --test-study {wildcards.test_study} \
-            > {log} 2>&1
+            --adjuster {wildcards.adjuster} \
+            --classifier {wildcards.classifier} \
+            --num-datasets {wildcards.n_datasets} \
+            --test-study {wildcards.test_study} \
+            |& tee {log}
         """
 
 
@@ -297,7 +227,7 @@ rule visualize_batch_adjustment:
             --test-study {wildcards.test_study} \
             --output-dir {params.output_dir} \
             --reduce 0 \
-            > {log} 2>&1
+            &> {log}
         """
 
 

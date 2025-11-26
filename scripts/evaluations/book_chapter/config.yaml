@@ -1,7 +1,7 @@
 # config.yaml
 
 # Base folder for all final outputs, logs, and intermediate results
-output_folder: "/grphome/grp_batch_effects/outputs/book_chapter"
+output_folder: "/home/phr23/confounded_analysis/grp_batch_effects/outputs/book_chapter"
 
 # Folder containing input data
 data_folder: "data"
@@ -25,6 +25,7 @@ classifiers:
 adjusters:
   - "unadjusted"
   - "combat"
+  - "combat_sup"
   - "mnn"
 
 split_seed_start: 42

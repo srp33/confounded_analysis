@@ -19,7 +19,7 @@ suppressMessages(suppressWarnings({
 parser <- ArgumentParser(description = "Visualize batch adjustment effects using PCA, LDA, and UMAP")
 
 parser$add_argument("--adjuster", type = "character", required = TRUE,
-                   help = "Batch correction method: unadjusted, combat, or mnn")
+                   help = "Batch correction method: unadjusted, combat, combat_sup, or mnn")
 parser$add_argument("--num-datasets", type = "integer", required = TRUE,
                    help = "Number of datasets to include: 3, 4, 5, or 6")
 parser$add_argument("--test-study", type = "character", required = TRUE,
@@ -32,7 +32,7 @@ parser$add_argument("--reduce", type = "integer", default = 0,
 args <- parser$parse_args()
 
 # Validate arguments
-valid_adjusters <- c("unadjusted", "combat", "mnn")
+valid_adjusters <- c("unadjusted", "combat", "combat_sup", "mnn")
 valid_num_datasets <- c(3, 4, 5, 6)
 
 if (!args$adjuster %in% valid_adjusters) {
@@ -193,23 +193,45 @@ apply_batch_correction <- function(dat, batch, group, dat_test, method) {
   if (method == "combat") {
     library(sva, quietly = TRUE)
     
-    # ComBat correction on training data only (no data leakage)
+    # ComBat correction without labels (unsupervised)
+    # Step 1: Correct batch effects within training data without using labels
+    dat_corrected <- ComBat(dat, batch=batch, mod=NULL)
+    
+    # Step 2: Adjust test data to match corrected training distribution
+    combined_dat <- cbind(dat_corrected, dat_test)
+    ref_batch_id <- 1
+    test_batch_id <- 2
+    combined_batch <- c(rep(ref_batch_id, ncol(dat_corrected)), 
+                       rep(test_batch_id, ncol(dat_test)))
+    
+    combat_combined <- ComBat(combined_dat, batch=combined_batch, 
+                             mod=NULL, ref.batch=ref_batch_id)
+    
+    dat_test_corrected <- combat_combined[, (ncol(dat_corrected) + 1):ncol(combat_combined)]
+    
+    return(list(
+      dat_corrected = dat_corrected,
+      dat_test_corrected = dat_test_corrected
+    ))
+  }
+  
+  if (method == "combat_sup") {
+    library(sva, quietly = TRUE)
+    
+    # ComBat correction with labels (supervised)
     # Step 1: Correct batch effects within training data while preserving biological signal
     dat_corrected <- ComBat(dat, batch=batch, mod=model.matrix(~group))
     
     # Step 2: Adjust test data to match corrected training distribution
-    # Use entire corrected training set as reference batch
     combined_dat <- cbind(dat_corrected, dat_test)
-    ref_batch_id <- 1  # Training data batch ID
-    test_batch_id <- 2  # Test data batch ID
+    ref_batch_id <- 1
+    test_batch_id <- 2
     combined_batch <- c(rep(ref_batch_id, ncol(dat_corrected)), 
                        rep(test_batch_id, ncol(dat_test)))
     
-    # Apply ComBat with training as reference (no mod matrix to avoid using test labels)
     combat_combined <- ComBat(combined_dat, batch=combined_batch, 
                              mod=NULL, ref.batch=ref_batch_id)
     
-    # Extract corrected test data (training data unchanged as it's the reference)
     dat_test_corrected <- combat_combined[, (ncol(dat_corrected) + 1):ncol(combat_combined)]
     
     return(list(

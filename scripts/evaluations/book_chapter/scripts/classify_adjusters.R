@@ -11,10 +11,11 @@ suppressMessages(suppressWarnings({
 
 # Load required libraries
 suppressMessages(suppressWarnings({
-  required_packages <- c("glmnet", "SummarizedExperiment", "sva", "DESeq2", "ROCR", "ggplot2", 
-                        "gridExtra", "reshape2", "dplyr", "purrr", "nnls", "batchelor",
-                        "argparse", "class", "xgboost",
-                        "reticulate") 
+  # REMOVE "reticulate" from this list
+  required_packages <- c("glmnet", "SummarizedExperiment", "sva", "DESeq2", 
+                        "ROCR", "ggplot2", "gridExtra", "reshape2", 
+                        "dplyr", "purrr", "nnls", "batchelor",
+                        "argparse", "class", "xgboost")
   sapply(required_packages, require, character.only=TRUE, quietly=TRUE)
 }))
 
@@ -28,6 +29,9 @@ np_py <- NULL
 
 import_reticulate <- function() {
   tryCatch({
+    # LOAD THE LIBRARY HERE
+    library(reticulate) 
+    
     cat("Attempting to import Python modules for RVC...\n")
     rvm_module <- import("sklearn_rvm")
     RVC_py <<- rvm_module$em_rvm$EMRVC
@@ -495,7 +499,7 @@ main_analysis_function <- function() {
       # Train model
       cat(sprintf("Training %s classifier...\n", classifier_type))
       trained_model <- trainPipe(train_set = train_data, train_label = train_labels, 
-                                test_set = NULL, lfit = learner_fit)
+                                lfit = learner_fit)
       
       # Generate predictions on test set
       cat(sprintf("Generating predictions...\n"))
@@ -682,6 +686,8 @@ main_analysis_function <- function() {
 # EXECUTE MAIN JOB
 # ====================================================================
 
-# Run the main job with error handling
-# Suppress automatic printing of return value
-invisible(main_job_wrapper())
+# Store result (or NULL if it crashed inside wrapper, though wrapper handles that)
+res <- main_job_wrapper()
+
+# Force a clean exit to signal to Snakemake that we are happy
+quit(save = "no", status = 0)
