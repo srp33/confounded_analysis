@@ -47,7 +47,7 @@ cat("Data dimensions:", nrow(data), "rows,", ncol(data), "columns\n")
 cat("Column names:", paste(colnames(data), collapse = ", "), "\n")
 
 # Validate expected columns for adjusters data
-expected_cols <- c("adjuster", "classifier", "n_datasets", "seed", "metric", "value")
+expected_cols <- c("adjuster", "classifier", "n_datasets", "test_study", "metric", "value")
 missing_cols <- setdiff(expected_cols, colnames(data))
 if (length(missing_cols) > 0) {
   stop("Missing required columns: ", paste(missing_cols, collapse = ", "))
@@ -81,9 +81,22 @@ mxe_data$classifier_label <- factor(mxe_data$classifier,
   levels = c("logistic", "elasticnet", "svm", "rf", "knn", "xgboost", "nnet", "rvc"),
   labels = c("Logistic", "ElasticNet", "SVM", "Random Forest", "KNN", "XGBoost", "Neural Net", "RVC"))
 
+# Dynamically determine adjuster levels from the data
+unique_adjusters <- sort(unique(mxe_data$adjuster))
+cat("Unique adjusters in data:", paste(unique_adjusters, collapse = ", "), "\n")
+
+# Create labels with proper capitalization
+adjuster_labels <- sapply(unique_adjusters, function(x) {
+  if (x == "unadjusted") return("Unadjusted")
+  if (x == "combat") return("ComBat")
+  if (x == "combat_sup") return("ComBat-Sup")
+  if (x == "mnn") return("MNN")
+  return(tools::toTitleCase(x))
+})
+
 mxe_data$adjuster_label <- factor(mxe_data$adjuster,
-  levels = c("unadjusted", "combat", "mnn"),
-  labels = c("Unadjusted", "ComBat", "MNN"))
+  levels = unique_adjusters,
+  labels = adjuster_labels)
 
 mxe_data$adjuster_type <- "Batch Correction"
 mxe_data$adjuster_type[mxe_data$adjuster == "unadjusted"] <- "Original Data"
@@ -111,9 +124,9 @@ sumstats <- mxe_data %>%
     .groups = "drop"
   )
 
-# Calculate frequency of best method for annotations (simplified version)
+# Calculate frequency of best method for annotations
 freq_data <- mxe_data %>%
-  group_by(classifier_label, dataset_label, seed) %>%
+  group_by(classifier_label, dataset_label, test_study) %>%
   summarise(
     best_adjuster = adjuster_label[which.max(value)],
     .groups = "drop"
@@ -187,7 +200,7 @@ for (classifier in classifiers_with_data) {
   plot_data$dataset_label <- factor(plot_data$dataset_label, 
                                    levels = c("3 studies", "4 studies", "5 studies", "6 studies"))
   plot_data$adjuster_label <- factor(plot_data$adjuster_label,
-                                    levels = c("Unadjusted", "ComBat", "MNN"))
+                                    levels = adjuster_labels)
   
   # Debug plot_data for this classifier
   cat("Classifier:", classifier, "\n")

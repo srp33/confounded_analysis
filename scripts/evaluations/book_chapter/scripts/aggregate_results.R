@@ -172,32 +172,47 @@ validate_job_completeness <- function(results_data, input_dir, verbose = FALSE) 
     expected_adjusters <- c("unadjusted", "combat", "mnn")
     expected_classifiers <- c("logistic", "elasticnet", "svm", "rf", "knn", "xgboost", "nn", "rvc")
     expected_n_datasets <- c(3, 4, 5, 6)
-    expected_seeds <- 42:141  # 100 seeds starting from 42
+    # For adjusters, we use test_study instead of seed
+    all_studies <- c("GSE37250_SA", "USA", "India", "GSE37250_M", "Africa", "GSE39941_M")
+    
+    # Build expected test studies for each n_datasets
+    expected_test_studies <- list()
+    for (n in expected_n_datasets) {
+      expected_test_studies[[as.character(n)]] <- all_studies[1:n]
+    }
     
     # Calculate expected total jobs
-    expected_total <- length(expected_adjusters) * length(expected_classifiers) * 
-                     length(expected_n_datasets) * length(expected_seeds)
+    expected_total <- 0
+    for (n in expected_n_datasets) {
+      expected_total <- expected_total + 
+        length(expected_adjusters) * length(expected_classifiers) * length(expected_test_studies[[as.character(n)]])
+    }
     
     if (verbose) {
       cat("Expected parameters:\n")
       cat("  Adjusters:", length(expected_adjusters), "\n")
       cat("  Classifiers:", length(expected_classifiers), "\n")
       cat("  N_datasets:", length(expected_n_datasets), "\n")
-      cat("  Seeds:", length(expected_seeds), "\n")
       cat("  Total expected jobs:", expected_total, "\n")
     }
     
     # Check actual parameter combinations
-    actual_combinations <- unique(results_data[, c("adjuster", "classifier", "n_datasets", "seed")])
+    actual_combinations <- unique(results_data[, c("adjuster", "classifier", "n_datasets", "test_study")])
     
     # Create expected combinations for comparison
-    expected_combinations <- expand.grid(
-      adjuster = expected_adjusters,
-      classifier = expected_classifiers,
-      n_datasets = expected_n_datasets,
-      seed = expected_seeds,
-      stringsAsFactors = FALSE
-    )
+    expected_combinations <- data.frame()
+    for (n in expected_n_datasets) {
+      for (test_study in expected_test_studies[[as.character(n)]]) {
+        temp <- expand.grid(
+          adjuster = expected_adjusters,
+          classifier = expected_classifiers,
+          n_datasets = n,
+          test_study = test_study,
+          stringsAsFactors = FALSE
+        )
+        expected_combinations <- rbind(expected_combinations, temp)
+      }
+    }
     
   } else {
     cat("Warning: Unknown job type based on columns:", paste(columns, collapse = ", "), "\n")
@@ -236,9 +251,9 @@ validate_job_completeness <- function(results_data, input_dir, verbose = FALSE) 
                      sample_missing$classifier[i], sample_missing$mean[i], 
                      sample_missing$variance[i], sample_missing$seed[i]))
         } else if (job_type == "adjusters") {
-          cat(sprintf("  %s_%s_n%s_seed%s\n", 
+          cat(sprintf("  %s_%s_n%s_test%s\n", 
                      sample_missing$adjuster[i], sample_missing$classifier[i], 
-                     sample_missing$n_datasets[i], sample_missing$seed[i]))
+                     sample_missing$n_datasets[i], sample_missing$test_study[i]))
         }
       }
       if (nrow(missing_combinations) > 10) {
