@@ -1,0 +1,115 @@
+configfile: "config.yaml"
+
+OUTPUT_FOLDER = config["output_folder"]
+DATA_FOLDER = config["data_folder"]
+
+rule all: 
+    input: 
+        OUTPUT_FOLDER + "/classify_all_figures/absolute_scaling_MCC.png", 
+        OUTPUT_FOLDER + "/classify_all_figures/absolute_scaling_ROC AUC.png",
+        OUTPUT_FOLDER + "/classify_all_figures/scaling_MCC.png",
+        OUTPUT_FOLDER + "/classify_all_figures/scaling_ROC AUC.png"
+
+rule plot_performance:
+    input:
+        aggregated_metrics_file=OUTPUT_FOLDER + "/classify_er_all/all_metrics.csv"
+    output: 
+        OUTPUT_FOLDER + "/classify_all_figures/absolute_scaling_MCC.png", 
+        OUTPUT_FOLDER + "/classify_all_figures/absolute_scaling_ROC AUC.png",
+        OUTPUT_FOLDER + "/classify_all_figures/scaling_MCC.png",
+        OUTPUT_FOLDER + "/classify_all_figures/scaling_ROC AUC.png"
+    log: 
+        "log/plot_performance.log"
+    shell:
+        """
+            Rscript plot_performance.R &> {log}
+        """
+
+rule aggregate_metrics:
+    input: 
+        metrics_data=expand(
+            OUTPUT_FOLDER + "/metrics/{adjuster}/{adjuster}_{k}studies_test_{test_source}_metrics.csv",
+            adjuster=config["adjuster"],
+            k=list(range(1,16)),
+            test_source=config["dataset_ids"]
+        ),
+        metrics_dir=OUTPUT_FOLDER + "/metrics"
+    output:
+        output_path=OUTPUT_FOLDER + "/classify_er_all/all_metrics.csv"
+    log: 
+        "log/aggregate.log"
+    shell:
+        """
+        python aggregate_metrics.py --metrics-dir {metrics_dir} --output {output_path} &> {log}
+        """
+
+rule classify:
+    input:
+        adjusted_csv = DATA_FOLDER + "/adjusted_data/{adjuster}/{adjuster}_{k}studies_test_{test_source}.csv"
+    output: 
+        OUTPUT_FOLDER + "/metrics/{adjuster}/{adjuster}_{k}studies_test_{test_source}_metrics.csv"
+    log: 
+        "log/classify/{adjuster}_{k}_{test_source}_classify.log"
+    params:
+        output_dir = OUTPUT_FOLDER + "/metrics"
+    shell:
+        """
+        python run_classifier.py {input.adjusted_csv} {params.output_dir} &> {log}
+
+        """
+
+rule adjust: 
+    input: 
+        DATA_FOLDER + "/subset_data/{k}studies_test_{test_source}.csv"
+    output: 
+        DATA_FOLDER + "/adjusted_data/{adjuster}/{adjuster}_{k}studies_test_{test_source}.csv"
+    log: 
+        "log/adjust/{adjuster}_{k}_{test_source}_adjust.log"
+    shell:
+        """
+        Rscript run_scaling_experiment.R {wildcards.adjuster} {wildcards.k} &> {log}
+        """
+
+rule subset:
+    input:
+        combined_file = DATA_FOLDER + "/all_combined/all_combined.csv",
+        order_file = DATA_FOLDER + "/all_combined/gse_order_files/{test_source}_order.csv"
+    output:
+        DATA_FOLDER + "/subset_data/{k}studies_test_{test_source}.csv"
+    log: 
+        "log/subset/{k}_{test_source}_subset.log"
+    shell:
+        """
+        Rscript subset_prep.R \
+        --input {input.combined_file} \
+        --test {wildcards.test_source} \
+        --order {input.order_file} \
+        --k {wildcards.k} \
+        --output {output} \
+        &> {log}
+        """
+
+rule make_order_files:
+    input: 
+        combined_file = DATA_FOLDER + "/all_combined/all_combined.csv"
+    output: 
+        order_file = DATA_FOLDER + "/all_combined/gse_order_files/{test_source}_order.csv"
+    log: 
+        "log/order/{test_source}_order.log"
+    shell:
+        """
+        python make_order_files.py {input.combined_file} {output} &> {log}
+        
+        """
+
+rule combine:
+    input: 
+        DATA_FOLDER + "/gold"
+    output:
+        DATA_FOLDER + "/all_combined/all_combined.csv"
+    log: 
+        "log/combine.log"
+    shell:
+        """
+        python combine_all.py --input-dir {input} --output-file {output} &> {log}
+        """

@@ -106,7 +106,7 @@ for (test_source in sources) {
     cat("  Preparing to write CSV: ", nrow(adjusted_df), "rows x", ncol(adjusted_df), "columns\n")
     cat("  Column names (first few):", paste(head(colnames(adjusted_df), 5), collapse = ", "), "\n")
 
-    out_path <- file.path(out_dir, sprintf("subset%dstudies_test_%s.csv", subset_index, test_source))
+    out_path <- file.path(out_dir, sprintf("%dstudies_test_%s.csv", subset_index, test_source))
     write_csv(adjusted_df, out_path)
     cat("Saved adjusted dataset to:", out_path, "\n")
   }, error = function(e) {
