@@ -185,7 +185,7 @@ rule classify_adjusters:
     threads: 1
     resources:
         mem_mb=2000,
-        runtime=5
+        runtime=12
     shell:
         """
         set -o pipefail
@@ -246,7 +246,7 @@ rule create_visualization_grid:
     threads: 1
     resources:
         mem_mb=2000,
-        runtime=5
+        runtime=8
     params:
         input_dir=OUTPUT_FOLDER + "/visualizations/unreduced/individual"
     shell:
