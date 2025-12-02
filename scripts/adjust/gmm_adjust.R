@@ -268,8 +268,7 @@ bimodal_normalize <- function(data, weight_alpha=NULL, variance_alpha=NULL, mean
     if (.Platform$OS.type == "unix") {
       # Prefer fork clusters on Unix systems (no port conflicts)
       cl <- tryCatch({
-        parallel::makeForkCluster(num_cores)
-        if (debug) cat("Fork cluster created successfully\n")
+        if (debug) cat("Creating fork cluster\n")
         parallel::makeForkCluster(num_cores)
       }, error = function(e) {
         if (debug) cat("Fork cluster failed, using PSOCK with retry:", e$message, "\n")
@@ -290,7 +289,7 @@ bimodal_normalize <- function(data, weight_alpha=NULL, variance_alpha=NULL, mean
         }
       })
     } else {
-      if (debug) cat("Fork cluster successful")
+      if (debug) cat("Creating PSOCK cluster\n")
       # Try to create PSOCK cluster with port retry logic
       cl <- NULL
       max_attempts <- 5
@@ -310,11 +309,14 @@ bimodal_normalize <- function(data, weight_alpha=NULL, variance_alpha=NULL, mean
     registerDoParallel(cl)
     on.exit(stopCluster(cl), add = TRUE)
     
+    # Explicitly export all required functions to avoid namespace collisions
     results <- foreach(i = seq_along(gene_names), .combine = cbind, 
-                      .packages = c("stats"), .errorhandling = 'pass') %dopar% {
+                      .packages = c("stats"),
+                      .export = c("get_gene_gmm_transform", "simple_fallback", "GaussianMixture1D",
+                                "fit.GaussianMixture1D", "normal_pdf"),
+                      .errorhandling = 'remove') %dopar% {
       gene_exp <- data[, i]
       if (all(is.na(gene_exp)) || all(gene_exp == gene_exp[1], na.rm = TRUE)) {
-        print(gene_exp)
         return(gene_exp)
       }
       
@@ -322,7 +324,6 @@ bimodal_normalize <- function(data, weight_alpha=NULL, variance_alpha=NULL, mean
         get_gene_gmm_transform(gene_exp, weight_alpha, variance_alpha, mean_mean_zero, mean1_zero, 
                               unit_var, means_at_1, diff_exp, output_counts, log_transform)
       }, error = function(e) {
-        if (debug) message("Doing simple fallback")
         simple_fallback(gene_exp)
       })
     }

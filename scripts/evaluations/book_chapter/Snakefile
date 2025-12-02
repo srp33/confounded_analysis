@@ -38,7 +38,7 @@ for n in config["num_datasets"]:
 
 rule all:
     input:
-        batch_fig=OUTPUT_FOLDER + "/batch_on_classifiers.png",
+        # batch_fig=OUTPUT_FOLDER + "/batch_on_classifiers.png",
         adjuster_fig=OUTPUT_FOLDER + "/adjusters_on_classifiers.png",
         viz_figs=VIZ_TARGETS
 
@@ -51,7 +51,7 @@ rule make_fig1:
         data=OUTPUT_FOLDER + "/batch_on_classifiers.csv",
         script=SCRIPTS_FOLDER + "/plot_batch_on_classifiers.R"
     output:
-        OUTPUT_FOLDER + "/batch_on_classifiers.png"
+        [OUTPUT_FOLDER + "/batch_on_classifiers.png"]
     log:
         OUTPUT_FOLDER + "/logs/plot_batch_on_classifiers.log"
     threads: 1
@@ -105,7 +105,7 @@ rule classify_batch_effects:
     threads: 1
     resources:
         mem_mb=2000,
-        runtime=lambda wildcards, attempt: 15 * attempt
+        runtime=lambda wildcards, attempt: 20 * attempt
     shell:
         """
         Rscript {input.script} -o {output} \
@@ -122,7 +122,10 @@ rule make_fig2:
         data=OUTPUT_FOLDER + "/adjusters_on_classifiers.csv",
         script=SCRIPTS_FOLDER + "/plot_adjusters_on_classifiers.R"
     output:
-        OUTPUT_FOLDER + "/adjusters_on_classifiers.png"
+        main=OUTPUT_FOLDER + "/adjusters_on_classifiers.png",
+        diff=OUTPUT_FOLDER + "/adjusters_on_classifiers_differences.png",
+        relative=OUTPUT_FOLDER + "/adjusters_on_classifiers_relative.png",
+        stats=OUTPUT_FOLDER + "/adjusters_on_classifiers_statistics.csv"
     log:
         OUTPUT_FOLDER + "/logs/plot_adjusters_on_classifiers.log"
     threads: 1
@@ -133,7 +136,7 @@ rule make_fig2:
         adjusters=",".join(config.get("viz_adjusters", config["adjusters"]))
     shell:
         """
-        Rscript {input.script} -i {input.data} -o {output} --adjusters {params.adjusters} &> {log}
+        Rscript {input.script} -i {input.data} -o {output.main} --adjusters {params.adjusters} &> {log}
         """
 
 

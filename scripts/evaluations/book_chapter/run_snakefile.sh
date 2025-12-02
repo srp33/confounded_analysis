@@ -30,12 +30,18 @@ pixi run snakemake -s $BOOK_CHAPTER_DIR/Snakefile \
     --executor slurm \
     --default-resources slurm_account=srp33 slurm_partition="(auto)" \
     --jobs 300 \
-    --group-components batch_real_group=20 batch_simulation_group=20 \
+    --group-components batch_real_group=20 batch_simulation_group=3 \
     --resources mem_mb=100000 runtime=4320 \
     --max-jobs-per-second 20 \
     --max-status-checks-per-second 10 \
     --latency-wait 120 \
-    --detailed-summary \
+    --quiet \
     --rerun-incomplete \
     --retries 2 \
     --keep-going
+
+pixi run snakemake -s $BOOK_CHAPTER_DIR/Snakefile \
+    --configfile $BOOK_CHAPTER_DIR/config.yaml \
+    --cores 1 \
+    --detailed-summary \
+    &> snake_summary.log
