@@ -91,32 +91,33 @@ def update_variance_coupled(data, means, responsibilities, Nk, variance_other, a
 
 def fit_gmm_batch(data_chunk, weight_alpha=None, variance_alpha=None, max_iter=100, tol=1e-4):
     """
-    Fit GMM to multiple genes simultaneously (vectorized).
-    
-    Parameters:
-    -----------
-    data_chunk : ndarray [n_genes × n_samples]
-    weight_alpha : float, Dirichlet prior for weights
-    variance_alpha : float, Inverse-Gamma prior for variances
-    
-    Returns:
-    --------
-    dict with 'means', 'variances', 'weights' as [n_genes × 2] arrays
+    Fit GMM to multiple genes simultaneously (Fully Vectorized - No Loops).
     """
     n_genes, n_samples = data_chunk.shape
     K = 2
     eps = 1e-12
     
     # Initialize parameters [n_genes × K]
-    means = np.zeros((n_genes, K))
-    variances = np.zeros((n_genes, K))
     weights = np.full((n_genes, K), 0.5)
     
-    # Initialize means at quantiles
-    for g in range(n_genes):
-        q = np.percentile(data_chunk[g, :], [25, 75])
-        means[g, :] = q
-        variances[g, :] = np.var(data_chunk[g, :]) + 1e-6
+    # --- VECTORIZED INITIALIZATION (Replaces Loop) ---
+    # Use Mean +/- 0.5 * SD instead of sorting for quantiles
+    # This is O(N) instead of O(N log N) and fully vectorized
+    means = np.zeros((n_genes, K))
+    variances = np.zeros((n_genes, K))
+    
+    row_means = np.nanmean(data_chunk, axis=1)
+    row_vars = np.nanvar(data_chunk, axis=1)
+    row_sds = np.sqrt(row_vars)
+    
+    # Initialize components split around the mean
+    means[:, 0] = row_means - 0.5 * row_sds
+    means[:, 1] = row_means + 0.5 * row_sds
+    
+    # Clamp variances to avoid singularities
+    variances[:, 0] = np.maximum(row_vars, 1e-6)
+    variances[:, 1] = variances[:, 0].copy()
+    # ------------------------------------------------
     
     # Set priors
     if weight_alpha is None:
@@ -134,22 +135,19 @@ def fit_gmm_batch(data_chunk, weight_alpha=None, variance_alpha=None, max_iter=1
         if len(active_genes) == 0:
             break
         
-        # E-step: Compute responsibilities using helper function
+        # E-step
         data_active = data_chunk[active_genes, :]
-        n_active = len(active_genes)
         
-        # Compute PDFs for both components
         pdf_k1 = compute_gaussian_pdf(data_active, means[active_genes, 0:1], 
                                       variances[active_genes, 0:1], weights[active_genes, 0:1])
         pdf_k2 = compute_gaussian_pdf(data_active, means[active_genes, 1:2], 
                                       variances[active_genes, 1:2], weights[active_genes, 1:2])
         
-        # Normalize to get responsibilities [n_active × n_samples]
         pdf_sums = pdf_k1 + pdf_k2 + eps
         resp_k1 = pdf_k1 / pdf_sums
         resp_k2 = pdf_k2 / pdf_sums
         
-        # M-step: update parameters
+        # M-step
         Nk1 = resp_k1.sum(axis=1)
         Nk2 = resp_k2.sum(axis=1)
         
@@ -160,13 +158,10 @@ def fit_gmm_batch(data_chunk, weight_alpha=None, variance_alpha=None, max_iter=1
         weights[active_genes, 1] = (Nk2 + weight_alpha) / (n_samples + K * weight_alpha)
         
         # Update means
-        weighted_sums1 = (data_active * resp_k1).sum(axis=1)
-        means[active_genes, 0] = weighted_sums1 / (Nk1 + eps)
+        means[active_genes, 0] = (data_active * resp_k1).sum(axis=1) / (Nk1 + eps)
+        means[active_genes, 1] = (data_active * resp_k2).sum(axis=1) / (Nk2 + eps)
         
-        weighted_sums2 = (data_active * resp_k2).sum(axis=1)
-        means[active_genes, 1] = weighted_sums2 / (Nk2 + eps)
-        
-        # Update variances with coupling
+        # Update variances
         variances[active_genes, 0] = update_variance_coupled(
             data_active, means[active_genes, 0:1], resp_k1, Nk1, variances_old[:, 1], alpha_v
         )
@@ -174,14 +169,26 @@ def fit_gmm_batch(data_chunk, weight_alpha=None, variance_alpha=None, max_iter=1
             data_active, means[active_genes, 1:2], resp_k2, Nk2, variances_old[:, 0], alpha_v
         )
         
-        # Convergence check
-        log_likelihoods = np.log(pdf_sums).sum(axis=1)
-        for i, g in enumerate(active_genes):
-            if abs(log_likelihoods[i] - log_likelihood_old[g]) < tol:
-                converged[g] = True
-            log_likelihood_old[g] = log_likelihoods[i]
+        # --- VECTORIZED CONVERGENCE CHECK (Replaces Loop) ---
+        current_ll = np.log(pdf_sums).sum(axis=1)
         
-        active_genes = np.where(~converged)[0]
+        # Calculate diff for ALL active genes at once
+        delta = np.abs(current_ll - log_likelihood_old[active_genes])
+        
+        # Boolean mask of who converged this step
+        newly_converged = delta < tol
+        
+        # Update global state
+        # Map active indices back to global indices
+        converged_indices = active_genes[newly_converged]
+        converged[converged_indices] = True
+        
+        # Update history
+        log_likelihood_old[active_genes] = current_ll
+        
+        # Update active set
+        active_genes = active_genes[~newly_converged]
+        # ----------------------------------------------------
     
     return {'means': means, 'variances': variances, 'weights': weights}
 
@@ -264,11 +271,13 @@ def bimodal_normalize(data, weight_alpha=None, variance_alpha=None, mean_mean_ze
     n_genes, n_samples = data.shape
     bimodal_data = np.full((n_genes, n_samples), np.nan)
     
-    # Log transform once
+    # --- VECTORIZED LOG TRANSFORM (Replaces Loop) ---
     if log_transform:
-        for g in range(n_genes):
-            min_val = np.nanmin(data[g, :])
-            data[g, :] = np.log(data[g, :] - min_val + 1)
+        # Calculate min per row, keeping dimensions (n_genes, 1) for broadcasting
+        min_vals = np.nanmin(data, axis=1, keepdims=True)
+        # Broadcasting: (n_genes, n_samples) - (n_genes, 1)
+        data = np.log(data - min_vals + 1.0)
+    # ------------------------------------------------
     
     # Identify degenerate genes
     gene_vars = np.var(data, axis=1)
