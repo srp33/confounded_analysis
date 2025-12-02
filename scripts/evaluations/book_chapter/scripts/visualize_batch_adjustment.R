@@ -19,7 +19,7 @@ suppressMessages(suppressWarnings({
 parser <- ArgumentParser(description = "Visualize batch adjustment effects using PCA, LDA, and UMAP")
 
 parser$add_argument("--adjuster", type = "character", required = TRUE,
-                   help = "Batch correction method: unadjusted, combat, combat_sup, or mnn")
+                   help = "Batch correction method: unadjusted, combat, combat_mean, combat_sup, mnn, or mnn_centered")
 parser$add_argument("--num-datasets", type = "integer", required = TRUE,
                    help = "Number of datasets to include: 3, 4, 5, or 6")
 parser$add_argument("--test-study", type = "character", required = TRUE,
@@ -32,7 +32,7 @@ parser$add_argument("--reduce", type = "integer", default = 0,
 args <- parser$parse_args()
 
 # Validate arguments
-valid_adjusters <- c("unadjusted", "combat", "combat_sup", "mnn")
+valid_adjusters <- c("unadjusted", "combat", "combat_mean", "combat_sup", "mnn", "mnn_centered", "ruvr", "gmm")
 valid_num_datasets <- c(3, 4, 5, 6)
 
 if (!args$adjuster %in% valid_adjusters) {
@@ -215,6 +215,30 @@ apply_batch_correction <- function(dat, batch, group, dat_test, method) {
     ))
   }
   
+  if (method == "combat_mean") {
+    library(sva, quietly = TRUE)
+    
+    # ComBat correction with mean adjustment only (no variance adjustment)
+    dat_corrected <- ComBat(dat, batch=batch, mod=NULL, mean.only=TRUE)
+    
+    # Step 2: Adjust test data to match corrected training distribution
+    combined_dat <- cbind(dat_corrected, dat_test)
+    ref_batch_id <- 1
+    test_batch_id <- 2
+    combined_batch <- c(rep(ref_batch_id, ncol(dat_corrected)), 
+                       rep(test_batch_id, ncol(dat_test)))
+    
+    combat_combined <- ComBat(combined_dat, batch=combined_batch, 
+                             mod=NULL, ref.batch=ref_batch_id, mean.only=TRUE)
+    
+    dat_test_corrected <- combat_combined[, (ncol(dat_corrected) + 1):ncol(combat_combined)]
+    
+    return(list(
+      dat_corrected = dat_corrected,
+      dat_test_corrected = dat_test_corrected
+    ))
+  }
+  
   if (method == "combat_sup") {
     library(sva, quietly = TRUE)
     
@@ -244,7 +268,7 @@ apply_batch_correction <- function(dat, batch, group, dat_test, method) {
     library(batchelor, quietly = TRUE)
     library(SummarizedExperiment, quietly = TRUE)
     
-    # Combine data
+    # MNN without pre-centering
     combined_dat <- cbind(dat, dat_test)
     # Test set gets a unique batch ID
     test_id <- "TEST_SET"
@@ -274,40 +298,170 @@ apply_batch_correction <- function(dat, batch, group, dat_test, method) {
     ))
   }
   
+  if (method == "mnn_centered") {
+    library(batchelor, quietly = TRUE)
+    library(SummarizedExperiment, quietly = TRUE)
+    
+    # Pre-center each gene within each batch before MNN
+    cat("Pre-centering data for MNN...\n")
+    
+    # Center training data within each batch
+    dat_centered <- dat
+    for (b in unique(batch)) {
+      batch_idx <- batch == b
+      gene_means <- rowMeans(dat[, batch_idx, drop = FALSE])
+      dat_centered[, batch_idx] <- dat[, batch_idx] - gene_means
+    }
+    
+    # Center test data (as its own batch)
+    test_gene_means <- rowMeans(dat_test)
+    dat_test_centered <- dat_test - test_gene_means
+    
+    # Combine centered data
+    combined_dat <- cbind(dat_centered, dat_test_centered)
+    test_id <- "TEST_SET"
+    combined_batch <- c(batch, rep(test_id, ncol(dat_test)))
+    
+    # Determine merge order: training batches by size, test last
+    u_batches <- unique(batch)
+    train_sizes <- table(batch)[u_batches]
+    train_ord <- order(train_sizes, decreasing = TRUE)
+    merge_ord <- c(u_batches[train_ord], test_id)
+    
+    # Apply MNN correction
+    mnn_object <- batchelor::mnnCorrect(
+      combined_dat, 
+      batch = combined_batch, 
+      merge.order = merge_ord
+    )
+    mnn_matrix <- SummarizedExperiment::assay(mnn_object)
+    
+    # Split back
+    dat_corrected <- mnn_matrix[, 1:ncol(dat)]
+    dat_test_corrected <- mnn_matrix[, (ncol(dat) + 1):ncol(mnn_matrix)]
+    
+    return(list(
+      dat_corrected = dat_corrected,
+      dat_test_corrected = dat_test_corrected
+    ))
+  }
+  
+  if (method == "ruvr") {
+    # RUVr: Remove Unwanted Variation using Residuals
+    # Custom implementation without ruv package dependency
+    cat("Applying RUVr correction...\n")
+    
+    # Step 1: Fit initial GLM on training data to get residuals
+    design <- model.matrix(~ group + batch)
+    
+    # Fit gene-wise linear models
+    cat("Fitting initial GLM to estimate residuals...\n")
+    residuals <- matrix(NA, nrow = nrow(dat), ncol = ncol(dat))
+    for (i in 1:nrow(dat)) {
+      fit <- lm(dat[i, ] ~ group + batch)
+      residuals[i, ] <- residuals(fit)
+    }
+    
+    # Step 2: Estimate unwanted variation factors from residuals using SVD
+    k <- 3  # Number of unwanted variation factors
+    cat(sprintf("Estimating %d unwanted variation factors...\n", k))
+    
+    svd_res <- svd(residuals)
+    W <- svd_res$u[, 1:k, drop = FALSE]  # Factor loadings (genes x k)
+    alpha <- svd_res$v[, 1:k, drop = FALSE] %*% diag(svd_res$d[1:k])  # Factor scores (samples x k)
+    
+    # Step 3: Correct training data by regressing out the factors
+    dat_corrected <- dat
+    for (i in 1:nrow(dat)) {
+      fit <- lm(dat[i, ] ~ alpha)
+      dat_corrected[i, ] <- residuals(fit) + mean(dat[i, ])
+    }
+    
+    # Step 4: Project test data onto the learned factors and correct
+    cat("Projecting test data onto learned factors...\n")
+    alpha_test <- t(dat_test) %*% W
+    
+    dat_test_corrected <- dat_test
+    for (i in 1:nrow(dat_test)) {
+      fit <- lm(dat_test[i, ] ~ alpha_test)
+      dat_test_corrected[i, ] <- residuals(fit) + mean(dat_test[i, ])
+    }
+    
+    cat("RUVr correction complete\n")
+    
+    return(list(
+      dat_corrected = dat_corrected,
+      dat_test_corrected = dat_test_corrected
+    ))
+  }
+  
+  if (method == "gmm") {
+    # GMM adjustment: fits 2-component GMM to each gene within each batch
+    cat("Applying GMM adjustment...\n")
+    
+    # Source the GMM adjustment function (use absolute path from workspace root)
+    gmm_script <- file.path(getwd(), "..", "..", "adjust", "gmm_adjust.R")
+    if (!file.exists(gmm_script)) {
+      gmm_script <- "scripts/adjust/gmm_adjust.R"  # Fallback to relative from workspace root
+    }
+    source(gmm_script)
+    
+    # Apply GMM to training data
+    dat_corrected <- gmm_adjust(
+      data = dat,
+      batch = batch,
+      genes_are_columns = FALSE,
+      mean_mean_zero = TRUE,
+      unit_var = TRUE,
+      log_transform = FALSE,
+      debug = FALSE,
+      num_workers = 1
+    )
+    
+    # Apply GMM to test data (single batch)
+    dat_test_corrected <- gmm_adjust(
+      data = dat_test,
+      batch = rep(1, ncol(dat_test)),
+      genes_are_columns = FALSE,
+      mean_mean_zero = TRUE,
+      unit_var = TRUE,
+      log_transform = FALSE,
+      debug = FALSE,
+      num_workers = 1
+    )
+    
+    cat("GMM adjustment complete\n")
+    
+    return(list(
+      dat_corrected = dat_corrected,
+      dat_test_corrected = dat_test_corrected
+    ))
+  }
+  
   stop(sprintf("Unknown batch correction method: %s", method))
 }
 
-#' Normalize data within batches
-#' @param dat Data matrix
-#' @param batch Batch assignments (character vector)
-#' @param batch_names Batch identifiers (character vector)
-#' @return Normalized data matrix
-normalize_within_batches <- function(dat, batch, batch_names) {
-  # Create empty matrix with same dimensions
-  dat_norm <- matrix(NA, nrow = nrow(dat), ncol = ncol(dat))
+#' Global scaling: scale entire dataset to have overall variance = 1
+#' Preserves relative gene importance while putting data on consistent scale
+#' @param dat_train Training data matrix
+#' @param dat_test Test data matrix
+#' @return List with scaled training and test data
+global_scale <- function(dat_train, dat_test) {
+  # Compute global mean and SD from training data
+  train_mean <- mean(dat_train)
+  train_sd <- sd(as.vector(dat_train))
   
-  # Normalize each batch separately
-  for (batch_name in batch_names) {
-    batch_indices <- batch == batch_name
-    batch_data <- dat[, batch_indices, drop = FALSE]
-    
-    # Normalize this batch
-    normalized_batch <- normalizeData(batch_data)
-    
-    # Remove dimnames to avoid assignment issues
-    dimnames(normalized_batch) <- NULL
-    
-    # Assign to output matrix
-    dat_norm[, batch_indices] <- normalized_batch
-  }
+  # Apply same transformation to both train and test
+  dat_train_scaled <- (dat_train - train_mean) / train_sd
+  dat_test_scaled <- (dat_test - train_mean) / train_sd
   
-  # Set dimnames after filling the matrix
-  rownames(dat_norm) <- rownames(dat)
-  colnames(dat_norm) <- colnames(dat)
+  cat(sprintf("Global scaling: mean=%.4f, sd=%.4f\n", train_mean, train_sd))
   
-  dat_norm
+  list(
+    dat_train = dat_train_scaled,
+    dat_test = dat_test_scaled
+  )
 }
-
 
 # ====================================================================
 # DIMENSIONALITY REDUCTION (Single Responsibility: Transformation)
@@ -646,21 +800,13 @@ main <- function() {
       adjuster
     )
     
-    cat("\nStep 6: Normalizing data...\n")
-    # Normalize training data within batches
-    dat_train_norm <- normalize_within_batches(
-      corrected$dat_corrected,
-      datasets$batch,
-      datasets$batch_names
-    )
-    
-    # Normalize test data (as a single batch)
-    dat_test_norm <- normalizeData(corrected$dat_test_corrected)
+    cat("\nStep 6: Applying global scaling...\n")
+    scaled <- global_scale(corrected$dat_corrected, corrected$dat_test_corrected)
     
     cat("\nStep 7: Creating visualizations...\n")
     create_all_visualizations(
-      dat_train = dat_train_norm,
-      dat_test = dat_test_norm,
+      dat_train = scaled$dat_train,
+      dat_test = scaled$dat_test,
       batch_train = datasets$batch,
       labels_train = datasets$group,
       labels_test = datasets$group_test,

@@ -165,13 +165,18 @@ get_gene_gmm_transform <- function(
     unit_var = TRUE,
     means_at_1 = FALSE,
     diff_exp = FALSE,
-    output_counts = FALSE
+    output_counts = FALSE,
+    log_transform = TRUE
 ) {
   if (all(is.na(gene_exp))) return(gene_exp)
 
-  # --- Log-transform ---
-  min_val <- min(gene_exp, na.rm = TRUE)
-  x_transformed <- log(gene_exp - min_val + 1)
+  # --- Log-transform (optional) ---
+  if (log_transform) {
+    min_val <- min(gene_exp, na.rm = TRUE)
+    x_transformed <- log(gene_exp - min_val + 1)
+  } else {
+    x_transformed <- gene_exp
+  }
   mean_shift_fallback <- scale(x_transformed, scale = FALSE)[, 1]
 
   # Check for small variance
@@ -246,7 +251,7 @@ get_gene_gmm_transform <- function(
 #' Bimodal normalization using GMM with parallel processing
 bimodal_normalize <- function(data, weight_alpha=NULL, variance_alpha=NULL, mean_mean_zero = TRUE, unit_var = TRUE, 
                              mean1_zero = FALSE, diff_exp = FALSE, means_at_1 = FALSE, 
-                             output_counts = FALSE, debug = FALSE, num_workers = NULL) {
+                             output_counts = FALSE, log_transform = TRUE, debug = FALSE, num_workers = NULL) {
   gene_names <- colnames(data)
   if (is.null(gene_names)) gene_names <- paste0("Gene", 1:ncol(data))
 
@@ -315,7 +320,7 @@ bimodal_normalize <- function(data, weight_alpha=NULL, variance_alpha=NULL, mean
       
       tryCatch({
         get_gene_gmm_transform(gene_exp, weight_alpha, variance_alpha, mean_mean_zero, mean1_zero, 
-                              unit_var, means_at_1, diff_exp, output_counts)
+                              unit_var, means_at_1, diff_exp, output_counts, log_transform)
       }, error = function(e) {
         if (debug) message("Doing simple fallback")
         simple_fallback(gene_exp)
@@ -336,7 +341,7 @@ bimodal_normalize <- function(data, weight_alpha=NULL, variance_alpha=NULL, mean
       
       tryCatch({
         bimodal_data[, i] <- get_gene_gmm_transform(gene_exp, weight_alpha, variance_alpha, mean_mean_zero, mean1_zero, 
-                                                   unit_var, means_at_1, diff_exp, output_counts)
+                                                   unit_var, means_at_1, diff_exp, output_counts, log_transform)
       }, error = function(e) {
         if (debug) message("Got Error, simple fallback")
         if (debug) message(e)
@@ -367,13 +372,14 @@ bimodal_normalize <- function(data, weight_alpha=NULL, variance_alpha=NULL, mean
 #' @param diff_exp If TRUE, adjust first mean to zero for differential expression preservation (default FALSE)
 #' @param means_at_1 If TRUE, place means at ±1 (default FALSE)
 #' @param output_counts If TRUE, attempt to preserve count structure (default FALSE)
+#' @param log_transform If TRUE, apply log-transformation to data (default TRUE). Set to FALSE for pre-transformed data.
 #' @param debug If TRUE, print progress messages
 #' 
 #' @details The function applies GMM-based bimodal normalization to each batch separately.
 #' Various transformation options allow control over the final distribution properties.
 gmm_adjust <- function(data, batch, genes_are_columns=TRUE, weight_alpha=NULL, variance_alpha=NULL, mean_mean_zero = TRUE,
                       mean1_zero = FALSE, unit_var = TRUE, diff_exp = FALSE, means_at_1 = FALSE, 
-                      output_counts = FALSE, debug = FALSE, num_workers = NULL) {
+                      output_counts = FALSE, log_transform = TRUE, debug = FALSE, num_workers = NULL) {
   batch_factor <- as.factor(batch)
   batch_levels <- levels(batch_factor)
   if (!genes_are_columns) {
@@ -394,7 +400,7 @@ gmm_adjust <- function(data, batch, genes_are_columns=TRUE, weight_alpha=NULL, v
       weight_alpha=weight_alpha, variance_alpha=variance_alpha,
       mean_mean_zero=mean_mean_zero, unit_var=unit_var,
       mean1_zero=mean1_zero, diff_exp=diff_exp, means_at_1=means_at_1, 
-      output_counts=output_counts, 
+      output_counts=output_counts, log_transform=log_transform,
       debug=debug, num_workers=num_workers
     )
     

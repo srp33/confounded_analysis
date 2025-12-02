@@ -277,7 +277,8 @@ def get_gene_gmm_transform(
     unit_var=True,
     means_at_1=False,
     diff_exp=False,
-    output_counts=False
+    output_counts=False,
+    log_transform=True
 ):
     """
     Fit a 2-component GMM to a single gene's transformed expression values and map quantiles
@@ -301,9 +302,12 @@ def get_gene_gmm_transform(
     if means_at_1 and unit_var:
         raise ValueError("Cannot have both means_at_1 and unit_var")
 
-    # --- Log-transform ---
-    min_val = np.nanmin(gene_exp)
-    x_transformed = np.log(gene_exp - min_val + 1.0)
+    # --- Log-transform (optional) ---
+    if log_transform:
+        min_val = np.nanmin(gene_exp)
+        x_transformed = np.log(gene_exp - min_val + 1.0)
+    else:
+        x_transformed = gene_exp
     mean_shift_fallback = x_transformed - np.nanmean(x_transformed)
 
     if np.nanvar(x_transformed) < 1e-8:
@@ -371,7 +375,7 @@ def get_gene_gmm_transform(
 def _process_gene(args):
     """Helper for parallel processing of a single gene column."""
     (i, gene_exp, weight_pseudo_count, nonlinear, mean_mean_zero, mean1_zero,
-     unit_var, diff_exp, means_at_1, output_counts) = args
+     unit_var, diff_exp, means_at_1, output_counts, log_transform) = args
 
     if np.all(np.isnan(gene_exp)) or np.all(gene_exp == gene_exp[0]):
         return gene_exp
@@ -386,14 +390,15 @@ def _process_gene(args):
             unit_var=unit_var,
             means_at_1=means_at_1,
             diff_exp=diff_exp,
-            output_counts=output_counts
+            output_counts=output_counts,
+            log_transform=log_transform
         )
     except Exception:
         return simple_fallback(gene_exp)
 
 def bimodal_normalize(data, weight_pseudo_count=3.0, nonlinear=True, mean_mean_zero=True,
                      mean1_zero=False, unit_var=True, diff_exp=False, means_at_1=False,
-                     output_counts=False, debug=False, num_workers=None):
+                     output_counts=False, log_transform=True, debug=False, num_workers=None):
     """
     Apply bimodal (GMM-based) normalization column-wise to a 2D array or pandas DataFrame.
 
@@ -427,7 +432,7 @@ def bimodal_normalize(data, weight_pseudo_count=3.0, nonlinear=True, mean_mean_z
         for i in range(n_genes):
             gene_exp = data_array[:, i]
             args_list.append((i, gene_exp, weight_pseudo_count, nonlinear, mean_mean_zero,
-                              mean1_zero, unit_var, diff_exp, means_at_1, output_counts))
+                              mean1_zero, unit_var, diff_exp, means_at_1, output_counts, log_transform))
         with Pool(num_cores) as pool:
             results = pool.map(_process_gene, args_list)
         output = np.column_stack(results)
@@ -448,7 +453,8 @@ def bimodal_normalize(data, weight_pseudo_count=3.0, nonlinear=True, mean_mean_z
                     unit_var=unit_var,
                     diff_exp=diff_exp,
                     means_at_1=means_at_1,
-                    output_counts=output_counts
+                    output_counts=output_counts,
+                    log_transform=log_transform
                 )
             except Exception:
                 output[:, i] = simple_fallback(gene_exp)
@@ -460,10 +466,15 @@ def bimodal_normalize(data, weight_pseudo_count=3.0, nonlinear=True, mean_mean_z
 
 def gmm_adjust(data, batch, weight_pseudo_count=3.0, nonlinear=True, mean_mean_zero=True,
               mean1_zero=False, unit_var=True, diff_exp=False, means_at_1=False,
-              output_counts=False, debug=False, num_workers=None):
+              output_counts=False, log_transform=True, debug=False, num_workers=None):
     """
     Apply GMM-based adjustment per batch (batch is an array-like of batch labels).
     Returns adjusted data with same structure as input.
+    
+    Parameters:
+    -----------
+    log_transform : bool, default=True
+        If True, apply log-transformation to data. Set to False for pre-transformed data.
     """
     batch = np.asarray(batch)
     if batch.shape[0] != data.shape[0]:
@@ -500,6 +511,7 @@ def gmm_adjust(data, batch, weight_pseudo_count=3.0, nonlinear=True, mean_mean_z
             diff_exp=diff_exp,
             means_at_1=means_at_1,
             output_counts=output_counts,
+            log_transform=log_transform,
             debug=debug,
             num_workers=num_workers
         )

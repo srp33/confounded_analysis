@@ -28,7 +28,7 @@ parser$add_argument("-i", "--input", type = "character", required = TRUE,
 parser$add_argument("-o", "--output", type = "character", default = "adjusters_on_classifiers.png",
                    help = "Output PNG file path (default: %(default)s)")
 
-parser$add_argument("--width", type = "double", default = 14,
+parser$add_argument("--width", type = "double", default = 20,
                    help = "Plot width in inches (default: %(default)s)")
 
 parser$add_argument("--height", type = "double", default = 16,
@@ -37,11 +37,22 @@ parser$add_argument("--height", type = "double", default = 16,
 parser$add_argument("--dpi", type = "integer", default = 300,
                    help = "Plot resolution in DPI (default: %(default)s)")
 
+parser$add_argument("--adjusters", type = "character", default = NULL,
+                   help = "Comma-separated list of adjusters to include (default: all)")
+
 # Parse arguments and input file
 args <- parser$parse_args()
 
 cat("Reading input data from:", args$input, "\n")
 data <- read.csv(args$input, stringsAsFactors = FALSE)
+
+# Filter to specified adjusters if provided
+if (!is.null(args$adjusters)) {
+  adjusters_to_include <- trimws(strsplit(args$adjusters, ",")[[1]])
+  cat("Filtering to adjusters:", paste(adjusters_to_include, collapse = ", "), "\n")
+  data <- data[data$adjuster %in% adjusters_to_include, ]
+  cat("After filtering:", nrow(data), "rows remain\n")
+}
 
 cat("Data dimensions:", nrow(data), "rows,", ncol(data), "columns\n")
 cat("Column names:", paste(colnames(data), collapse = ", "), "\n")
@@ -207,7 +218,7 @@ for (classifier in classifiers_with_data) {
   cat("  Unique dataset_label values in plot_data:", paste(sort(unique(plot_data$dataset_label)), collapse = ", "), "\n")
   cat("  Factor levels of dataset_label:", paste(levels(plot_data$dataset_label), collapse = ", "), "\n")
   
-  # Get raw data for this classifier for boxplots
+  # Get raw data for this classifier
   raw_data <- mxe_data[mxe_data$classifier_label == classifier & !is.na(mxe_data$classifier_label), ]
   
   # Calculate annotation position at the top of the plot
@@ -220,25 +231,40 @@ for (classifier in classifiers_with_data) {
     annotation_y <- local_y_max + 0.12 * local_y_range  # Position at top with padding
   }
   
-  p <- ggplot(raw_data, aes(x = adjuster_label, y = value, fill = adjuster_type)) +
-    geom_boxplot(outlier.shape = 16, outlier.size = 1, alpha = 0.7) +
+  # Calculate mean for each adjuster to show as horizontal line
+  mean_data <- raw_data %>%
+    group_by(adjuster_label, dataset_label, adjuster_type) %>%
+    summarise(mean_value = mean(value), .groups = "drop")
+  
+  p <- ggplot(raw_data, aes(x = adjuster_label, y = value)) +
+    # Add mean line for each adjuster
+    geom_segment(data = mean_data, 
+                aes(x = as.numeric(adjuster_label) - 0.3, 
+                    xend = as.numeric(adjuster_label) + 0.3,
+                    y = mean_value, yend = mean_value),
+                color = "gray40", linewidth = 0.8) +
+    # Add individual points colored by test study
+    geom_point(aes(color = test_study, shape = test_study), 
+              size = 3, alpha = 0.5) +
     geom_text(data = plot_data, aes(x = adjuster_label, y = annotation_y, 
-                                   label = annot, fill = NULL), 
-              color = "black", size = 3, vjust = 1) +
+                                   label = annot), 
+              color = "black", size = 2.0, vjust = 1) +
     facet_wrap(~ dataset_label, scales = "fixed", ncol = 4) +
+    scale_x_discrete() +
     {if (SHARE_Y_AXIS) {
       scale_y_continuous(limits = global_y_limits, expand = expansion(mult = c(0, 0)))
     } else {
       scale_y_continuous(expand = expansion(mult = c(0.05, 0.15)))
     }} +
-    scale_fill_manual(values = type_colors) +
+    scale_color_brewer(palette = "Set2", name = "Test Study") +
+    scale_shape_manual(values = c(15, 16, 17, 25, 18, 19), name = "Test Study") +
     theme_bw() +
     theme(
       axis.title.x = element_blank(),
       axis.text.x = element_text(angle = 30, hjust = 1, size = 8),
       axis.title.y = element_text(size = 10),
-      legend.title = element_blank(),
-      legend.position = "none",
+      legend.title = element_text(size = 9, face = "bold"),
+      legend.position = "right",
       panel.grid.major.y = element_line(color = "grey90", size = 0.5),
       panel.grid.major.x = element_blank(),
       panel.grid.minor = element_blank(),
@@ -257,24 +283,14 @@ for (classifier in classifiers_with_data) {
 cat("Plot list names:", paste(names(plot_list), collapse = ", "), "\n")
 cat("Plot list length:", length(plot_list), "\n")
 
-# Create legend from the first available plot
-first_plot_name <- names(plot_list)[1]
-legend <- get_legend(
-  plot_list[[first_plot_name]] + 
-    theme(legend.position = "bottom", legend.direction = "horizontal") +
-    guides(color = guide_legend(title = NULL))
-)
-
-# Try a simpler approach with grid.arrange
+# Arrange plots in grid (legend is now part of each plot)
 library(gridExtra)
 plot_vector <- unname(plot_list)
 
-# Arrange plots manually based on how many we have
-# Fallback for other numbers of plots
-  final_plot <- grid.arrange(
-    grobs = c(plot_vector, list(legend)),
-    ncol = 2
-  )
+final_plot <- grid.arrange(
+  grobs = plot_vector,
+  ncol = 2
+)
 
 # Save the plot
 cat("Saving plot to:", args$output, "\n")
