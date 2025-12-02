@@ -635,7 +635,8 @@ adjust_gmm_global_npn <- function(matrix_, batch = NULL, debug = FALSE) {
 }
 
 adjust_gmm <- function(matrix_, batch, debug = FALSE, mean_mean_zero = TRUE, unit_var = TRUE, 
-                      mean1_zero = FALSE, diff_exp = FALSE, means_at_1 = FALSE, output_counts = FALSE) {
+                      mean1_zero = FALSE, diff_exp = FALSE, means_at_1 = FALSE, output_counts = FALSE,
+                      log_transform = TRUE) {
   #' GMM adjustment using the fast implementation.
   #' Applies bimodal GMM transformation to all genes.
   #' @param matrix_ The matrix to adjust (features x samples).
@@ -646,6 +647,7 @@ adjust_gmm <- function(matrix_, batch, debug = FALSE, mean_mean_zero = TRUE, uni
   #' @param diff_exp If TRUE, adjust first mean to zero for differential expression preservation (default FALSE)
   #' @param means_at_1 If TRUE, place means at ±1 (default FALSE)
   #' @param output_counts If TRUE, attempt to preserve count structure (default FALSE)
+  #' @param log_transform If TRUE, apply log transformation (default TRUE). Set FALSE if data is already log-transformed.
   #' @return The adjusted matrix (features x samples).
   
   message("Adjusting with GMM (bimodal for all genes)")
@@ -668,6 +670,7 @@ adjust_gmm <- function(matrix_, batch, debug = FALSE, mean_mean_zero = TRUE, uni
     diff_exp = diff_exp,
     means_at_1 = means_at_1,
     output_counts = output_counts,
+    log_transform = log_transform,
     debug = debug,
     num_workers = get_allocated_cores()
   )
@@ -677,24 +680,28 @@ adjust_gmm <- function(matrix_, batch, debug = FALSE, mean_mean_zero = TRUE, uni
 }
 
 
-adjust_gmm_mean_ones <- function(matrix_, batch, debug = FALSE) {
+adjust_gmm_mean_ones <- function(matrix_, batch, debug = FALSE, log_transform = TRUE) {
   #' Applies bimodal GMM transformation to all genes with means centered at ±1.
-  return(adjust_gmm(matrix_, batch, debug = debug, mean_mean_zero = TRUE, unit_var = FALSE, means_at_1 = TRUE))
+  return(adjust_gmm(matrix_, batch, debug = debug, mean_mean_zero = TRUE, unit_var = FALSE, 
+                   means_at_1 = TRUE, log_transform = log_transform))
 }
 
-adjust_gmm_affine <- function(matrix_, batch, debug = FALSE) {
+adjust_gmm_affine <- function(matrix_, batch, debug = FALSE, log_transform = TRUE) {
   #' Applies bimodal GMM transformation to all genes but only adjusts means without inverse CDF.
-  return(adjust_gmm(matrix_, batch, debug = debug, mean_mean_zero = TRUE, unit_var = TRUE))
+  return(adjust_gmm(matrix_, batch, debug = debug, mean_mean_zero = TRUE, unit_var = TRUE,
+                   log_transform = log_transform))
 }
 
-adjust_gmm_diff_exp <- function(matrix_, batch, debug = FALSE) {
+adjust_gmm_diff_exp <- function(matrix_, batch, debug = FALSE, log_transform = TRUE) {
   #' Don't scale to preserve differential expression.
-  return(adjust_gmm(matrix_, batch, debug = debug, mean_mean_zero = TRUE, unit_var = FALSE, diff_exp = TRUE))
+  return(adjust_gmm(matrix_, batch, debug = debug, mean_mean_zero = TRUE, unit_var = FALSE, 
+                   diff_exp = TRUE, log_transform = log_transform))
 }
 
-adjust_gmm_diff_exp_counts <- function(matrix_, batch, debug = FALSE) {
+adjust_gmm_diff_exp_counts <- function(matrix_, batch, debug = FALSE, log_transform = TRUE) {
   #' GMM adjustment attempting to preserve count structure and differential expression.
-  return(adjust_gmm(matrix_, batch, debug = debug, output_counts = TRUE, mean_mean_zero = TRUE, diff_exp = TRUE))
+  return(adjust_gmm(matrix_, batch, debug = debug, output_counts = TRUE, mean_mean_zero = TRUE, 
+                   diff_exp = TRUE, log_transform = log_transform))
 }
 
 
