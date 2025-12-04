@@ -5,7 +5,7 @@
 #SBATCH --cpus-per-task=2 # Allocate num CPUs (threads) to each task
 #SBATCH --mem-per-cpu=4G
 #SBATCH -J "run_snakefile"   # job name
-#SBATCH -o snake.log
+#SBATCH -o snake_%A.log
 
 BOOK_CHAPTER_DIR="$HOME/confounded_analysis/scripts/evaluations/book_chapter"
 OUTPUT_DIR="$HOME/confounded_analysis/grp_batch_effects/outputs/book_chapter"
@@ -37,11 +37,4 @@ pixi run snakemake -s $BOOK_CHAPTER_DIR/Snakefile \
     --latency-wait 120 \
     --quiet \
     --rerun-incomplete \
-    --retries 2 \
     --keep-going
-
-pixi run snakemake -s $BOOK_CHAPTER_DIR/Snakefile \
-    --configfile $BOOK_CHAPTER_DIR/config.yaml \
-    --cores 1 \
-    --detailed-summary \
-    &> snake_summary.log
