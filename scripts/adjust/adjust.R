@@ -7,18 +7,6 @@ Sys.setenv(OMP_NUM_THREADS = 1)
 # Suppress package startup messages for a cleaner console output.
 suppressPackageStartupMessages({
   library(dplyr)
-  library(readr)
-  library(vroom)
-  library(stringr)
-  library(argparse)
-  library(sva)
-  library(limma)
-  library(Seurat)
-  library(batchelor)
-  library(fairadapt)
-  library(future)
-  library(huge)
-  library(data.table)
 })
 
 source("/scripts/adjust/gmm_adjust.R")
@@ -88,7 +76,7 @@ ComBat_ignore_nonvariance <- function(matrix_, batch, design) {
     )
   }
   
-  matrix_[varying_row_mask, ] <- ComBat(matrix_[varying_row_mask, ], batch, mod = design, prior.plots = FALSE)
+  matrix_[varying_row_mask, ] <- sva::ComBat(matrix_[varying_row_mask, ], batch, mod = design, prior.plots = FALSE)
   return(matrix_)
 }
 
@@ -157,14 +145,14 @@ prep_seurat_like <- function(df_, batch, data_are_counts) {
   meta <- data.frame(Batch = batch)
   rownames(meta) <- sanitized_sample_names
   
-  seurat_obj <- CreateSeuratObject(counts = df_copy, meta.data = meta)
+  seurat_obj <- Seurat::CreateSeuratObject(counts = df_copy, meta.data = meta)
   
   if (data_are_counts) {
     message("Data appears to be raw counts. Normalizing using LogNormalize.")
-    seurat_obj <- NormalizeData(seurat_obj, normalization.method = "LogNormalize", scale.factor = 10000, verbose = FALSE)
+    seurat_obj <- Seurat::NormalizeData(seurat_obj, normalization.method = "LogNormalize", scale.factor = 10000, verbose = FALSE)
   } else {
     message("Data appears pre-normalized. Setting 'data' layer directly from input.")
-    seurat_obj <- SetAssayData(seurat_obj, layer = "data", new.data = df_copy)
+    seurat_obj <- Seurat::SetAssayData(seurat_obj, layer = "data", new.data = df_copy)
   }
   
   return(list(
@@ -263,7 +251,7 @@ adjust_combat <- function(matrix_, batch, design, data_are_counts, debug = FALSE
   
   if (data_are_counts) {
     message("Using ComBat_seq for count data.")
-    return(ComBat_seq(matrix_, batch, covar_mod = design))
+    return(sva::ComBat_seq(matrix_, batch, covar_mod = design))
   } else {
     message("Using ComBat for continuous data.")
     return(ComBat_ignore_nonvariance(matrix_, batch, design))
@@ -272,12 +260,6 @@ adjust_combat <- function(matrix_, batch, design, data_are_counts, debug = FALSE
 
 
 adjust_limma <- function(matrix_, batch, design, ..., debug = FALSE) {
-  #' Adjust matrix using limma's removeBatchEffect.
-  #' @param matrix_ The matrix to adjust (features x samples).
-  #' @param batch The batch variable vector.
-  #' @param design The design matrix.
-  #' @return The adjusted matrix.
-  
   message("Adjusting data with limma::removeBatchEffect.")
   return(limma::removeBatchEffect(matrix_, batch = batch, design = design))
 }
@@ -384,9 +366,9 @@ adjust_seurat_scaling <- function(df_, batch, data_are_counts, debug = FALSE) {
   seurat_obj <- prep_list$obj
   
   all_features <- rownames(seurat_obj)
-  seurat_obj <- ScaleData(seurat_obj, vars.to.regress = "Batch", features = all_features, verbose = FALSE)
+  seurat_obj <- Seurat::ScaleData(seurat_obj, vars.to.regress = "Batch", features = all_features, verbose = FALSE)
   
-  scaled_matrix <- as.matrix(GetAssayData(seurat_obj, layer = "scale.data"))
+  scaled_matrix <- as.matrix(Seurat::GetAssayData(seurat_obj, layer = "scale.data"))
   
   return(restore_names(scaled_matrix, prep_list))
 }
@@ -407,26 +389,26 @@ adjust_seurat_integration <- function(df_, batch, data_are_counts, debug = FALSE
   prep_list <- prep_seurat_like(df_, batch, data_are_counts)
   seurat_obj <- prep_list$obj
   
-  seurat_obj.list <- SplitObject(seurat_obj, split.by = "Batch")
+  seurat_obj.list <- Seurat::SplitObject(seurat_obj, split.by = "Batch")
   
   # Pre-process each batch object.
   for (i in 1:length(seurat_obj.list)) {
     if (data_are_counts) {
-      seurat_obj.list[[i]] <- FindVariableFeatures(seurat_obj.list[[i]], selection.method = "vst", nfeatures = 2000, verbose = FALSE)
+      seurat_obj.list[[i]] <- Seurat::FindVariableFeatures(seurat_obj.list[[i]], selection.method = "vst", nfeatures = 2000, verbose = FALSE)
     } else {
       if (debug) message("DEBUG: Finding variable features for batch ", i, " by variance ranking.")
-      hvf_data <- GetAssayData(seurat_obj.list[[i]], layer = "data")
+      hvf_data <- Seurat::GetAssayData(seurat_obj.list[[i]], layer = "data")
       variances <- apply(hvf_data, 1, var, na.rm = TRUE)
       top_features <- names(sort(variances, decreasing = TRUE)[1:2000])
-      VariableFeatures(seurat_obj.list[[i]]) <- top_features
+      Seurat::VariableFeatures(seurat_obj.list[[i]]) <- top_features
     }
     
     all_features_in_obj <- rownames(seurat_obj.list[[i]])
-    seurat_obj.list[[i]] <- ScaleData(seurat_obj.list[[i]], features = all_features_in_obj, verbose = FALSE)
+    seurat_obj.list[[i]] <- Seurat::ScaleData(seurat_obj.list[[i]], features = all_features_in_obj, verbose = FALSE)
     
     num_cells <- ncol(seurat_obj.list[[i]])
     npcs_to_use <- min(50, num_cells - 1)
-    seurat_obj.list[[i]] <- RunPCA(seurat_obj.list[[i]], npcs = npcs_to_use, features = VariableFeatures(seurat_obj.list[[i]]), verbose = FALSE)
+    seurat_obj.list[[i]] <- Seurat::RunPCA(seurat_obj.list[[i]], npcs = npcs_to_use, features = Seurat::VariableFeatures(seurat_obj.list[[i]]), verbose = FALSE)
   }
   
   # Find integration anchors.
@@ -434,7 +416,7 @@ adjust_seurat_integration <- function(df_, batch, data_are_counts, debug = FALSE
   k_anchor <- min(5, min_batch_size - 1)
   dims_to_use <- 1:min(30, min_batch_size - 1)
   
-  anchors <- FindIntegrationAnchors(object.list = seurat_obj.list, reduction = "rpca", dims = dims_to_use, k.anchor = k_anchor, verbose = FALSE)
+  anchors <- Seurat::FindIntegrationAnchors(object.list = seurat_obj.list, reduction = "rpca", dims = dims_to_use, k.anchor = k_anchor, verbose = FALSE)
   
   if (nrow(anchors@anchors) < 2) {
     stop("Integration failed: Not enough anchors were found between datasets.")
@@ -444,10 +426,10 @@ adjust_seurat_integration <- function(df_, batch, data_are_counts, debug = FALSE
   k_weight <- min(100, min_batch_size - 1) # Seurat default is 100
   if (debug) message("DEBUG: Setting k.weight to ", k_weight)
   
-  seurat_obj.integrated <- IntegrateData(anchorset = anchors, k.weight = k_weight, verbose = FALSE)
+  seurat_obj.integrated <- Seurat::IntegrateData(anchorset = anchors, k.weight = k_weight, verbose = FALSE)
   
   # Combine integrated and non-integrated features.
-  integrated_matrix_sanitized <- as.matrix(GetAssayData(seurat_obj.integrated, assay = "integrated", layer = "data"))
+  integrated_matrix_sanitized <- as.matrix(Seurat::GetAssayData(seurat_obj.integrated, assay = "integrated", layer = "data"))
   
   integrated_features_sanitized <- rownames(integrated_matrix_sanitized)
   all_features_sanitized <- rownames(seurat_obj)
@@ -517,7 +499,7 @@ adjust_fairadapt <- function(gene_df, batch, design, ..., debug = FALSE) {
   
   formula <- as.formula(paste(design_col_name, "~ ."))
   
-  mod <- fairadapt(formula,
+  mod <- fairadapt::fairadapt(formula,
     train.data = data_for_adj,
     prot.attr = "batch",
     adj.mat = adj.mat
@@ -1106,14 +1088,9 @@ batch_adjust_tidy <- function(df, input_file, adjuster, batch_col, column, full_
 }
 
 
-# Set future plan for parallel processing -------------------------------------
-# Increase the maximum size for global variables.
-options(future.globals.maxSize = 2000 * 1024^2)
-
-
 # Parse command line arguments ------------------------------------------------
 if (sys.nframe() == 0 && !interactive()){
-parser <- ArgumentParser(description = "A script to apply various batch correction methods to tidy data.")
+parser <- argparse::ArgumentParser(description = "A script to apply various batch correction methods to tidy data.")
 
 parser$add_argument("input_file", help = "Path to the input CSV file. Rows are samples, columns are features/metadata.")
 parser$add_argument("output_file", help = "Path for the output adjusted CSV file.")
@@ -1143,7 +1120,7 @@ if (args$skip_if_exists && file.exists(args$output_file)) {
 }
 
 message("Reading input file '", args$input_file, "'")
-suppressMessages(df <- vroom(args$input_file, show_col_types = FALSE))
+suppressMessages(df <- vroom::vroom(args$input_file, show_col_types = FALSE))
 message("Input file has ", nrow(df), " rows and ", ncol(df), " columns.")
 
 if (!is.null(args$batch_col) && !(args$batch_col %in% names(df))) {
@@ -1154,9 +1131,8 @@ if (!is.null(args$batch_col) && !(args$batch_col %in% names(df))) {
   ))
 }
 
-# Changing "Sample_ID" column to "meta_Sample_ID" to simplify later code.
 if ("Sample_ID" %in% names(df)) {
-  df <- df %>% dplyr::rename(meta_Sample_ID = Sample_ID)
+  df <- df %>% rename(meta_Sample_ID = Sample_ID)
 }
 
 
@@ -1177,10 +1153,9 @@ message("Adjusting ", args$input_file, " took ", Sys.time() - initial_start_time
 
 start_time = Sys.time()
 message("Writing adjusted data to '", args$output_file, "'")
-# Round numeric columns and write to output file.
 adjusted_data %>%
   mutate(across(where(is.numeric), ~ sprintf("%.6f", .))) %>%
-  fwrite(args$output_file)
+  data.table::fwrite(args$output_file)
 
 elapsed_time = Sys.time() - start_time
 message("Successfully saved adjusted data to '", args$output_file, "'", " in ", elapsed_time, " seconds.")
