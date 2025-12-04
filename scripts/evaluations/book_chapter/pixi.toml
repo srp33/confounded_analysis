@@ -10,8 +10,7 @@ platforms = ["linux-64"]
 r-base = ">=4.3"
 
 # === Data Manipulation ===
-r-dplyr = "*"         # classify_*.R, visualize_*.R, plot_*.R
-r-purrr = "*"         # classify_*.R, visualize_*.R
+r-tidyverse = "*"     # Core tidyverse packages (dplyr, purrr, ggplot2, etc.)
 r-reshape2 = "*"      # classify_adjusters.R
 r-readxl = "*"        # 2_TB_getdata.R (data loading)
 
@@ -29,7 +28,6 @@ r-mcmcpack = "*"      # Inverse gamma for batch simulation (classify_batch_effec
 r-dabestr = "*"       # Estimation statistics (generate_*_plot.R)
 
 # === Visualization ===
-r-ggplot2 = "*"       # All plotting scripts
 r-gridextra = "*"     # Multi-panel plots (generate_*_plot.R)
 r-scales = "*"        # Formatting (generate_main_plot.R)
 
