@@ -56,7 +56,7 @@ prepare_delta <- function(df_adj, df_unadj, metric_col) {
 }
 
 # Generate scaling plots
-generate_scaling_plot <- function(all_data, metric = "ROC AUC", fig_dir = CONFIG$figures_dir) {
+generate_scaling_plot <- function(all_data, metric = "ROC_AUC", fig_dir = CONFIG$figures_dir) {
   if (nrow(all_data) == 0) return()
   
   p <- ggplot(all_data, aes(x = adjuster, y = Mean_Metric, fill = adjuster)) +
@@ -81,7 +81,7 @@ generate_scaling_plot <- function(all_data, metric = "ROC AUC", fig_dir = CONFIG
 }
 
 # Generate scaling plots
-generate_test_source_scaling_plot <- function(all_data, metric = "ROC AUC", fig_dir = CONFIG$figures_dir) {
+generate_test_source_scaling_plot <- function(all_data, metric = "ROC_AUC", fig_dir = CONFIG$figures_dir) {
   if (nrow(all_data) == 0) return()
   
   p <- ggplot(all_data, aes(x = n_studies, y = Mean_Metric, color = adjuster)) +
@@ -103,7 +103,7 @@ generate_test_source_scaling_plot <- function(all_data, metric = "ROC AUC", fig_
 
 generate_test_source_scaling_plot_absolute <- function(
     df,
-    metric = "ROC AUC",
+    metric = "ROC_AUC",
     fig_dir = CONFIG$figures_dir
 ) {
 
@@ -163,7 +163,7 @@ generate_test_source_scaling_plot_absolute <- function(
   message("Saved: ", file_path)
 }
 
-generate_absolute_boxplot <- function(all_data, metric_name = "ROC AUC", fig_dir = CONFIG$figures_dir) {
+generate_absolute_boxplot <- function(all_data, metric_name = "ROC_AUC", fig_dir = CONFIG$figures_dir) {
   # Filter for the metric we want
   data_plot <- all_data %>% filter(Metric == metric_name)
   
@@ -192,7 +192,7 @@ generate_absolute_boxplot <- function(all_data, metric_name = "ROC AUC", fig_dir
 
 generate_adjuster_comparison_by_testset <- function(
     df,
-    metric = "ROC AUC",
+    metric = "ROC_AUC",
     fig_dir = CONFIG$figures_dir
 ) {
 
@@ -254,7 +254,7 @@ generate_adjuster_comparison_by_testset <- function(
 
 generate_adjuster_lineplots_by_testset <- function(
     df,
-    metric = "ROC AUC",
+    metric = "ROC_AUC",
     fig_dir = CONFIG$figures_dir
 ) {
 
@@ -336,9 +336,9 @@ generate_adjuster_lineplots_by_testset <- function(
 
 # --- Main Processing ---
 
-# Compute delta metrics for ROC AUC and MCC
+# Compute delta metrics for ROC_AUC and MCC
 results <- data.frame()
-for (metric in c("ROC AUC", "MCC")) {
+for (metric in c("ROC_AUC", "MCC")) {
   delta_df <- prepare_delta(all_adjusters, df_unadj, metric) %>%
     mutate(Metric = metric)
   results <- bind_rows(results, delta_df)
@@ -352,23 +352,23 @@ for (metric in c("ROC AUC", "MCC")) {
 #   )
 
 absolute_data <- all_metrics %>%
-  select(adjuster, n_studies, test_source, `ROC AUC`, MCC) %>%
-  pivot_longer(cols = c(`ROC AUC`, MCC), names_to = "Metric", values_to = "Value")
+  select(adjuster, n_studies, test_source, `ROC_AUC`, MCC) %>%
+  pivot_longer(cols = c(`ROC_AUC`, MCC), names_to = "Metric", values_to = "Value")
 
 # Save combined CSV
 write_csv(results, file.path(CONFIG$figures_dir, "scaling_comparison_results.csv"))
 
 # Generate plots
-generate_test_source_scaling_plot(results %>% filter(Metric == "ROC AUC"), "ROC AUC")
+generate_test_source_scaling_plot(results %>% filter(Metric == "ROC_AUC"), "ROC_AUC")
 generate_test_source_scaling_plot(results %>% filter(Metric == "MCC"), "MCC")
 
-generate_test_source_scaling_plot_absolute(absolute_data, "ROC AUC")
+generate_test_source_scaling_plot_absolute(absolute_data, "ROC_AUC")
 generate_test_source_scaling_plot_absolute(absolute_data, "MCC")
 
-generate_absolute_boxplot(absolute_data, "ROC AUC")
+generate_absolute_boxplot(absolute_data, "ROC_AUC")
 generate_absolute_boxplot(absolute_data, "MCC")
 
-generate_adjuster_lineplots_by_testset(absolute_data, "ROC AUC")
+generate_adjuster_lineplots_by_testset(absolute_data, "ROC_AUC")
 generate_adjuster_lineplots_by_testset(absolute_data, "MCC")
 
 

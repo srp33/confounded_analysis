@@ -1,18 +1,20 @@
 # Prepping breast cancer study data
 # Create new files that subset all_combined.csv based on the meta_source column
 
-# Libraries
-library(readr)
-library(dplyr)
-library(argparse)
+# ---- Load Libraries ----
+suppressPackageStartupMessages({
+  library(readr)
+  library(dplyr)
+  library(argparse)
+})
 
-# Parse command-line arguments
+# ---- Parse Arguments ----
 parser <- ArgumentParser(description = "Create a subset of all_combined.csv using the top-K studies by sample count")
 
 parser$add_argument('--input', required=TRUE, help='Path to all_combined.csv')
 parser$add_argument('--test',required=TRUE, help='Test source name')
 parser$add_argument('--order', required=TRUE, help='Randomized, fixed vector of the order to add datasets')
-parser$add_argument('--k', required=TRUE, type="integer", help='Number of studies to include (k)')
+parser$add_argument('--k', required=TRUE, type='integer', help='Number of studies to include (k)')
 parser$add_argument('--output', required=TRUE, help='Output CSV path for the subset')
 args <- parser$parse_args()
 

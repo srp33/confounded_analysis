@@ -2,6 +2,7 @@ import os
 import sys
 import pandas as pd
 import numpy as np
+import argparse
 from sklearn.ensemble import HistGradientBoostingClassifier
 from sklearn.metrics import (accuracy_score, roc_auc_score, confusion_matrix, matthews_corrcoef)
 
@@ -38,7 +39,7 @@ def run_classifier(X_train, y_train, X_test, y_test, random_state=42):
 
     return {
         "Accuracy": acc,
-        "ROC AUC": auc,
+        "ROC_AUC": auc,
         "Sensitivity": sens,
         "Specificity": spec,
         "MCC": mcc,
@@ -49,30 +50,34 @@ def run_classifier(X_train, y_train, X_test, y_test, random_state=42):
     }
 
 def main():
-    if len(sys.argv) != 3:
-        print("Usage: python run_classifier.py <adjusted_csv> <output_dir>")
-        sys.exit(1)
+    parser = argparse.ArgumentParser(
+        description="Train/test classifier with bootstrapping."
+    )
 
-    csv_file = sys.argv[1]
-    output_dir = sys.argv[2]
+    parser.add_argument("--csv", required=True, help="Input adjusted CSV file")
+    parser.add_argument("--outdir", required=True, help="Output directory")
+    parser.add_argument("--bootstrap", type=int, default=1, help="Number of bootstrap runs (default: 1 = no bootstrap)")
+
+    args = parser.parse_args()
+
+    csv_file = args.csv
+    output_dir = args.outdir
+    n_boot = args.bootstrap
 
     if not os.path.exists(csv_file):
-        print(f"File not found: {csv_file}")
-        sys.exit(1)
+        raise FileNotFoundError(f"CSV not found: {csv_file}")
 
     df = pd.read_csv(csv_file)
 
     if 'meta_er_status' not in df.columns or 'meta_source' not in df.columns:
         raise ValueError("CSV must contain 'meta_er_status' and 'meta_source' columns")
 
-    print(f"[DEBUG] Missing values in 'meta_er_status': {df['meta_er_status'].isna().sum()} / {len(df)} total rows")
-    print(f"[DEBUG] Unique meta_source values: {df['meta_source'].unique()[:10]}")
-    print(f"[DEBUG] Unique meta_er_status values: {df['meta_er_status'].unique()[:10]}")
+    # print(f"[DEBUG] Missing values in 'meta_er_status': {df['meta_er_status'].isna().sum()} / {len(df)} total rows")
+    # print(f"[DEBUG] Unique meta_source values: {df['meta_source'].unique()[:10]}")
+    # print(f"[DEBUG] Unique meta_er_status values: {df['meta_er_status'].unique()[:10]}")
 
     test_source = parse_test_source(csv_file)
     adjuster = os.path.basename(os.path.dirname(csv_file))
-
-    lower_match = df['meta_source'].str.lower() == test_source.lower()
 
     # ✅ Case-insensitive split
     train_df = df[df['meta_source'].str.lower() != test_source.lower()]
@@ -83,15 +88,15 @@ def main():
         print(f"[DEBUG] First few meta_source values: {df['meta_source'].head()}")
         sys.exit(1)
 
-    # ✅ Print unique label values to catch string vs numeric issues
-    print("[DEBUG] Unique values in meta_er_status (train):", train_df['meta_er_status'].unique())
-    print("[DEBUG] Unique values in meta_er_status (test):", test_df['meta_er_status'].unique())
+    # # ✅ Print unique label values to catch string vs numeric issues
+    # print("[DEBUG] Unique values in meta_er_status (train):", train_df['meta_er_status'].unique())
+    # print("[DEBUG] Unique values in meta_er_status (test):", test_df['meta_er_status'].unique())
 
-    # ✅ Print all meta columns for reference
-    meta_cols = [c for c in df.columns if c.startswith("meta_")]
-    print(f"[DEBUG] Meta columns found: {meta_cols}")
-    print("[DEBUG] Example meta data (first 5 rows):")
-    print(df[meta_cols].head())
+    # # ✅ Print all meta columns for reference
+    # meta_cols = [c for c in df.columns if c.startswith("meta_")]
+    # print(f"[DEBUG] Meta columns found: {meta_cols}")
+    # print("[DEBUG] Example meta data (first 5 rows):")
+    # print(df[meta_cols].head())
 
     feature_cols = [c for c in df.columns if not c.startswith("meta_")]
     X_train, y_train = train_df[feature_cols], train_df['meta_er_status']
@@ -109,41 +114,42 @@ def main():
     X_test_clean = X_test[mask_test]
     y_test_clean = y_test[mask_test]
 
-    metrics = run_classifier(X_train_clean, y_train_clean, X_test_clean, y_test_clean)
-    metrics['adjuster'] = adjuster
-    metrics['subset_file'] = os.path.basename(csv_file)
-    metrics['test_source'] = test_source
+    # Bootstrapping logic
+    results = []
+    rng = np.random.default_rng(seed=123)
+
+    for b in range(n_boot):
+        print(f"\n=== Bootstrap iteration {b+1}/{n_boot} ===")
+        if n_boot == 1 or b == 0:
+            Xb, yb = X_train_clean, y_train_clean
+        else:
+            indices = rng.integers(0, len(X_train_clean), len(X_train_clean))
+            Xb = X_train_clean.iloc[indices]
+            yb = y_train_clean.iloc[indices]
+
+        metrics = run_classifier(Xb, yb, X_test_clean, y_test_clean, random_state=42 + b)
+
+        metrics['adjuster'] = adjuster
+        metrics['subset_file'] = os.path.basename(csv_file)
+        metrics['test_source'] = test_source
+        metrics['bootstrap_iter'] = b + 1
+
+        results.append(metrics)
 
     # --- Use the provided output directory ---
-    results_dir = os.path.join(output_dir, "", adjuster)
+    results_dir = os.path.join(output_dir, adjuster)
     os.makedirs(results_dir, exist_ok=True)
 
     result_file = os.path.join(
         results_dir,
         f"{os.path.basename(csv_file).replace('.csv', '')}_metrics.csv"
     )
-    # --- Safe write: write to a temporary file first ---
-    tmp_path = result_file + ".tmp"
+    
+    df_results = pd.DataFrame(results)
+    df_results.to_csv(result_file, index=False)
 
-    # Write complete CSV content (header + row) to temp file
-    pd.DataFrame([metrics]).to_csv(tmp_path, index=False)
-
-    # Verify that the temp file looks complete before moving it
-    # (check for header line and nonzero file size)
-    is_complete = False
-    if os.path.getsize(tmp_path) > 0:
-        with open(tmp_path, "r") as f:
-            first_line = f.readline().strip()
-            if first_line == "Accuracy,ROC AUC,Sensitivity,Specificity,MCC,True Negative,False Positive,False Negative,True Positive,adjuster,subset_file,test_source":
-                is_complete = True
-
-    if is_complete:
-        # Replace old file atomically (if it exists)
-        os.replace(tmp_path, result_file)
-        print(f"✅ Saved classifier metrics: {result_file}")
-    else:
-        print(f"⚠️ Incomplete write detected for {result_file}. Temp file left at {tmp_path}")
-
+    print(f"\nSaved classifier metrics (including bootstrap runs): ")
+    print(result_file)
 
 if __name__ == "__main__":
     main()

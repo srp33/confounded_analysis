@@ -1,13 +1,19 @@
 #!/bin/bash
 #SBATCH --job-name=run_snakemake
 #SBATCH --ntasks=1 
-#SBATCH --cpus-per-task=128
-#SBATCH --mem=16G
+#SBATCH --cpus-per-task=1
+#SBATCH --mem=2G
 #SBATCH --time=10:00:00
-#SBATCH --output=logs/snakemake_%A_%a.out
+#SBATCH --output=logs/snakemake_%A.out
 #SBATCH --requeue  # allow job to be requeued if killed
 
-pixi run snakemake -c 128
+pixi run snakemake \
+    --scheduler-ilp-solver COIN_CMD \
+    --executor slurm \
+    --default-resources slurm_account=srp33 slurm_partition="(auto)" \
+    --jobs 300 \
+    --resources mem_mb=100000 runtime=4320 \
+    --rerun-incomplete 
 
 
 

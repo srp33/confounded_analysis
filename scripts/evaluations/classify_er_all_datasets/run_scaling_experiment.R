@@ -3,24 +3,32 @@
 # Example:
 #   Rscript run_scaling_experiment.R log_combat 2
 
+# ---- Load Libraries ----
 suppressPackageStartupMessages({
   library(readr)
   library(dplyr)
+  library(argparse)
 })
 
 # ---- Parse Arguments ----
-args <- commandArgs(trailingOnly = TRUE)
-if (length(args) < 2) {
-  stop("Usage: Rscript run_scaling_experiment.R <adjuster> <subset_index>")
-}
+parser <- ArgumentParser(description = "Adjust each subset with a given adjuster and subset index k.")
 
-adjuster <- args[1]
-subset_index <- as.integer(args[2])
+parser$add_argument('--adjuster', required=TRUE, help='Desired adjuster (gmm, min_mean, combat, mnn, or log_transform)')
+parser$add_argument('--subset-path', required=TRUE, help='Subset .csv file to be adjusted.')
+parser$add_argument('--k', required=TRUE, help='Number of datasets in the subset, k.')
+parser$add_argument('--test', required=TRUE, help='Test source name/ID.')
 
-cat("Running scaling experiment with adjuster:", adjuster, "on subset:", subset_index, "\n")
+args <- parser$parse_args()
+
+adjuster <- args$adjuster
+subset_path <- args$subset_path
+subset_index <- args$k
+test_source <- args$test
+
+cat("Running scaling experiment with adjuster:", adjuster, "on file: ", subset_path, "\n")
 
 # ---- Source adjustment functions ----
-source("/scripts/adjust/adjust.R")
+source("/home/aw998/confounded_analysis/scripts/adjust/adjust.R")
 
 # ---- Adjustment wrapper ----
 apply_adjustment <- function(df, method, test_source) {
@@ -81,9 +89,6 @@ apply_adjustment <- function(df, method, test_source) {
 }
 
 # ---- Process single subset ----
-subset_path <- sprintf("/data/all_combined_subsets/subset_%dstudies.csv", subset_index)
-cat("\nProcessing:", subset_path, "\n")
-
 if (!file.exists(subset_path)) {
   stop("Missing subset file:", subset_path)
 }
@@ -93,25 +98,22 @@ cat("  Loaded subset with", nrow(df), "rows and", ncol(df), "columns.\n")
 cat("  Example columns:", paste(head(colnames(df), 5), collapse = ", "), "\n")
 cat("  Numeric columns:", sum(sapply(df, is.numeric)), "\n\n")
 
-sources <- unique(df$meta_source)
 
-for (test_source in sources) {
-  cat("\n--- Processing test source:", test_source, "---\n")
+cat("\n--- Processing test source:", test_source, "---\n")
   tryCatch({
     adjusted_df <- apply_adjustment(df, method = adjuster, test_source = test_source)
     
-    out_dir <- file.path("/data/adjusted_datasets", adjuster)
+    out_dir <- file.path("/home/aw998/confounded_analysis/grp_batch_effects/data/adjusted_datasets", adjuster)
     if (!dir.exists(out_dir)) dir.create(out_dir, recursive = TRUE)
 
     cat("  Preparing to write CSV: ", nrow(adjusted_df), "rows x", ncol(adjusted_df), "columns\n")
     cat("  Column names (first few):", paste(head(colnames(adjusted_df), 5), collapse = ", "), "\n")
 
-    out_path <- file.path(out_dir, sprintf("%dstudies_test_%s.csv", subset_index, test_source))
+    out_path <- file.path(out_dir, sprintf("%sstudies_test_%s.csv", subset_index, test_source))
     write_csv(adjusted_df, out_path)
     cat("Saved adjusted dataset to:", out_path, "\n")
   }, error = function(e) {
     cat("⚠️  Error while processing subset", subset_index, "test source", test_source, ":", conditionMessage(e), "\n")
   })
-}
 
 cat("\n=== Finished subset", subset_index, "for adjuster:", adjuster, "===\n")

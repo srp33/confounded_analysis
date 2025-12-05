@@ -6,18 +6,22 @@ DATA_FOLDER = config["data_folder"]
 rule all: 
     input: 
         OUTPUT_FOLDER + "/classify_all_figures/absolute_scaling_MCC.png", 
-        OUTPUT_FOLDER + "/classify_all_figures/absolute_scaling_ROC AUC.png",
+        OUTPUT_FOLDER + "/classify_all_figures/absolute_scaling_ROC_AUC.png",
         OUTPUT_FOLDER + "/classify_all_figures/scaling_MCC.png",
-        OUTPUT_FOLDER + "/classify_all_figures/scaling_ROC AUC.png"
+        OUTPUT_FOLDER + "/classify_all_figures/scaling_ROC_AUC.png"
 
 rule plot_performance:
     input:
         aggregated_metrics_file=OUTPUT_FOLDER + "/classify_er_all/all_metrics.csv"
     output: 
         OUTPUT_FOLDER + "/classify_all_figures/absolute_scaling_MCC.png", 
-        OUTPUT_FOLDER + "/classify_all_figures/absolute_scaling_ROC AUC.png",
+        OUTPUT_FOLDER + "/classify_all_figures/absolute_scaling_ROC_AUC.png",
         OUTPUT_FOLDER + "/classify_all_figures/scaling_MCC.png",
-        OUTPUT_FOLDER + "/classify_all_figures/scaling_ROC AUC.png"
+        OUTPUT_FOLDER + "/classify_all_figures/scaling_ROC_AUC.png"
+    resources: 
+        mem_mb=4000,
+        runtime=20
+    threads: 1
     log: 
         "log/plot_performance.log"
     shell:
@@ -36,6 +40,10 @@ rule aggregate_metrics:
         metrics_dir=OUTPUT_FOLDER + "/metrics"
     output:
         output_path=OUTPUT_FOLDER + "/classify_er_all/all_metrics.csv"
+    resources: 
+        mem_mb=4000,
+        runtime=20
+    threads: 1
     log: 
         "log/aggregate.log"
     shell:
@@ -47,15 +55,23 @@ rule classify:
     input:
         adjusted_csv = DATA_FOLDER + "/adjusted_data/{adjuster}/{adjuster}_{k}studies_test_{test_source}.csv"
     output: 
-        OUTPUT_FOLDER + "/metrics/{adjuster}/{adjuster}_{k}studies_test_{test_source}_metrics.csv"
+        metrics_file = OUTPUT_FOLDER + "/metrics/{adjuster}/{adjuster}_{k}studies_test_{test_source}_metrics.csv"
     log: 
         "log/classify/{adjuster}_{k}_{test_source}_classify.log"
+    resources: 
+        mem_mb=4000,
+        runtime=30
+    threads: 1
     params:
-        output_dir = OUTPUT_FOLDER + "/metrics"
+        output_dir = OUTPUT_FOLDER + "/metrics",
+        bootstrap = 100
     shell:
         """
-        python run_classifier.py {input.adjusted_csv} {params.output_dir} &> {log}
-
+        python run_classifier.py \
+            --csv {input.adjusted_csv} \
+            --outdir {params.output_dir} \
+            --bootstrap {params.bootstrap} \
+            &> {log}
         """
 
 rule adjust: 
@@ -63,11 +79,20 @@ rule adjust:
         DATA_FOLDER + "/subset_data/{k}studies_test_{test_source}.csv"
     output: 
         DATA_FOLDER + "/adjusted_data/{adjuster}/{adjuster}_{k}studies_test_{test_source}.csv"
+    resources: 
+        mem_mb=4000,
+        runtime=30
+    threads: 1
     log: 
         "log/adjust/{adjuster}_{k}_{test_source}_adjust.log"
     shell:
         """
-        Rscript run_scaling_experiment.R {wildcards.adjuster} {wildcards.k} &> {log}
+        Rscript run_scaling_experiment.R \
+            --adjuster {wildcards.adjuster} \
+            --subset-path {input} \
+            --k {wildcards.k} \
+            --test {wildcards.test_source} \
+            &> {log}
         """
 
 rule subset:
@@ -76,6 +101,10 @@ rule subset:
         order_file = DATA_FOLDER + "/all_combined/gse_order_files/{test_source}_order.csv"
     output:
         DATA_FOLDER + "/subset_data/{k}studies_test_{test_source}.csv"
+    resources: 
+        mem_mb=8000,
+        runtime=30
+    threads: 1
     log: 
         "log/subset/{k}_{test_source}_subset.log"
     shell:
@@ -94,6 +123,10 @@ rule make_order_files:
         combined_file = DATA_FOLDER + "/all_combined/all_combined.csv"
     output: 
         order_file = DATA_FOLDER + "/all_combined/gse_order_files/{test_source}_order.csv"
+    resources: 
+        mem_mb=4000,
+        runtime=10
+    threads: 1
     log: 
         "log/order/{test_source}_order.log"
     shell:
@@ -107,6 +140,10 @@ rule combine:
         DATA_FOLDER + "/gold"
     output:
         DATA_FOLDER + "/all_combined/all_combined.csv"
+    resources: 
+        mem_mb=4000,
+        runtime=60
+    threads: 1
     log: 
         "log/combine.log"
     shell:
