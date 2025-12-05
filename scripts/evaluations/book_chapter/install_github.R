@@ -10,20 +10,6 @@ pkgs <- list(
   polyester = "alyssafrazee/polyester"
 )
 
-# Bioconductor-only packages (install if missing)
-bioc_needed <- c("GenomeInfoDbData", "fairadapt")
-for (b in bioc_needed) {
-  if (!requireNamespace(b, quietly = TRUE)) {
-    message("Installing Bioconductor package: ", b)
-    tryCatch(
-      BiocManager::install(b, update = FALSE, ask = FALSE),
-      error = function(e) message("Bioc install failed for ", b, ": ", e$message)
-    )
-  } else {
-    message("Bioconductor package ", b, " already installed")
-  }
-}
-
 # GitHub packages (install only if missing)
 for (pkg in names(pkgs)) {
   if (!requireNamespace(pkg, quietly = TRUE)) {

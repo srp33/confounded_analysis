@@ -1,5 +1,12 @@
 #!/bin/bash
 
+#SBATCH --time 6:00:00
+#SBATCH --ntasks=1      # Processes per task
+#SBATCH --cpus-per-task=2 # Allocate num CPUs (threads) to each task
+#SBATCH --mem-per-cpu=4G
+#SBATCH -J "run_snakefile"   # job name
+#SBATCH -o snake_%A.log
+
 BOOK_CHAPTER_DIR="$HOME/confounded_analysis/scripts/evaluations/book_chapter"
 OUTPUT_DIR="$HOME/confounded_analysis/grp_batch_effects/outputs/book_chapter"
 
@@ -22,11 +29,12 @@ pixi run snakemake -s $BOOK_CHAPTER_DIR/Snakefile \
     --scheduler-ilp-solver COIN_CMD \
     --executor slurm \
     --default-resources slurm_account=srp33 slurm_partition="(auto)" \
-    --jobs 2500 \
-    --group-components batch_real_group=20 batch_simulation_group=20 \
+    --jobs 300 \
+    --group-components batch_real_group=20 batch_simulation_group=3 \
     --resources mem_mb=100000 runtime=4320 \
     --max-jobs-per-second 20 \
     --max-status-checks-per-second 10 \
     --latency-wait 120 \
+    --quiet \
     --rerun-incomplete \
     --keep-going

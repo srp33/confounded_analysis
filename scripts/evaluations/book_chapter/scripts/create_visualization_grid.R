@@ -27,6 +27,8 @@ parser$add_argument("--num-datasets", type = "integer", required = TRUE,
                    help = "Number of datasets to visualize")
 parser$add_argument("--test-study", type = "character", required = TRUE,
                    help = "Test study name")
+parser$add_argument("--adjusters", type = "character", required = TRUE,
+                   help = "Comma-separated list of adjusters to include")
 
 args <- parser$parse_args()
 
@@ -52,9 +54,9 @@ load_png_as_grob <- function(filepath) {
 #' @param method Visualization method
 #' @param num_datasets Number of datasets
 #' @param test_study Test study name
+#' @param adjusters Vector of adjuster names
 #' @return Grid arrangement
-create_comparison_grid <- function(input_dir, method, num_datasets, test_study) {
-  adjusters <- c("unadjusted", "combat", "mnn")
+create_comparison_grid <- function(input_dir, method, num_datasets, test_study, adjusters) {
   
   # Load all plots
   grobs <- lapply(adjusters, function(adj) {
@@ -67,26 +69,34 @@ create_comparison_grid <- function(input_dir, method, num_datasets, test_study) 
   title <- sprintf("%s Comparison (n=%d datasets, test=%s)", 
                   toupper(method), num_datasets, test_study)
   
-  grid.arrange(
-    grobs[[1]], grobs[[2]], grobs[[3]],
-    ncol = 3,
-    top = textGrob(title, gp = gpar(fontsize = 16, fontface = "bold"))
-  )
+  # Arrange horizontally (all adjusters in one row)
+  do.call(grid.arrange, c(
+    grobs,
+    list(
+      ncol = length(grobs),
+      top = textGrob(title, gp = gpar(fontsize = 16, fontface = "bold"))
+    )
+  ))
 }
 
 # ====================================================================
 # MAIN EXECUTION
 # ====================================================================
 
+# Parse adjusters list
+adjusters <- strsplit(args$adjusters, ",")[[1]]
+adjusters <- trimws(adjusters)  # Remove any whitespace
+
 cat(sprintf("Creating %s grid for n=%d, test=%s\n", 
             args$method, args$num_datasets, args$test_study))
+cat(sprintf("Adjusters: %s\n", paste(adjusters, collapse = ", ")))
 
 # Create output directory
 dir.create(dirname(args$output_file), recursive = TRUE, showWarnings = FALSE)
 
 # Create and save grid
-png(args$output_file, width = 2400, height = 800, res = 150)
-create_comparison_grid(args$input_dir, args$method, args$num_datasets, args$test_study)
+png(args$output_file, width = 800 * length(adjusters), height = 800, res = 150)
+create_comparison_grid(args$input_dir, args$method, args$num_datasets, args$test_study, adjusters)
 dev.off()
 
 cat(sprintf("Saved grid: %s\n", args$output_file))

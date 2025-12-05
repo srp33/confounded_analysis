@@ -10,135 +10,7 @@ suppressPackageStartupMessages({
 })
 
 # -----------------------------------------------------------------------------
-# GMM MODEL CONSTRUCTOR
-# -----------------------------------------------------------------------------
-
-#' 1D 2-component Gaussian Mixture Model
-#'
-#' @param max_iter Maximum number of EM iterations
-#' @param tol Convergence tolerance for log-likelihood
-#' @param weight_alpha Dirichlet prior pseudo-count for mixture weights (>= 1.0)
-#' @param variance_alpha Inverse-Gamma prior shape parameter for variances (>1 for posterior mean to exist)
-GaussianMixture1D <- function(
-  max_iter = 100,
-  tol = 1e-4,
-  weight_alpha = NULL,
-  variance_alpha = NULL
-) {
-  structure(list(
-    max_iter = max_iter,
-    tol = tol,
-    weight_alpha = weight_alpha,
-    variance_alpha = variance_alpha,
-    means_ = NULL,
-    variances_ = NULL,
-    weights_ = NULL,
-    resp_ = NULL
-  ), class = "GaussianMixture1D")
-}
-
-# -----------------------------------------------------------------------------
-# NORMAL PDF
-# -----------------------------------------------------------------------------
-
-normal_pdf <- function(x, mean, sd) {
-  exp(-0.5 * ((x - mean) / sd)^2) / (sd * sqrt(2 * pi))
-}
-
-# -----------------------------------------------------------------------------
-# FIT FUNCTION
-# -----------------------------------------------------------------------------
-
-fit.GaussianMixture1D <- function(model, X) {
-  X <- as.vector(X)
-  n <- length(X)
-  K <- 2
-  eps <- 1e-12
-
-  # Initialize means at 25th and 75th percentiles
-  means <- quantile(X, c(0.25, 0.75), na.rm = TRUE)
-  variances <- rep(var(X, na.rm = TRUE) + 1e-6, K)
-  weights <- rep(0.5, K)
-
-  if (is.null(model$weight_alpha)) {
-    model$weight_alpha <- 3.0 + n / 100.0
-  }
-  if (is.null(model$variance_alpha)) {
-    model$variance_alpha <- 6.0 + n / 50.0
-  }
-
-  log_likelihood_old <- -Inf
-
-  alpha_w <- model$weight_alpha
-  alpha_v <- max(model$variance_alpha, 1.01)  # ensure posterior mean exists
-
-  for (iter in 1:model$max_iter) {
-    # -------------------------------
-    # E-step: responsibilities
-    # -------------------------------
-    pdfs <- matrix(0, nrow = n, ncol = K)
-    for (k in 1:K) {
-      pdfs[, k] <- weights[k] * normal_pdf(X, means[k], sqrt(variances[k]))
-    }
-    resp <- pdfs / (rowSums(pdfs) + eps)
-
-    # -------------------------------
-    # M-step: posterior mean updates
-    # -------------------------------
-    Nk <- colSums(resp)
-    variances_old <- variances
-
-    # 1) Update weights: posterior mean of Dirichlet
-    weights <- (Nk + alpha_w) / (n + K * alpha_w)
-
-    # 2) Update means (weighted ML, no prior)
-    for (k in 1:K) {
-      means[k] <- sum(resp[, k] * X) / (Nk[k] + eps)
-    }
-
-    # 3) Update variances: inverse-gamma prior, coupled across components
-    for (k in 1:K) {
-      other_k <- 3 - k  # if k=1, other=2; if k=2, other=1
-      if (Nk[k] < 1e-8) {
-        variances[k] <- variances_old[k]
-        next
-      }
-
-      S_k <- sum(resp[, k] * (X - means[k])^2)
-      v_other <- variances_old[other_k]
-      beta0 <- (alpha_v - 1) * v_other
-
-      alpha_post <- alpha_v + 0.5 * Nk[k]
-      beta_post <- beta0 + 0.5 * S_k
-
-      if (alpha_post <= 1 + 1e-12) {
-        variances[k] <- max(variances_old[k], 1e-6)
-      } else {
-        variances[k] <- beta_post / (alpha_post - 1)
-      }
-    }
-
-    variances <- pmax(variances, 1e-6)
-
-    # -------------------------------
-    # Convergence check
-    # -------------------------------
-    log_likelihood <- sum(log(rowSums(pdfs) + eps))
-    if (abs(log_likelihood - log_likelihood_old) < model$tol) break
-    log_likelihood_old <- log_likelihood
-  }
-
-  model$means_ <- means
-  model$variances_ <- variances
-  model$weights_ <- weights
-  model$resp_ <- resp
-
-  return(model)
-}
-
-
-# -----------------------------------------------------------------------------
-# SIMPLE FALLBACK
+# SIMPLE FALLBACK FOR DEGENERATE GENES
 # -----------------------------------------------------------------------------
 
 simple_fallback <- function(gene_exp) {
@@ -153,206 +25,370 @@ simple_fallback <- function(gene_exp) {
 
 
 # -----------------------------------------------------------------------------
-# GENE TRANSFORM / BIMODAL NORMALIZE / BATCH ADJUST
+# HELPER: COMPUTE GAUSSIAN PDF
 # -----------------------------------------------------------------------------
 
-get_gene_gmm_transform <- function(
-    gene_exp,
-    weight_alpha = NULL,
-    variance_alpha = NULL,
-    mean_mean_zero = TRUE,
-    mean1_zero = FALSE,
-    unit_var = TRUE,
-    means_at_1 = FALSE,
-    diff_exp = FALSE,
-    output_counts = FALSE
-) {
-  if (all(is.na(gene_exp))) return(gene_exp)
-
-  # --- Log-transform ---
-  min_val <- min(gene_exp, na.rm = TRUE)
-  x_transformed <- log(gene_exp - min_val + 1)
-  mean_shift_fallback <- scale(x_transformed, scale = FALSE)[, 1]
-
-  # Check for small variance
-  if (var(x_transformed, na.rm = TRUE) < 1e-8) return(mean_shift_fallback)
-
-  # --- Quantiles ---
-  ranks <- rank(x_transformed, na.last = "keep", ties.method = "average")
-  n_valid <- sum(!is.na(x_transformed))
-  quantiles <- ranks / (n_valid + 1)
-
-  # --- Fit 2-component GMM ---
-  gmm <- GaussianMixture1D(weight_alpha = weight_alpha, variance_alpha = variance_alpha)
-  gmm <- fit.GaussianMixture1D(gmm, x_transformed)
-
-  qnorm_fallback <- qnorm(quantiles)
-
-  # Validate GMM parameters
-  if (any(is.na(gmm$means_)) || any(is.na(gmm$variances_)) || any(is.na(gmm$weights_))) {
-    return(qnorm_fallback)
-  }
-
-  # Ensure lower component first
-  if (gmm$means_[1] > gmm$means_[2]) {
-    means <- c(gmm$means_[2], gmm$means_[1])
-    variances <- c(gmm$variances_[2], gmm$variances_[1])
-    weights <- c(gmm$weights_[2], gmm$weights_[1])
-  } else {
-    means <- gmm$means_
-    variances <- gmm$variances_
-    weights <- gmm$weights_
-  }
-
-  # Check for small variances, likely not truly bimodal
-  if (any(variances < 1e-9)) return(qnorm_fallback)
-
-  # --- Affine corrections ---
-  if (mean1_zero) {
-    # Adjusts the first mean to be 0
-    x_transformed <- x_transformed - means[1]
-  }
-
-  if (mean_mean_zero) {
-    # Centers the means on zero, one on either side
-    mean_center <- 0.5 * (means[1] + means[2])
-    x_transformed <- x_transformed - mean_center
-  }
-
-  if (unit_var) {
-    # Scales the variance to be 1, assuming equal weights
-    variance <- 0.5 * (variances[1] + variances[2]) + 0.25 * (means[2] - means[1])^2
-    scale_factor <- sqrt(max(variance, 1e-9))
-    x_transformed <- x_transformed / scale_factor
-  }
-
-  if (means_at_1) {
-    # Compute safe scaling so component means map to ±1
-    scale_factor <- (means[2] - means[1]) / 2
-    if (abs(scale_factor) < 1e-6) {
-      return(mean_shift_fallback)
-    }
-    x_transformed <- x_transformed / scale_factor
-  }
-
-  if (output_counts) {
-    # Output integral data
-    x_transformed = round(exp(x_transformed) * 250)
-  }
-
-  return(x_transformed)
+#' Compute Gaussian PDF for multiple genes
+#' 
+#' Computes the probability density function of a Gaussian distribution:
+#' PDF(x | μ, σ²) = (1 / (σ√(2π))) * exp(-(x-μ)² / (2σ²))
+#' 
+#' @param data Matrix [n_genes × n_samples] of data points
+#' @param means Vector [n_genes] of means (μ)
+#' @param variances Vector [n_genes] of variances (σ²)
+#' @param weights Vector [n_genes] of mixture weights
+#' @return Matrix [n_genes × n_samples] of weighted PDFs
+compute_gaussian_pdf <- function(data, means, variances, weights) {
+  centered <- data - means  # (x - μ)
+  scaled <- centered^2 / variances  # (x - μ)² / σ²
+  sds <- sqrt(variances)  # σ
+  exp(-0.5 * scaled) * (weights / (sds * sqrt(2 * pi)))
 }
 
-#' Bimodal normalization using GMM with parallel processing
+#' Update variance with coupled Inverse-Gamma prior
+#' 
+#' Computes posterior mean of Inverse-Gamma distribution where the prior
+#' mean is coupled to the other component's variance. This encourages
+#' similar variances across components for stability.
+#' 
+#' @param data Matrix [n_genes × n_samples] of data points
+#' @param means Vector [n_genes] of component means
+#' @param responsibilities Matrix [n_genes × n_samples] of responsibilities
+#' @param Nk Vector [n_genes] of effective sample counts
+#' @param variance_other Vector [n_genes] of other component's variances
+#' @param alpha_v Inverse-Gamma shape parameter
+#' @return Vector [n_genes] of updated variances
+update_variance_coupled <- function(data, means, responsibilities, Nk, variance_other, alpha_v) {
+  eps <- 1e-12
+  
+  # Compute sum of squared residuals weighted by responsibilities
+  centered <- data - means
+  S_k <- rowSums(responsibilities * centered^2)
+  
+  # Prior: beta0 = (alpha - 1) * variance_other
+  # This couples the prior to the other component's variance
+  beta0 <- (alpha_v - 1) * variance_other
+  
+  # Posterior parameters
+  alpha_post <- alpha_v + 0.5 * Nk
+  beta_post <- beta0 + 0.5 * S_k
+  
+  # Posterior mean: beta_post / (alpha_post - 1)
+  pmax(beta_post / (alpha_post - 1), 1e-6)
+}
+
+
+# -----------------------------------------------------------------------------
+# VECTORIZED MINI-BATCH GMM FITTING
+# -----------------------------------------------------------------------------
+
+#' Fit GMM to multiple genes simultaneously (fully vectorized)
+#' @param data_chunk Matrix [n_genes × n_samples] for this chunk
+#' @param weight_alpha Prior for mixture weights
+#' @param variance_alpha Prior for variances
+#' @param max_iter Maximum EM iterations
+#' @param tol Convergence tolerance
+#' @return List with means, variances, weights matrices [n_genes × 2]
+fit_gmm_batch <- function(data_chunk, weight_alpha = NULL, variance_alpha = NULL, 
+                         max_iter = 100, tol = 1e-6) {
+  # data_chunk is [n_genes × n_samples]
+  n_genes <- nrow(data_chunk)
+  n_samples <- ncol(data_chunk)
+  K <- 2
+  eps <- 1e-12
+  
+  # Initialize parameters for all genes [n_genes × K]
+  means <- matrix(0, nrow = n_genes, ncol = K)
+  variances <- matrix(0, nrow = n_genes, ncol = K)
+  weights <- matrix(0.5, nrow = n_genes, ncol = K)
+  
+  # Vectorized initialization using mean ± 0.5*sd (faster than quantiles)
+  row_sums <- rowSums(data_chunk)
+  row_sq_sums <- rowSums(data_chunk^2)
+  global_means <- row_sums / n_samples
+  global_vars <- (row_sq_sums - (row_sums^2 / n_samples)) / (n_samples - 1)
+  global_vars <- pmax(global_vars, 1e-6)
+  global_sds <- sqrt(global_vars)
+  
+  means[, 1] <- global_means - 0.5 * global_sds
+  means[, 2] <- global_means + 0.5 * global_sds
+  variances[, 1] <- global_vars
+  variances[, 2] <- global_vars
+  
+  # Set priors
+  if (is.null(weight_alpha)) weight_alpha <- 3.0 + n_samples / 100.0
+  if (is.null(variance_alpha)) variance_alpha <- 6.0 + n_samples / 50.0
+  alpha_v <- max(variance_alpha, 1.01)
+  
+  # Track convergence per gene
+  converged <- rep(FALSE, n_genes)
+  log_likelihood_old <- rep(-Inf, n_genes)
+  active_genes <- 1:n_genes
+  
+  for (iter in 1:max_iter) {
+    if (length(active_genes) == 0) break
+    
+    # ========================================================================
+    # VECTORIZED E-STEP: Compute responsibilities for all active genes at once
+    # ========================================================================
+    # Extract active gene data [n_active_genes × n_samples]
+    data_active <- data_chunk[active_genes, , drop = FALSE]
+    n_active <- length(active_genes)
+    
+    # Compute PDFs for both components using helper function
+    pdf_k1 <- compute_gaussian_pdf(data_active, means[active_genes, 1], 
+                                   variances[active_genes, 1], weights[active_genes, 1])
+    pdf_k2 <- compute_gaussian_pdf(data_active, means[active_genes, 2], 
+                                   variances[active_genes, 2], weights[active_genes, 2])
+    
+    # Normalize to get responsibilities [n_active × n_samples]
+    pdf_sums <- pdf_k1 + pdf_k2 + eps
+    resp_k1 <- pdf_k1 / pdf_sums
+    resp_k2 <- pdf_k2 / pdf_sums
+    
+    # Transpose for compatibility with M-step [n_samples × n_active]
+    resp_k1_t <- t(resp_k1)
+    resp_k2_t <- t(resp_k2)
+    
+    # ========================================================================
+    # VECTORIZED M-STEP: Update parameters for all active genes
+    # ========================================================================
+    
+    # Compute Nk for all genes [n_active × K]
+    Nk1 <- colSums(resp_k1_t)
+    Nk2 <- colSums(resp_k2_t)
+    
+    variances_old <- variances[active_genes, , drop = FALSE]
+    
+    # 1) Update weights [n_active × K]
+    weights[active_genes, 1] <- (Nk1 + weight_alpha) / (n_samples + K * weight_alpha)
+    weights[active_genes, 2] <- (Nk2 + weight_alpha) / (n_samples + K * weight_alpha)
+    
+    # 2) Update means [n_active × K]
+    weighted_sums1 <- rowSums(data_active * resp_k1)
+    means[active_genes, 1] <- weighted_sums1 / (Nk1 + eps)
+    
+    weighted_sums2 <- rowSums(data_active * resp_k2)
+    means[active_genes, 2] <- weighted_sums2 / (Nk2 + eps)
+    
+    # 3) Update variances with coupling [n_active × K]
+    variances[active_genes, 1] <- update_variance_coupled(
+      data_active, means[active_genes, 1], resp_k1, Nk1, variances_old[, 2], alpha_v
+    )
+    variances[active_genes, 2] <- update_variance_coupled(
+      data_active, means[active_genes, 2], resp_k2, Nk2, variances_old[, 1], alpha_v
+    )
+    
+    # ========================================================================
+    # VECTORIZED CONVERGENCE CHECK
+    # ========================================================================
+    log_likelihoods <- rowSums(log(pdf_sums))
+    
+    # Compute delta for all active genes at once
+    delta <- abs(log_likelihoods - log_likelihood_old[active_genes])
+    newly_converged <- delta < tol
+    
+    # Update convergence status
+    converged[active_genes[newly_converged]] <- TRUE
+    log_likelihood_old[active_genes] <- log_likelihoods
+    
+    # Update active genes (only non-converged)
+    active_genes <- which(!converged)
+  }
+  
+  return(list(means = means, variances = variances, weights = weights))
+}
+
+#' Apply GMM transformations to a batch of genes (fully vectorized)
+#' @param data_chunk Matrix [n_genes × n_samples]
+apply_gmm_transforms_batch <- function(data_chunk, gmm_params, mean_mean_zero, mean1_zero,
+                                      unit_var, means_at_1, output_counts) {
+  # data_chunk is [n_genes × n_samples]
+  n_genes <- nrow(data_chunk)
+  n_samples <- ncol(data_chunk)
+  
+  means <- gmm_params$means
+  variances <- gmm_params$variances
+  
+  # Vectorized: Ensure lower component first for all genes
+  swap_needed <- means[, 1] > means[, 2]
+  if (any(swap_needed)) {
+    means[swap_needed, ] <- means[swap_needed, c(2, 1)]
+    variances[swap_needed, ] <- variances[swap_needed, c(2, 1)]
+  }
+  
+  transformed <- data_chunk
+  
+  # All operations work on rows (genes)
+  if (mean1_zero) {
+    # Subtract first mean from each gene (row-wise)
+    transformed <- transformed - means[, 1]
+  }
+  
+  if (mean_mean_zero) {
+    # Center means around zero
+    mean_centers <- 0.5 * (means[, 1] + means[, 2])
+    transformed <- transformed - mean_centers
+  }
+  
+  if (unit_var) {
+    # Scale to unit variance
+    variances_total <- 0.5 * rowSums(variances) + 0.25 * (means[, 2] - means[, 1])^2
+    scale_factors <- sqrt(pmax(variances_total, 1e-9))
+    transformed <- transformed / scale_factors
+  }
+  
+  if (means_at_1) {
+    # Scale so means are at ±1 
+    scale_factors <- (means[, 2] - means[, 1]) / 2
+    transformed <- transformed / scale_factors
+  }
+  
+  if (output_counts) {
+    # Convert to count-like data
+    transformed <- round(exp(transformed) * 250)
+  }
+  
+  return(transformed)
+}
+
+#' Setup parallel cluster with fallback
+#' @param num_workers Number of workers (-1 for all cores)
+#' @param debug Print debug messages
+#' @return Cluster object
+setup_parallel_cluster <- function(num_workers, debug = FALSE) {
+  num_cores <- if (num_workers == -1) detectCores() else min(num_workers, detectCores())
+  if (debug) message("Using ", num_cores, " cores for parallel processing")
+  
+  if (.Platform$OS.type == "unix") {
+    tryCatch({
+      parallel::makeForkCluster(num_cores)
+    }, error = function(e) {
+      if (debug) cat("Fork cluster failed, using PSOCK:", e$message, "\n")
+      parallel::makePSOCKcluster(num_cores)
+    })
+  } else {
+    parallel::makePSOCKcluster(num_cores)
+  }
+}
+
+#' Bimodal normalization using GMM with mini-batch vectorization and optional parallelization
+#' @param data Matrix in [genes × samples] orientation
 bimodal_normalize <- function(data, weight_alpha=NULL, variance_alpha=NULL, mean_mean_zero = TRUE, unit_var = TRUE, 
                              mean1_zero = FALSE, diff_exp = FALSE, means_at_1 = FALSE, 
-                             output_counts = FALSE, debug = FALSE, num_workers = NULL) {
-  gene_names <- colnames(data)
-  if (is.null(gene_names)) gene_names <- paste0("Gene", 1:ncol(data))
+                             output_counts = FALSE, log_transform = TRUE, debug = FALSE, 
+                             num_workers = NULL, chunk_size = 200) {
+  # Expect data in [genes × samples] orientation
+  gene_names <- rownames(data)
+  if (is.null(gene_names)) gene_names <- paste0("Gene", 1:nrow(data))
 
   if (diff_exp && unit_var) stop("Unit variance not allowed for diff exp")
   if (diff_exp && means_at_1) stop("Means at 1 not allowed for diff exp")
   if (means_at_1 && unit_var) stop("Cannot have both means_at_1 and unit_var")
   if (means_at_1 && !mean_mean_zero) stop("Cannot have means_at_1 without mean_mean_zero")
   
-  if (debug) message("%%%%%%% Num workers: ", num_workers)
-  # Use parallel processing if num_workers > 1
-  if (!is.null(num_workers) && (num_workers != 1)) {
-    num_cores <- if (num_workers == -1) detectCores() else min(num_workers, detectCores())
-    if (debug) message("%%%%%%% Num cores: ", num_cores)
-    if (.Platform$OS.type == "unix") {
-      # Prefer fork clusters on Unix systems (no port conflicts)
-      cl <- tryCatch({
-        parallel::makeForkCluster(num_cores)
-        if (debug) cat("Fork cluster created successfully\n")
-        parallel::makeForkCluster(num_cores)
-      }, error = function(e) {
-        if (debug) cat("Fork cluster failed, using PSOCK with retry:", e$message, "\n")
-        # Fallback to PSOCK with retry logic
-        cl_temp <- NULL
-        max_attempts <- 5
-        for (attempt in 1:max_attempts) {
-          tryCatch({
-            cl_temp <- parallel::makePSOCKcluster(num_cores)
-            return(cl_temp)
-          }, error = function(e2) {
-            if (debug) cat("PSOCK cluster attempt", attempt, "failed:", e2$message, "\n")
-            if (attempt == max_attempts) {
-              stop("Failed to create cluster after ", max_attempts, " attempts: ", e2$message)
-            }
-            Sys.sleep(runif(1, 0.5, 2))  # Random delay before retry
-          })
-        }
-      })
-    } else {
-      if (debug) cat("Fork cluster successful")
-      # Try to create PSOCK cluster with port retry logic
-      cl <- NULL
-      max_attempts <- 5
-      for (attempt in 1:max_attempts) {
-        tryCatch({
-          cl <- parallel::makePSOCKcluster(num_cores)
-          break
-        }, error = function(e) {
-          if (debug) cat("Cluster creation attempt", attempt, "failed:", e$message, "\n")
-          if (attempt == max_attempts) {
-            stop("Failed to create cluster after ", max_attempts, " attempts: ", e$message)
-          }
-          Sys.sleep(runif(1, 0.5, 2))  # Random delay before retry
-        })
-      }
-    }
-    registerDoParallel(cl)
-    on.exit(stopCluster(cl), add = TRUE)
-    
-    results <- foreach(i = seq_along(gene_names), .combine = cbind, 
-                      .packages = c("stats"), .errorhandling = 'pass') %dopar% {
-      gene_exp <- data[, i]
-      if (all(is.na(gene_exp)) || all(gene_exp == gene_exp[1], na.rm = TRUE)) {
-        print(gene_exp)
-        return(gene_exp)
-      }
-      
-      tryCatch({
-        get_gene_gmm_transform(gene_exp, weight_alpha, variance_alpha, mean_mean_zero, mean1_zero, 
-                              unit_var, means_at_1, diff_exp, output_counts)
-      }, error = function(e) {
-        if (debug) message("Doing simple fallback")
-        simple_fallback(gene_exp)
-      })
-    }
-    bimodal_data <- as.matrix(results)
-  } else {
-    # Sequential processing
-    if (debug) message("Doing sequential processing!")
-    bimodal_data <- matrix(NA, nrow = nrow(data), ncol = ncol(data))
-    for (i in seq_along(gene_names)) {
-      gene_exp <- data[, i]
-      if (all(is.na(gene_exp)) || all(gene_exp == gene_exp[1], na.rm = TRUE)) {
-        if (debug) message("All NA for gene: ", gene_names[i])
-        bimodal_data[, i] <- gene_exp
-        next
-      }
-      
-      tryCatch({
-        bimodal_data[, i] <- get_gene_gmm_transform(gene_exp, weight_alpha, variance_alpha, mean_mean_zero, mean1_zero, 
-                                                   unit_var, means_at_1, diff_exp, output_counts)
-      }, error = function(e) {
-        if (debug) message("Got Error, simple fallback")
-        if (debug) message(e)
-        bimodal_data[, i] <- simple_fallback(gene_exp)
-      })
-
-      if (debug) {
-        message("Min: ", min(bimodal_data[, i], na.rm = TRUE))
-        message("Max: ", max(bimodal_data[, i], na.rm = TRUE))
-        message("Num non-finite: ", sum(!is.finite(bimodal_data[, i])))
-      }
+  n_genes <- nrow(data)
+  n_samples <- ncol(data)
+  bimodal_data <- matrix(NA, nrow = n_genes, ncol = n_samples)
+  
+  # Vectorized log transform
+  if (log_transform) {
+    row_mins <- apply(data, 1, min, na.rm = TRUE)
+    data <- log(sweep(data, 1, row_mins, "-") + 1)
+  }
+  
+  # Vectorized variance calculation (faster than apply)
+  row_sums <- rowSums(data, na.rm = TRUE)
+  row_sq_sums <- rowSums(data^2, na.rm = TRUE)
+  n_valid <- rowSums(!is.na(data))
+  gene_vars <- (row_sq_sums - (row_sums^2 / n_valid)) / (n_valid - 1)
+  degenerate <- is.na(gene_vars) | gene_vars < 1e-8
+  
+  good_genes <- which(!degenerate)
+  bad_genes <- which(degenerate)
+  
+  if (debug) {
+    message("Processing ", length(good_genes), " non-degenerate genes with GMM")
+    if (length(bad_genes) > 0) {
+      message("Using fallback for ", length(bad_genes), " degenerate genes")
     }
   }
   
-  colnames(bimodal_data) <- gene_names
-  rownames(bimodal_data) <- rownames(data)
+  # Apply fallback to degenerate genes
+  if (length(bad_genes) > 0) {
+    for (g in bad_genes) {
+      bimodal_data[g, ] <- simple_fallback(data[g, ])
+    }
+  }
+  
+  # Fail fast
+  if (length(good_genes) == 0) {
+    rownames(bimodal_data) <- gene_names
+    colnames(bimodal_data) <- colnames(data)
+    return(bimodal_data)
+  }
+  
+  # Create chunks from good genes only
+  # Use larger chunks for sequential processing to reduce overhead
+  effective_chunk_size <- if (is.null(num_workers) || num_workers == 1) {
+    min(chunk_size * 5, length(good_genes))  # 5x larger chunks for sequential
+  } else {
+    chunk_size
+  }
+  
+  chunks <- split(good_genes, ceiling(seq_along(good_genes) / effective_chunk_size))
+  
+  if (debug) message("Processing in ", length(chunks), " chunks of size ~", effective_chunk_size)
+  
+  # Decide on parallelization
+  use_parallel <- !is.null(num_workers) && (num_workers != 1) && length(chunks) > 1
+  
+  if (use_parallel) {
+    cl <- setup_parallel_cluster(num_workers, debug)
+    registerDoParallel(cl)
+    on.exit(stopCluster(cl), add = TRUE)
+    
+    # Process chunks in parallel
+    # Explicitly export helper functions to avoid namespace collisions
+    chunk_results <- foreach(i = seq_along(chunks), .packages = c("stats"),
+                             .export = c("fit_gmm_batch", "apply_gmm_transforms_batch", 
+                                       "compute_gaussian_pdf", "update_variance_coupled"),
+                             .errorhandling = 'pass') %dopar% {
+      chunk_idx <- chunks[[i]]
+      chunk_data <- data[chunk_idx, , drop = FALSE]
+      gmm_params <- fit_gmm_batch(chunk_data, weight_alpha, variance_alpha)
+      apply_gmm_transforms_batch(chunk_data, gmm_params, mean_mean_zero, 
+                                mean1_zero, unit_var, means_at_1, output_counts)
+    }
+    
+    # Combine results
+    for (i in seq_along(chunks)) {
+      chunk_idx <- chunks[[i]]
+      result_chunk <- chunk_results[[i]]
+      if (!is.null(result_chunk) && !inherits(result_chunk, "error")) {
+        bimodal_data[chunk_idx, ] <- result_chunk
+      } else {
+        # Fallback for failed chunks
+        for (g in chunk_idx) {
+          bimodal_data[g, ] <- simple_fallback(data[g, ])
+        }
+      }
+    }
+    
+  } else {
+    # Sequential processing of chunks
+    if (debug) message("Sequential chunk processing")
+    
+    for (chunk_idx in chunks) {
+      chunk_data <- data[chunk_idx, , drop = FALSE]
+      gmm_params <- fit_gmm_batch(chunk_data, weight_alpha, variance_alpha)
+      bimodal_data[chunk_idx, ] <- apply_gmm_transforms_batch(chunk_data, gmm_params, mean_mean_zero, 
+                                                              mean1_zero, unit_var, means_at_1, output_counts)
+    }
+  }
+  
+  rownames(bimodal_data) <- gene_names
+  colnames(bimodal_data) <- colnames(data)
   return(bimodal_data)
 }
 
@@ -367,45 +403,52 @@ bimodal_normalize <- function(data, weight_alpha=NULL, variance_alpha=NULL, mean
 #' @param diff_exp If TRUE, adjust first mean to zero for differential expression preservation (default FALSE)
 #' @param means_at_1 If TRUE, place means at ±1 (default FALSE)
 #' @param output_counts If TRUE, attempt to preserve count structure (default FALSE)
+#' @param log_transform If TRUE, apply log-transformation to data (default TRUE). Set to FALSE for pre-transformed data.
 #' @param debug If TRUE, print progress messages
 #' 
 #' @details The function applies GMM-based bimodal normalization to each batch separately.
 #' Various transformation options allow control over the final distribution properties.
 gmm_adjust <- function(data, batch, genes_are_columns=TRUE, weight_alpha=NULL, variance_alpha=NULL, mean_mean_zero = TRUE,
                       mean1_zero = FALSE, unit_var = TRUE, diff_exp = FALSE, means_at_1 = FALSE, 
-                      output_counts = FALSE, debug = FALSE, num_workers = NULL) {
+                      output_counts = FALSE, log_transform = TRUE, debug = FALSE, num_workers = NULL, chunk_size = 200) {
   batch_factor <- as.factor(batch)
   batch_levels <- levels(batch_factor)
-  if (!genes_are_columns) {
-    if (debug) message("Transposing data")
+  
+  # Work in [genes × samples] orientation throughout
+  needs_transpose_back <- FALSE
+  if (genes_are_columns) {
+    if (debug) message("Transposing to [genes × samples] orientation")
     data <- t(data)
+    needs_transpose_back <- TRUE
   }
+  # Now data is [genes × samples]
+  
   adjusted_data <- matrix(NA, nrow = nrow(data), ncol = ncol(data))
 
   if (debug) message("Batch: ",  batch)
   
   for (b in batch_levels) {
     batch_indices <- which(batch == b)
-    if (debug) message("Batch indices: ", batch_indices)
-    batch_data <- data[batch_indices, , drop = FALSE]
+    # Extract batch samples (columns in [genes × samples])
+    batch_data <- data[, batch_indices, drop = FALSE]
     
     batch_adjusted <- bimodal_normalize(
       batch_data, 
       weight_alpha=weight_alpha, variance_alpha=variance_alpha,
       mean_mean_zero=mean_mean_zero, unit_var=unit_var,
       mean1_zero=mean1_zero, diff_exp=diff_exp, means_at_1=means_at_1, 
-      output_counts=output_counts, 
-      debug=debug, num_workers=num_workers
+      output_counts=output_counts, log_transform=log_transform,
+      debug=debug, num_workers=num_workers, chunk_size=chunk_size
     )
     
-    adjusted_data[batch_indices, ] <- batch_adjusted
+    adjusted_data[, batch_indices] <- batch_adjusted
   }
   
-  colnames(adjusted_data) <- colnames(data)
   rownames(adjusted_data) <- rownames(data)
+  colnames(adjusted_data) <- colnames(data)
 
-  if (!genes_are_columns) {
-    if (debug) message("Transposing data back")
+  if (needs_transpose_back) {
+    if (debug) message("Transposing back to [samples × genes]")
     adjusted_data <- t(adjusted_data)
   }
   return(adjusted_data)

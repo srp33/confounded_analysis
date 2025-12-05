@@ -51,7 +51,7 @@ rule make_fig1:
         data=OUTPUT_FOLDER + "/batch_on_classifiers.csv",
         script=SCRIPTS_FOLDER + "/plot_batch_on_classifiers.R"
     output:
-        OUTPUT_FOLDER + "/batch_on_classifiers.png"
+        [OUTPUT_FOLDER + "/batch_on_classifiers.png"]
     log:
         OUTPUT_FOLDER + "/logs/plot_batch_on_classifiers.log"
     threads: 1
@@ -105,7 +105,7 @@ rule classify_batch_effects:
     threads: 1
     resources:
         mem_mb=2000,
-        runtime=9
+        runtime=lambda wildcards, attempt: 20 * attempt
     shell:
         """
         Rscript {input.script} -o {output} \
@@ -122,16 +122,21 @@ rule make_fig2:
         data=OUTPUT_FOLDER + "/adjusters_on_classifiers.csv",
         script=SCRIPTS_FOLDER + "/plot_adjusters_on_classifiers.R"
     output:
-        OUTPUT_FOLDER + "/adjusters_on_classifiers.png"
+        main=OUTPUT_FOLDER + "/adjusters_on_classifiers.png",
+        diff=OUTPUT_FOLDER + "/adjusters_on_classifiers_differences.png",
+        relative=OUTPUT_FOLDER + "/adjusters_on_classifiers_relative.png",
+        stats=OUTPUT_FOLDER + "/adjusters_on_classifiers_statistics.csv"
     log:
         OUTPUT_FOLDER + "/logs/plot_adjusters_on_classifiers.log"
     threads: 1
     resources:
         mem_mb=4000,
         runtime=10
+    params:
+        adjusters=",".join(config.get("viz_adjusters", config["adjusters"]))
     shell:
         """
-        Rscript {input.script} -i {input.data} -o {output} &> {log}
+        Rscript {input.script} -i {input.data} -o {output.main} --adjusters {params.adjusters} &> {log}
         """
 
 
@@ -185,7 +190,7 @@ rule classify_adjusters:
     threads: 1
     resources:
         mem_mb=2000,
-        runtime=12
+        runtime=lambda wildcards, attempt: 12 * attempt
     shell:
         """
         set -o pipefail
@@ -216,7 +221,7 @@ rule visualize_batch_adjustment:
     threads: 1
     resources:
         mem_mb=4000,
-        runtime=10
+        runtime=15
     params:
         output_dir=OUTPUT_FOLDER + "/visualizations/unreduced/individual"
     shell:
@@ -236,7 +241,7 @@ rule create_visualization_grid:
     input:
         plots=expand(
             OUTPUT_FOLDER + "/visualizations/unreduced/individual/{{method}}/{adjuster}_n{{n_datasets}}_test{{test_study}}.png",
-            adjuster=config["adjusters"]
+            adjuster=config.get("viz_adjusters", config["adjusters"])
         ),
         script=SCRIPTS_FOLDER + "/create_visualization_grid.R"
     output:
@@ -248,7 +253,8 @@ rule create_visualization_grid:
         mem_mb=2000,
         runtime=8
     params:
-        input_dir=OUTPUT_FOLDER + "/visualizations/unreduced/individual"
+        input_dir=OUTPUT_FOLDER + "/visualizations/unreduced/individual",
+        adjusters=",".join(config.get("viz_adjusters", config["adjusters"]))
     shell:
         """
         Rscript {input.script} \
@@ -257,5 +263,6 @@ rule create_visualization_grid:
             --method {wildcards.method} \
             --num-datasets {wildcards.n_datasets} \
             --test-study {wildcards.test_study} \
+            --adjusters {params.adjusters} \
             > {log} 2>&1
         """

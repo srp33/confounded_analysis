@@ -25,8 +25,21 @@ classifiers:
 adjusters:
   - "unadjusted"
   - "combat"
+  - "combat_mean"
   - "combat_sup"
   - "mnn"
+  - "mnn_centered"
+  - "ruvr"
+  - "gmm"
+
+# Adjusters to visualize (subset of adjusters for faster visualization)
+viz_adjusters:
+  - "unadjusted"
+  - "combat"
+  - "combat_mean"
+  - "combat_sup"
+  - "mnn"
+  - "mnn_centered"
 
 split_seed_start: 42
 split_seed_count: 200

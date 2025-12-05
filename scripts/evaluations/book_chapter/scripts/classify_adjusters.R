@@ -51,7 +51,7 @@ import_reticulate <- function() {
 parser <- ArgumentParser(description = "Execute single adjuster comparison job for batch correction analysis")
 
 parser$add_argument("--adjuster", type = "character", required = TRUE,
-                   help = "Batch correction method: unadjusted, combat, combat_sup, or mnn")
+                   help = "Batch correction method: unadjusted, combat, combat_mean, combat_sup, mnn, mnn_centered, ruvr, or gmm")
 parser$add_argument("--classifier", type = "character", required = TRUE,
                    help = "Classifier type: logistic, elnet, elasticnet, svm, rf, nnet, knn, xgboost, or rvc")
 parser$add_argument("--num-datasets", type = "integer", required = TRUE,
@@ -67,7 +67,7 @@ args <- parser$parse_args()
 # Arguments are automatically validated as required by argparse
 
 # Parameter validation
-valid_adjusters <- c("unadjusted", "combat", "combat_sup", "mnn")
+valid_adjusters <- c("unadjusted", "combat", "combat_mean", "combat_sup", "mnn", "mnn_centered", "ruvr", "gmm")
 valid_classifiers <- c("logistic", "elnet", "elasticnet", "svm", "rf", "nnet", "knn", "xgboost", "rvc")
 valid_num_datasets <- c(3, 4, 5, 6)
 
@@ -314,6 +314,28 @@ main_analysis_function <- function() {
         dat_corrected = dat_corrected,
         dat_test_corrected = dat_test_corrected
       ))
+    } else if (method == "combat_mean") {
+      # ComBat correction with mean adjustment only (no variance adjustment)
+      # Step 1: Correct batch effects within training data (mean only)
+      dat_corrected <- ComBat(dat, batch=batch, mod=NULL, mean.only=TRUE)
+      
+      # Step 2: Adjust test data to match corrected training distribution
+      combined_dat <- cbind(dat_corrected, dat_test)
+      ref_batch_id <- 1
+      test_batch_id <- 2
+      combined_batch <- c(rep(ref_batch_id, ncol(dat_corrected)), 
+                         rep(test_batch_id, ncol(dat_test)))
+      
+      # Apply ComBat with training as reference (mean only)
+      combat_combined <- ComBat(combined_dat, batch=combined_batch, 
+                               mod=NULL, ref.batch=ref_batch_id, mean.only=TRUE)
+      
+      dat_test_corrected <- combat_combined[, (ncol(dat_corrected) + 1):ncol(combat_combined)]
+      
+      return(list(
+        dat_corrected = dat_corrected,
+        dat_test_corrected = dat_test_corrected
+      ))
     } else if (method == "combat_sup") {
       # ComBat correction with labels (supervised)
       # Step 1: Correct batch effects within training data while preserving biological signal
@@ -342,7 +364,7 @@ main_analysis_function <- function() {
       library(batchelor, quietly = TRUE)
       library(SummarizedExperiment, quietly = TRUE)
 
-      # Combine data (Preserves original column order)
+      # MNN without pre-centering
       combined_dat <- cbind(dat, dat_test)
       
       # Create batch vector (Test set gets a new unique ID)
@@ -381,27 +403,163 @@ main_analysis_function <- function() {
       dat_test_corrected <- mnn_matrix[, (ncol(dat) + 1):ncol(mnn_matrix)]
       
       return(list(dat_corrected = dat_corrected, dat_test_corrected = dat_test_corrected))
+    } else if (method == "mnn_centered") {
+      library(batchelor, quietly = TRUE)
+      library(SummarizedExperiment, quietly = TRUE)
+
+      # Pre-center each gene within each batch before MNN
+      cat("Pre-centering data for MNN...\n")
+      
+      # Center training data within each batch
+      dat_centered <- dat
+      for (b in unique(batch)) {
+        batch_idx <- batch == b
+        gene_means <- rowMeans(dat[, batch_idx, drop = FALSE])
+        dat_centered[, batch_idx] <- dat[, batch_idx] - gene_means
+      }
+      
+      # Center test data (as its own batch)
+      test_gene_means <- rowMeans(dat_test)
+      dat_test_centered <- dat_test - test_gene_means
+      
+      # Combine centered data
+      combined_dat <- cbind(dat_centered, dat_test_centered)
+      
+      # Create batch vector (Test set gets a new unique ID)
+      test_id <- max(batch) + 1
+      combined_batch <- c(batch, rep(test_id, ncol(dat_test)))
+      
+      # Determine merge order: Training batches by size (descending), Test set last.
+      u_batches <- sort(unique(batch))
+      train_sizes <- table(batch)[as.character(u_batches)]
+      train_ord <- order(train_sizes, decreasing = TRUE)
+      merge_ord <- c(u_batches[train_ord], test_id)
+      
+      cat(sprintf("DEBUG MNN_CENTERED: batch range [%s], test_id=%s\n", paste(range(batch), collapse="-"), test_id))
+      cat(sprintf("DEBUG MNN_CENTERED: merge order: %s\n", paste(merge_ord, collapse=",")))
+      
+      tryCatch({
+        mnn_object <- batchelor::mnnCorrect(combined_dat, batch = combined_batch, merge.order = merge_ord)
+        mnn_matrix <- SummarizedExperiment::assay(mnn_object)
+      }, error = function(e) {
+        cat(sprintf("[ERROR] mnnCorrect (centered) failed: %s\n", e$message), file = stderr())
+        stop(sprintf("MNN centered correction failed: %s", e$message))
+      })
+      
+      # Split result
+      dat_corrected <- mnn_matrix[, 1:ncol(dat)]
+      dat_test_corrected <- mnn_matrix[, (ncol(dat) + 1):ncol(mnn_matrix)]
+      
+      return(list(dat_corrected = dat_corrected, dat_test_corrected = dat_test_corrected))
+    } else if (method == "ruvr") {
+      # RUVr: Remove Unwanted Variation using Residuals
+      # Custom implementation without ruv package dependency
+      cat("Applying RUVr correction...\n")
+      
+      # Step 1: Fit initial GLM on training data to get residuals
+      # Create design matrix with TB status and batch
+      design <- model.matrix(~ group + batch)
+      
+      # Fit gene-wise linear models
+      cat("Fitting initial GLM to estimate residuals...\n")
+      residuals <- matrix(NA, nrow = nrow(dat), ncol = ncol(dat))
+      for (i in 1:nrow(dat)) {
+        fit <- lm(dat[i, ] ~ group + batch)
+        residuals[i, ] <- residuals(fit)
+      }
+      
+      # Step 2: Estimate unwanted variation factors from residuals using SVD
+      k <- 3  # Number of unwanted variation factors (can be tuned)
+      cat(sprintf("Estimating %d unwanted variation factors...\n", k))
+      
+      svd_res <- svd(residuals)
+      W <- svd_res$u[, 1:k, drop = FALSE]  # Factor loadings (genes x k)
+      alpha <- svd_res$v[, 1:k, drop = FALSE] %*% diag(svd_res$d[1:k])  # Factor scores (samples x k)
+      
+      # Step 3: Correct training data by regressing out the factors
+      dat_corrected <- dat
+      for (i in 1:nrow(dat)) {
+        fit <- lm(dat[i, ] ~ alpha)
+        dat_corrected[i, ] <- residuals(fit) + mean(dat[i, ])
+      }
+      
+      # Step 4: Project test data onto the learned factors and correct
+      cat("Projecting test data onto learned factors...\n")
+      # Project test data onto factor space: alpha_test = dat_test^T %*% W
+      alpha_test <- t(dat_test) %*% W
+      
+      dat_test_corrected <- dat_test
+      for (i in 1:nrow(dat_test)) {
+        fit <- lm(dat_test[i, ] ~ alpha_test)
+        dat_test_corrected[i, ] <- residuals(fit) + mean(dat_test[i, ])
+      }
+      
+      cat("RUVr correction complete\n")
+      
+      return(list(dat_corrected = dat_corrected, dat_test_corrected = dat_test_corrected))
+    } else if (method == "gmm") {
+      # GMM adjustment: fits 2-component GMM to each gene within each batch
+      cat("Applying GMM adjustment...\n")
+      
+      # Source the GMM adjustment function (use absolute path from workspace root)
+      gmm_script <- file.path(getwd(), "..", "..", "adjust", "gmm_adjust.R")
+      if (!file.exists(gmm_script)) {
+        gmm_script <- "scripts/adjust/gmm_adjust.R"  # Fallback to relative from workspace root
+      }
+      source(gmm_script)
+      
+      # Apply GMM to training data (genes are rows, samples are columns)
+      dat_corrected <- gmm_adjust(
+        data = dat,
+        batch = batch,
+        genes_are_columns = FALSE,  # Our data has genes as rows
+        mean_mean_zero = TRUE,
+        unit_var = TRUE,
+        log_transform = FALSE,  # Data is already log-transformed
+        debug = FALSE,
+        num_workers = 1
+      )
+      
+      # Apply GMM to test data (treat as single batch)
+      dat_test_corrected <- gmm_adjust(
+        data = dat_test,
+        batch = rep(1, ncol(dat_test)),  # Single batch
+        genes_are_columns = FALSE,
+        mean_mean_zero = TRUE,
+        unit_var = TRUE,
+        log_transform = FALSE,
+        debug = FALSE,
+        num_workers = 1
+      )
+      
+      cat("GMM adjustment complete\n")
+      
+      return(list(dat_corrected = dat_corrected, dat_test_corrected = dat_test_corrected))
+    } else {
+      stop(sprintf("Unknown batch correction method: %s", method))
     }
   }
   
-  #' Normalize data matrices within batches
-  normalize_within_batches <- function(dat, batch, batch_names) {
-    dat_whole_norm <- normalizeData(dat)
+  #' Global scaling: scale entire dataset to have overall variance = 1
+  #' Preserves relative gene importance while putting data on consistent scale
+  #' @param dat_train Training data matrix
+  #' @param dat_test Test data matrix
+  #' @return List with scaled training and test data
+  global_scale <- function(dat_train, dat_test) {
+    # Compute global mean and SD from training data
+    train_mean <- mean(dat_train)
+    train_sd <- sd(as.vector(dat_train))
     
-    # Normalize each batch separately
-    batch_normalized_data <- lapply(batch_names, function(b) {
-      batch_indices <- batch == b
-      normalizeData(dat[, batch_indices])
-    })
+    # Apply same transformation to both train and test
+    dat_train_scaled <- (dat_train - train_mean) / train_sd
+    dat_test_scaled <- (dat_test - train_mean) / train_sd
     
-    # Reconstruct the full matrix
-    dat_batch_norm <- matrix(NA, nrow=nrow(dat), ncol=ncol(dat), dimnames=dimnames(dat))
-    for (i in seq_along(batch_names)) {
-      batch_indices <- batch == batch_names[i]
-      dat_batch_norm[, batch_indices] <- batch_normalized_data[[i]]
-    }
+    cat(sprintf("Global scaling: mean=%.4f, sd=%.4f\n", train_mean, train_sd))
     
-    list(whole_norm=dat_whole_norm, batch_norm=dat_batch_norm)
+    list(
+      dat_train = dat_train_scaled,
+      dat_test = dat_test_scaled
+    )
   }
   
   # ====================================================================
@@ -415,39 +573,28 @@ main_analysis_function <- function() {
   dat_corrected <- batch_corr_result$dat_corrected
   dat_test_corrected <- batch_corr_result$dat_test_corrected
   
-  # Normalize data
-  norm_data <- TRUE  # Always normalize as in original implementation
+  # Global scaling (not per-gene normalization)
+  cat("Applying global scaling to training and test data...\n")
   
-  if (norm_data) {
-    # Normalize training data
-    norm_result <- normalize_within_batches(dat_corrected, datasets$batch, datasets$batch_names)
-    dat_train_norm <- norm_result$whole_norm
-    
-    # Normalize test data with error handling
-    cat(sprintf("Debug - About to normalize test data. dat_test_corrected is NULL: %s\n", is.null(dat_test_corrected)))
-    
-    if(is.null(dat_test_corrected)) {
-      stop("Test data is NULL before normalization - batch correction failed")
-    }
-    
-    dat_test_norm <- normalizeData(dat_test_corrected)
-    
-    cat(sprintf("Debug - After normalization. dat_test_norm is NULL: %s\n", is.null(dat_test_norm)))
-    if(!is.null(dat_test_norm)) {
-      cat(sprintf("Debug - dat_test_norm dimensions after normalization: %d x %d\n", nrow(dat_test_norm), ncol(dat_test_norm)))
-    }
-    
-    # Check for normalization issues
-    if (any(is.na(dat_train_norm)) || any(is.na(dat_test_norm))) {
-      stop("Normalization produced NA values")
-    }
-    if (is.null(dat_test_norm)) {
-      stop("Test data became NULL during normalization")
-    }
-  } else {
-    dat_train_norm <- dat_corrected
-    dat_test_norm <- dat_test_corrected
+  if(is.null(dat_test_corrected)) {
+    stop("Test data is NULL after batch correction")
   }
+  
+  scaled_data <- global_scale(dat_corrected, dat_test_corrected)
+  dat_train_norm <- scaled_data$dat_train
+  dat_test_norm <- scaled_data$dat_test
+  
+  # Validation
+  if (any(is.na(dat_train_norm)) || any(is.na(dat_test_norm))) {
+    stop("Scaling produced NA values")
+  }
+  if (is.null(dat_test_norm)) {
+    stop("Test data became NULL during scaling")
+  }
+  
+  cat(sprintf("Scaled data dimensions - Train: %d x %d, Test: %d x %d\n", 
+              nrow(dat_train_norm), ncol(dat_train_norm),
+              nrow(dat_test_norm), ncol(dat_test_norm)))
   
   cat(sprintf("Batch correction completed successfully\n"))
   cat(sprintf("  Method: %s\n", adjuster))

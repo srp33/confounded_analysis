@@ -461,9 +461,11 @@ train_and_evaluate_classifier <- function(classifier_type, normalized_data, corr
       tryCatch({
         cat(sprintf("  Training on %s configuration...\n", config_name))
         config <- training_configs[[config_name]]
-        pred_res <- trainPipe(train_set = config$train, train_label = y_train, 
-                             test_set = config$test, lfit = learner_fit)
-        predictions[[config_name]] <- pred_res$pred_tst_prob
+        pred_res <- trainPipe(train_set = config$train, train_label = y_train, lfit = learner_fit)
+        
+        # Get test predictions using predWrapper
+        test_predictions <- predWrapper(pred_res$mod, config$test, classifier_type)
+        predictions[[config_name]] <- test_predictions
         cat(sprintf("  %s configuration complete\n", config_name))
       }, error = function(e) {
         cat(sprintf("[ERROR] Failed on %s configuration\n", config_name), file = stderr())
