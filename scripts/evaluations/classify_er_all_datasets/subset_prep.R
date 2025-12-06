@@ -49,12 +49,18 @@ if (k < 1 || k > length(order_vector)) {
 }
 
 # ---- Create subset ----
-selected_studies <- order_vector[1:k]
+selected_studies <- unique(c(test_source, order_vector[1:k]))
 
 message(">>> Selected studies (k=", k, "): ", paste(selected_studies, collapse=", "))
 
 subset_data <- combined %>%
         filter(meta_source %in% selected_studies)
+
+# Check for studies with no rows
+missing_studies <- setdiff(selected_studies, unique(subset_data$meta_source))
+if (length(missing_studies) > 0) {
+        warning("The following studies had no rows in combined data: ", paste(missing_studies, collapse=", "))
+}
 
 # ---- Write output ----
 out_dir <- dirname(output_path)

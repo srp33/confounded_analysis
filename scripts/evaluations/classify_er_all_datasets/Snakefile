@@ -11,6 +11,7 @@ rule all:
         OUTPUT_FOLDER + "/classify_all_figures/scaling_ROC_AUC.png"
 
 rule plot_performance:
+    priority: 60
     input:
         aggregated_metrics_file=OUTPUT_FOLDER + "/classify_er_all/all_metrics.csv"
     output: 
@@ -24,17 +25,26 @@ rule plot_performance:
     threads: 1
     log: 
         "log/plot_performance.log"
+    params:
+        fig_dir = OUTPUT_FOLDER
+        metadata_file = "/home/aw998/confounded_analysis/geo_metadata.csv"
     shell:
         """
-            Rscript plot_performance.R &> {log}
+        set -euo pipefail
+        Rscript plot_performance.R \
+            --metrics_file {input} \
+            --figures_dir {params.fig_dir} \
+            --metadata_file {params.metadata_file} \
+            &> {log}
         """
 
 rule aggregate_metrics:
+    priority: 70
     input: 
         metrics_data=expand(
             OUTPUT_FOLDER + "/metrics/{adjuster}/{adjuster}_{k}studies_test_{test_source}_metrics.csv",
             adjuster=config["adjuster"],
-            k=list(range(1,16)),
+            k=list(range(1,15)),
             test_source=config["dataset_ids"]
         ),
         metrics_dir=OUTPUT_FOLDER + "/metrics"
@@ -48,10 +58,12 @@ rule aggregate_metrics:
         "log/aggregate.log"
     shell:
         """
+        set -euo pipefail
         python aggregate_metrics.py --metrics-dir {metrics_dir} --output {output_path} &> {log}
         """
 
 rule classify:
+    priority: 80
     input:
         adjusted_csv = DATA_FOLDER + "/adjusted_data/{adjuster}/{adjuster}_{k}studies_test_{test_source}.csv"
     output: 
@@ -59,14 +71,15 @@ rule classify:
     log: 
         "log/classify/{adjuster}_{k}_{test_source}_classify.log"
     resources: 
-        mem_mb=4000,
-        runtime=30
+        mem_mb=16000,
+        runtime=90
     threads: 1
     params:
         output_dir = OUTPUT_FOLDER + "/metrics",
         bootstrap = 100
     shell:
         """
+        set -euo pipefail
         python run_classifier.py \
             --csv {input.adjusted_csv} \
             --outdir {params.output_dir} \
@@ -75,18 +88,20 @@ rule classify:
         """
 
 rule adjust: 
+    priority: 90
     input: 
         DATA_FOLDER + "/subset_data/{k}studies_test_{test_source}.csv"
     output: 
         DATA_FOLDER + "/adjusted_data/{adjuster}/{adjuster}_{k}studies_test_{test_source}.csv"
     resources: 
-        mem_mb=4000,
-        runtime=30
+        mem_mb=16000,
+        runtime=60
     threads: 1
     log: 
         "log/adjust/{adjuster}_{k}_{test_source}_adjust.log"
     shell:
         """
+        set -euo pipefail
         Rscript run_scaling_experiment.R \
             --adjuster {wildcards.adjuster} \
             --subset-path {input} \
@@ -96,19 +111,21 @@ rule adjust:
         """
 
 rule subset:
+    priority: 100
     input:
         combined_file = DATA_FOLDER + "/all_combined/all_combined.csv",
         order_file = DATA_FOLDER + "/all_combined/gse_order_files/{test_source}_order.csv"
     output:
         DATA_FOLDER + "/subset_data/{k}studies_test_{test_source}.csv"
     resources: 
-        mem_mb=8000,
+        mem_mb=16000,
         runtime=30
     threads: 1
     log: 
         "log/subset/{k}_{test_source}_subset.log"
     shell:
         """
+        set -euo pipefail
         Rscript subset_prep.R \
         --input {input.combined_file} \
         --test {wildcards.test_source} \
@@ -131,6 +148,7 @@ rule make_order_files:
         "log/order/{test_source}_order.log"
     shell:
         """
+        set -euo pipefail
         python make_order_files.py {input.combined_file} {output} &> {log}
         
         """

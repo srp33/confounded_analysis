@@ -1,4 +1,4 @@
-gse_id,platform,data_type,sample_size,tissue_type,disease,year
+gse_id,platform,technology,sample_size,tissue_type,disease,year
 gse19615,Affymetrix Human Genome U133 Plus 2.0 Array,microarray,115,breast,breast cancer,2010
 gse20194,Affymetrix Human Genome U133A Array,microarray,230,breast,breast cancer,2010
 gse20271,Affymetrix Human Genome U133A Array,microarray,156,breast,breast cancer,2010
