@@ -40,7 +40,7 @@ generate_differences_plot <- function(mxe_data, top_adjuster, top_adjuster_label
     )
   
   cat("Computing mean differences using 5000 bootstrap resamples...\n")
-  dabest_diff <- dabestr::mean_diff(dabest_obj, reps = 5000)
+  dabest_diff <- dabestr::mean_diff(dabest_obj, resamples = 5000)
   
   effect_results <- dabest_diff$result %>%
     select(control_group, test_group, difference, ci_low, ci_high, 

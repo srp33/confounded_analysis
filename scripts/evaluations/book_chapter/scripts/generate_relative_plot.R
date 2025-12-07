@@ -76,6 +76,10 @@ generate_relative_plot <- function(mxe_data, top_adjuster, top_adjuster_label,
       
       # Create dabest object
       tryCatch({
+        # Debug: check data structure
+        cat(sprintf("    Attempting dabestr for %s with %d rows, %d adjusters\n", 
+                   dataset_label, nrow(subset_data), length(adjusters_to_compare)))
+        
         dabest_obj <- dabestr::load(
             data = subset_data,
             x = adjuster_label,
@@ -85,24 +89,46 @@ generate_relative_plot <- function(mxe_data, top_adjuster, top_adjuster_label,
             id_col = condition_id
           )
         
-        # Compute mean differences
-        dabest_diff <- dabestr::mean_diff(dabest_obj, reps = 5000)
+        if (is.null(dabest_obj)) {
+          stop("dabestr::load returned NULL")
+        }
         
-        # Extract effect size results
-        effect_results <- dabest_diff$result %>%
-          select(control_group, test_group, difference, ci_low, ci_high, 
-                 pvalue_permutation, is_paired) %>%
+        # Compute mean differences
+        dabest_diff <- dabestr::mean_diff(dabest_obj, perm_count = 5000)
+        
+        if (is.null(dabest_diff)) {
+          stop("mean_diff returned NULL")
+        }
+        
+        if (is.null(dabest_diff$boot_result)) {
+          stop("boot_result is NULL")
+        }
+        
+        if (is.null(dabest_diff$permtest_pvals)) {
+          stop("permtest_pvals is NULL")
+        }
+        
+        # Extract effect size results from boot_result and permtest_pvals
+        boot_data <- dabest_diff$boot_result %>%
+          select(control_group, test_group, difference, bca_ci_low, bca_ci_high)
+        
+        perm_data <- dabest_diff$permtest_pvals %>%
+          select(control_group, test_group, pval_permtest)
+        
+        effect_results <- boot_data %>%
+          left_join(perm_data, by = c("control_group", "test_group")) %>%
           rename(
             reference = control_group,
             comparison = test_group,
             mean_difference = difference,
-            ci_lower = ci_low,
-            ci_upper = ci_high,
-            p_value = pvalue_permutation
+            ci_lower = bca_ci_low,
+            ci_upper = bca_ci_high,
+            p_value = pval_permtest
           ) %>%
           mutate(
             classifier = classifier,
-            dataset_label = dataset_label
+            dataset_label = dataset_label,
+            is_paired = dabest_diff$is_paired
           )
         
         # Collect for saving
