@@ -9,8 +9,8 @@ suppressPackageStartupMessages({
   library(dplyr)
 })
 
-source("/home/aw998/confounded_analysis/scripts/adjust/gmm_adjust.R")
-source("/home/aw998/confounded_analysis/scripts/adjust/gmm_global_simple.R")
+source("~/confounded_analysis/scripts/adjust/gmm_adjust.R")
+source("~/confounded_analysis/scripts/adjust/gmm_global_simple.R")
 
 get_allocated_cores <- function() {
   # Check SLURM-provided environment variables first

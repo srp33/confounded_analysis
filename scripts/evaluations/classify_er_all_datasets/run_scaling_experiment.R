@@ -28,7 +28,7 @@ test_source <- args$test
 cat("Running scaling experiment with adjuster:", adjuster, "on file: ", subset_path, "\n")
 
 # ---- Source adjustment functions ----
-source("/home/aw998/confounded_analysis/scripts/adjust/adjust.R")
+source("~/confounded_analysis/scripts/adjust/adjust.R")
 
 # ---- Adjustment wrapper ----
 apply_adjustment <- function(df, method, test_source) {
@@ -103,7 +103,7 @@ cat("\n--- Processing test source:", test_source, "---\n")
   tryCatch({
     adjusted_df <- apply_adjustment(df, method = adjuster, test_source = test_source)
     
-    out_dir <- file.path("/home/aw998/confounded_analysis/grp_batch_effects/data/adjusted_datasets", adjuster)
+    out_dir <- file.path("/grphome/grp_batch_effects/data/adjusted_datasets", adjuster)
     if (!dir.exists(out_dir)) dir.create(out_dir, recursive = TRUE)
 
     cat("  Preparing to write CSV: ", nrow(adjusted_df), "rows x", ncol(adjusted_df), "columns\n")
