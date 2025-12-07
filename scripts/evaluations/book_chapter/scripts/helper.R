@@ -1,6 +1,6 @@
-# Suppress warnings and messages for cleaner output
-options(warn = -1)
+# helper.R - Core helper functions for batch correction analysis
 
+options(warn = -1)
 
 perf_wrapper <- function(perf_names, tst_scores, ytest){
   perf_df <- lapply(perf_names, function(perf_name){
@@ -116,7 +116,6 @@ reduceSize <- function(dat, y, N){
 }
 
 
-####  Split a dataset into man-made batches
 splitBatch <- function(condition, N_batch){
   # split samples into case / control groups
   case_ind <- which(condition==1)
@@ -136,7 +135,6 @@ splitBatch <- function(condition, N_batch){
 }
 
 
-####  Take subset from dataset
 subsetBatch <- function(condition, N_sample_size, N_batch){
   # split samples into case / control groups
   case_ind <- which(condition==1)
@@ -248,7 +246,6 @@ getPredFunctions <- function(learner_type){
 }
 
 
-####  Some performance metrics 
 LogLossBinary <- function(actual, predicted, eps=1e-15) {
   if(class(actual)=="factor"){actual <- as.numeric(as.character(actual))}
   predicted = pmin(pmax(predicted, eps), 1-eps)
@@ -262,19 +259,15 @@ AccuracyBinary <- function(actual, predicted) {
 }
 
 
-####  Prediction functions
-
-# SVM (training only - no test data leakage)
 predSVM <- function(trn_set, y_trn){
-  library(e1071, quietly = TRUE)
-  tune_ctrl <- tune.control(sampling="cross", cross=4)
-  obj <- tune(svm, train.x=t(trn_set), train.y=as.factor(y_trn),
+  tune_ctrl <- e1071::tune.control(sampling="cross", cross=4)
+  obj <- e1071::tune(e1071::svm, train.x=t(trn_set), train.y=as.factor(y_trn),
               tunecontrol=tune_ctrl,
               ranges=list(type="C-classification",
                           kernel="linear",
                           cost=exp(seq(from=-10, to=10, by=2))))
   best_cost <- obj$best.parameters[,"cost"]
-  mod_svm <- svm(x=t(trn_set), y=as.factor(y_trn),
+  mod_svm <- e1071::svm(x=t(trn_set), y=as.factor(y_trn),
                  type="C-classification", kernel="linear",
                  cost=best_cost, probability=TRUE)
   pred_train_svm <- predict(mod_svm, t(trn_set), probability=TRUE)
@@ -285,7 +278,6 @@ predSVM <- function(trn_set, y_trn){
   return(res)
 }
 
-####  Prediction functions (training only - use predWrapper for test predictions)
 predLasso_pp <- function(trn_set, y_trn, ...){
   mod <- glmnet::cv.glmnet(x=t(trn_set), y=as.numeric(as.character(y_trn)), family="binomial", ...)
   pred_trn_prob <- as.vector(predict(mod, newx=t(trn_set), s="lambda.1se", type="response"))
@@ -321,8 +313,6 @@ predRF_fs_pp <- function(trn_set, y_trn){
 }
 
 predNnet_pp <- function(trn_set, y_trn){
-  library(nnet, quietly = TRUE)
-  
   if(is.null(trn_set) || is.null(y_trn)) {
     stop("Training set or labels are NULL")
   }
@@ -334,9 +324,7 @@ predNnet_pp <- function(trn_set, y_trn){
   n_samples <- nrow(data)
   network_size <- min(10, max(2, n_samples %/% 3))
   
-  # Add weight decay regularization (decay parameter) similar to elastic net strength
-  # Typical elastic net lambda ~0.01-0.1, weight decay of 0.01 provides similar regularization
-  mod <- nnet(y ~ ., data = data, size = network_size, MaxNWts = 50000, 
+  mod <- nnet::nnet(y ~ ., data = data, size = network_size, MaxNWts = 50000, 
               decay = 0.01, linout = FALSE, trace = FALSE, maxit = 200)
   
   pred_trn_prob <- as.vector(predict(mod, newdata = data[,-1]))
@@ -361,8 +349,7 @@ predLogistic_pp <- function(trn_set, y_trn){
 }
 
 predElnet_pp <- function(trn_set, y_trn){
-  library(glmnet, quietly = TRUE)
-  mod <- cv.glmnet(x=t(trn_set), y=as.numeric(as.character(y_trn)), family="binomial", alpha=0.5)
+  mod <- glmnet::cv.glmnet(x=t(trn_set), y=as.numeric(as.character(y_trn)), family="binomial", alpha=0.5)
   pred_trn_prob <- as.vector(predict(mod, newx=t(trn_set), s="lambda.1se", type="response"))
   pred_trn_class <- as.vector(predict(mod, newx=t(trn_set), s="lambda.1se", type="class"))
   return(list(mod=mod, pred_trn_prob=pred_trn_prob, pred_tst_prob=NULL,
@@ -370,8 +357,6 @@ predElnet_pp <- function(trn_set, y_trn){
 }
 
 predKNN_pp <- function(trn_set, y_trn){
-  library(class, quietly = TRUE)
-  
   n_samples <- ncol(trn_set)
   k_values <- c(3, 5, 7, 9, 11)
   k_values <- k_values[k_values < n_samples]
@@ -388,7 +373,7 @@ predKNN_pp <- function(trn_set, y_trn){
           tst_cv <- t(trn_set[, i, drop=FALSE])
           rownames(trn_cv) <- NULL
           rownames(tst_cv) <- NULL
-          pred <- knn(train = trn_cv, test = tst_cv, cl = y_trn[train_idx], k = k)
+          pred <- class::knn(train = trn_cv, test = tst_cv, cl = y_trn[train_idx], k = k)
           if(as.character(pred) == as.character(y_trn[i])) correct <- correct + 1
         }
         return(correct / n_samples)
@@ -404,7 +389,7 @@ predKNN_pp <- function(trn_set, y_trn){
             tst_fold <- t(trn_set[, test_idx])
             rownames(trn_fold) <- NULL
             rownames(tst_fold) <- NULL
-            pred <- knn(train = trn_fold, test = tst_fold, cl = y_trn[train_idx], k = k)
+            pred <- class::knn(train = trn_fold, test = tst_fold, cl = y_trn[train_idx], k = k)
             correct <- correct + sum(as.character(pred) == as.character(y_trn[test_idx]))
             total <- total + length(test_idx)
           }
@@ -422,7 +407,7 @@ predKNN_pp <- function(trn_set, y_trn){
     tst_subset <- t(trn_set[, i, drop=FALSE])
     rownames(trn_subset) <- NULL
     rownames(tst_subset) <- NULL
-    pred_trn_class[i] <- as.character(knn(train = trn_subset, test = tst_subset, 
+    pred_trn_class[i] <- as.character(class::knn(train = trn_subset, test = tst_subset, 
                                          cl = y_trn[train_idx], k = k_opt))
   }
   
@@ -434,10 +419,8 @@ predKNN_pp <- function(trn_set, y_trn){
 }
 
 predXGBoost_pp <- function(trn_set, y_trn){
-  library(xgboost, quietly = TRUE)
-  
   y_numeric <- as.numeric(as.factor(y_trn)) - 1
-  train_matrix <- xgb.DMatrix(data = t(trn_set), label = y_numeric)
+  train_matrix <- xgboost::xgb.DMatrix(data = t(trn_set), label = y_numeric)
   
   params <- list(
     objective = "binary:logistic",
@@ -453,7 +436,7 @@ predXGBoost_pp <- function(trn_set, y_trn){
   nrounds <- if(n_samples < 50) 50 else if(n_samples < 200) 100 else 200
   
   if(n_samples >= 20) {
-    cv_result <- xgb.cv(
+    cv_result <- xgboost::xgb.cv(
       params = params,
       data = train_matrix,
       nrounds = nrounds,
@@ -475,7 +458,7 @@ predXGBoost_pp <- function(trn_set, y_trn){
     best_nrounds <- min(30, nrounds)
   }
   
-  mod <- xgb.train(params = params, data = train_matrix, nrounds = best_nrounds, verbose = 0)
+  mod <- xgboost::xgb.train(params = params, data = train_matrix, nrounds = best_nrounds, verbose = 0)
   
   pred_trn_prob <- predict(mod, train_matrix)
   pred_trn_class <- as.character(as.numeric(pred_trn_prob >= 0.5))
@@ -510,23 +493,19 @@ predWrapper <- function(mod, tst_set, function_name){
   }else if(function_name=='knn'){
     tst_for_knn <- t(tst_set)
     rownames(tst_for_knn) <- NULL
-    res <- knn(train = mod$train_data, test = tst_for_knn, cl = mod$train_labels, k = mod$k)
+    res <- class::knn(train = mod$train_data, test = tst_for_knn, cl = mod$train_labels, k = mod$k)
     res <- as.numeric(as.character(res) == "1")
   }else if(function_name=='xgboost'){
-    test_matrix <- xgb.DMatrix(data = t(tst_set))
+    test_matrix <- xgboost::xgb.DMatrix(data = t(tst_set))
     res <- predict(mod, test_matrix)
   }
   return(res)
 }
 
-####  Quiet melt wrapper
-# Suppress "No id variables; using all as measure variables" messages
 quiet_melt <- function(...) {
   suppressMessages(melt(...))
 }
 
-####  Smart Results Loader
-# Automatically finds results in the correct directory structure
 load_results <- function(study_type = c("simulation", "real_4studies", "real_6studies"), 
                         study_name = NULL, metric = NULL, base_dir = "/scripts/evaluations/robustifying") {
   
