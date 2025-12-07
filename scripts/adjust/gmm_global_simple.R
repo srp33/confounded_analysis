@@ -9,7 +9,7 @@
 
 
 # Source functions from gmm_adjust.R for NPN functionality
-source("/home/aw998/confounded_analysis/scripts/adjust/gmm_adjust.R")
+source("~/confounded_analysis/scripts/adjust/gmm_adjust.R")
 
 # Robust GMM implementation (no external dependencies)
 fit_robust_gmm <- function(data, debug = FALSE) {
