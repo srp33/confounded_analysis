@@ -26,8 +26,8 @@ rule plot_performance:
     log: 
         "log/plot_performance.log"
     params:
-        fig_dir = OUTPUT_FOLDER
-        metadata_file = "/home/aw998/confounded_analysis/geo_metadata.csv"
+        fig_dir = OUTPUT_FOLDER,
+        metadata_file = DATA_FOLDER + "/geo_metadata.csv"
     shell:
         """
         set -euo pipefail

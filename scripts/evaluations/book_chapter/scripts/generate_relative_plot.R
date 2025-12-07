@@ -81,7 +81,7 @@ generate_relative_plot <- function(mxe_data, top_adjuster, top_adjuster_label,
             x = adjuster_label,
             y = value,
             idx = adjusters_to_compare,
-            paired = TRUE,
+            paired = "base",
             id_col = condition_id
           )
         
