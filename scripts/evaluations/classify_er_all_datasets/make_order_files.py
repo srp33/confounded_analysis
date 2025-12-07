@@ -31,19 +31,26 @@ def main():
         raise FileNotFoundError(f"File not found: {all_combined_csv}")
 
     df = pd.read_csv(all_combined_csv)
-ue()
-
-    # Extract test source from argument or filename
-    :
-        test_source t_source
     
-        test_source = os.path.basenam
+    # Extract test source from argument or filename
+    if args.test_source:
+        test_source = args.test_source
+    else:
+        # Extract from filename like "order_gse12345.csv"
+        test_source = os.path.basename(output_file).replace("order_", "").replace(".csv", "")
     
     random.seed(234)
- 
+    
+    # Get all unique GSE IDs
+    gse_ids = df['gse'].unique().tolist()
+    
     # Split into training and testing
-    train_source = [x for xe_ids if  gs in
-        "train_source": train_source
+    train_source = [x for x in gse_ids if x != test_source]
+    random.shuffle(train_source)
+    
+    out_df = pd.DataFrame({
+        "test_source": [test_source],
+        "train_source": [train_source]
     })
 
     # Write CSV
