@@ -32,7 +32,7 @@ adjusters:
   - "ruvr"
   - "gmm"
 
-# Adjusters to visualize (subset of adjusters for faster visualization)
+# Subser of adjusters to visualize
 viz_adjusters:
   - "unadjusted"
   - "combat"
@@ -40,6 +40,8 @@ viz_adjusters:
   - "combat_sup"
   - "mnn"
   - "mnn_centered"
+  - "ruvr"
+  - "gmm"
 
 split_seed_start: 42
 split_seed_count: 200
