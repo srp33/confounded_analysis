@@ -39,8 +39,10 @@ for n in config["num_datasets"]:
 rule all:
     input:
         # batch_fig=OUTPUT_FOLDER + "/batch_on_classifiers.png",
-        adjuster_fig=OUTPUT_FOLDER + "/adjusters_on_classifiers.png",
-        viz_figs=VIZ_TARGETS
+        adjuster_main=OUTPUT_FOLDER + "/adjusters_on_classifiers.png",
+        adjuster_relative=OUTPUT_FOLDER + "/adjusters_on_classifiers_relative.png",
+        adjuster_relative_agg=OUTPUT_FOLDER + "/adjusters_on_classifiers_relative_aggregated.png"
+        # viz_figs=VIZ_TARGETS
 
 
 ## Figure 1 Pipeline: How does each classifier respond to batch effects?
@@ -105,7 +107,7 @@ rule classify_batch_effects:
     threads: 1
     resources:
         mem_mb=2000,
-        runtime=lambda wildcards, attempt: 20 * attempt
+        runtime=20
     shell:
         """
         Rscript {input.script} -o {output} \
@@ -116,18 +118,17 @@ rule classify_batch_effects:
 
 ## Figure 2 Pipeline: How does each adjuster help mitigate batch effects, for each classifier?
 
-# Step 2.3: Create the adjuster plot
-rule make_fig2:
+# Step 2.3a: Create main adjuster plot
+rule make_fig2_main:
     input:
         data=OUTPUT_FOLDER + "/adjusters_on_classifiers.csv",
-        script=SCRIPTS_FOLDER + "/plot_adjusters_on_classifiers.R"
+        script=SCRIPTS_FOLDER + "/plot_adjusters_main_only.R",
+        utils=SCRIPTS_FOLDER + "/adjuster_plot_utils.R",
+        generator=SCRIPTS_FOLDER + "/generate_main_plot.R"
     output:
-        main=OUTPUT_FOLDER + "/adjusters_on_classifiers.png",
-        diff=OUTPUT_FOLDER + "/adjusters_on_classifiers_differences.png",
-        relative=OUTPUT_FOLDER + "/adjusters_on_classifiers_relative.png",
-        stats=OUTPUT_FOLDER + "/adjusters_on_classifiers_statistics.csv"
+        OUTPUT_FOLDER + "/adjusters_on_classifiers.png"
     log:
-        OUTPUT_FOLDER + "/logs/plot_adjusters_on_classifiers.log"
+        OUTPUT_FOLDER + "/logs/plot_adjusters_main.log"
     threads: 1
     resources:
         mem_mb=4000,
@@ -136,8 +137,56 @@ rule make_fig2:
         adjusters=",".join(config.get("viz_adjusters", config["adjusters"]))
     shell:
         """
-        Rscript {input.script} -i {input.data} -o {output.main} --adjusters {params.adjusters} &> {log}
+        Rscript {input.script} -i {input.data} -o {output} --adjusters {params.adjusters} &> {log}
         """
+
+# Step 2.3b: Create relative performance plot (using dabestr estimation statistics)
+rule make_fig2_relative:
+    input:
+        data=OUTPUT_FOLDER + "/adjusters_on_classifiers.csv",
+        script=SCRIPTS_FOLDER + "/plot_adjusters_relative_only.R",
+        utils=SCRIPTS_FOLDER + "/adjuster_plot_utils.R",
+        generator=SCRIPTS_FOLDER + "/generate_relative_plot.R"
+    output:
+        plot=OUTPUT_FOLDER + "/adjusters_on_classifiers_relative.png",
+        effects=OUTPUT_FOLDER + "/adjusters_on_classifiers_relative_effect_sizes.csv"
+    log:
+        OUTPUT_FOLDER + "/logs/plot_adjusters_relative.log"
+    threads: 1
+    resources:
+        mem_mb=6000,
+        runtime=15
+    params:
+        adjusters=",".join(config.get("viz_adjusters", config["adjusters"]))
+    shell:
+        """
+        Rscript {input.script} -i {input.data} -o {output.plot} --adjusters {params.adjusters} &> {log}
+        """
+
+# Step 2.3c: Create aggregated relative performance plot
+rule make_fig2_relative_aggregated:
+    input:
+        data=OUTPUT_FOLDER + "/adjusters_on_classifiers.csv",
+        script=SCRIPTS_FOLDER + "/plot_adjusters_relative_aggregated.R",
+        utils=SCRIPTS_FOLDER + "/adjuster_plot_utils.R",
+        generator=SCRIPTS_FOLDER + "/generate_relative_plot_aggregated.R"
+    output:
+        plot=OUTPUT_FOLDER + "/adjusters_on_classifiers_relative_aggregated.png",
+        sig=OUTPUT_FOLDER + "/adjusters_on_classifiers_relative_aggregated_significance.csv"
+    log:
+        OUTPUT_FOLDER + "/logs/plot_adjusters_relative_aggregated.log"
+    threads: 1
+    resources:
+        mem_mb=4000,
+        runtime=10
+    params:
+        adjusters=",".join(config.get("viz_adjusters", config["adjusters"]))
+    shell:
+        """
+        Rscript {input.script} -i {input.data} -o {output.plot} --adjusters {params.adjusters} &> {log}
+        """
+
+
 
 
 # Helper to generate all valid adjuster combinations
@@ -190,11 +239,9 @@ rule classify_adjusters:
     threads: 1
     resources:
         mem_mb=2000,
-        runtime=lambda wildcards, attempt: 12 * attempt
+        runtime=16
     shell:
         """
-        set -o pipefail
-        
         Rscript {input.script} -o {output} \
             --adjuster {wildcards.adjuster} \
             --classifier {wildcards.classifier} \
@@ -221,7 +268,7 @@ rule visualize_batch_adjustment:
     threads: 1
     resources:
         mem_mb=4000,
-        runtime=15
+        runtime=17
     params:
         output_dir=OUTPUT_FOLDER + "/visualizations/unreduced/individual"
     shell:
@@ -264,5 +311,5 @@ rule create_visualization_grid:
             --num-datasets {wildcards.n_datasets} \
             --test-study {wildcards.test_study} \
             --adjusters {params.adjusters} \
-            > {log} 2>&1
+            &> {log}
         """
