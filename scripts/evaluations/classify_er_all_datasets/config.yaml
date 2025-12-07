@@ -1,8 +1,8 @@
 # config.yaml
 
 
-output_folder: "/home/aw998/confounded_analysis/grp_batch_effects/outputs"
-data_folder: "/home/aw998/confounded_analysis/grp_batch_effects/data"
+output_folder: "/grphome/grp_batch_effects/outputs"
+data_folder: "/grphome/grp_batch_effects/data"
 
 adjuster: ["gmm", "min_mean", "mnn", "log_combat", "log_transformed"]
 dataset_ids:
