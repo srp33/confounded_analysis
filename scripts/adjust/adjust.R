@@ -571,7 +571,7 @@ adjust_mnn <- function(df_, batch, test_source, data_are_counts, debug = FALSE) 
     Seurat::as.SingleCellExperiment(prep_list$obj[, prep_list$obj$Batch == b]))
 
   sce_corrected <- do.call(batchelor::mnnCorrect, c(sce_list, list(assay.type = "logcounts")))
-  corrected_matrix <- as.matrix(Seurat::assay(sce_corrected, "corrected"))
+  corrected_matrix <- as.matrix(SummarizedExperiment::assay(sce_corrected, "corrected"))
 
   # Restore original rownames and order
   corrected_matrix <- restore_names_safe(corrected_matrix, prep_list)
