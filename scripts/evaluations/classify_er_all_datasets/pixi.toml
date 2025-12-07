@@ -18,6 +18,7 @@ r-vroom = "*"            # adjust.R (fast CSV reading)
 # === Batch Correction (Core) ===
 bioconductor-sva = "*"                      # ComBat (adjust.R)
 bioconductor-batchelor = "*"                # MNN (adjust.R)
+r-seurat = "*"                              # Required for MNN (adjust.R)
 bioconductor-summarizedexperiment = "*"     # Data structures (adjust.R)
 bioconductor-singlecellexperiment = "*"     # Required for MNN via Seurat (adjust.R)
 bioconductor-limma = "*"                    # removeBatchEffect (adjust.R)
@@ -42,7 +43,7 @@ pandas = "*"
 scikit-learn = "*"
 
 # === Workflow ===
-snakemake = "9.13.7"
+snakemake = "==9.13.7"
 snakemake-executor-plugin-slurm = ">=1.9.2,<2"
 
 [tasks]

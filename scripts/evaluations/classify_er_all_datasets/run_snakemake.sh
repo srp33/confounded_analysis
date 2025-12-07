@@ -2,7 +2,7 @@
 #SBATCH --job-name=run_snakemake
 #SBATCH --ntasks=1 
 #SBATCH --cpus-per-task=1
-#SBATCH --mem=2G
+#SBATCH --mem=4G
 #SBATCH --time=10:00:00
 #SBATCH --output=logs/snakemake_%A.log
 #SBATCH --requeue  # allow job to be requeued if killed
@@ -13,8 +13,5 @@ pixi run snakemake \
     --default-resources slurm_account=srp33 slurm_partition="(auto)" \
     --jobs 300 \
     --resources mem_mb=100000 runtime=4320 \
-    --rerun-incomplete
-
-
-
-
+    --rerun-incomplete \
+    --latency-wait 30
