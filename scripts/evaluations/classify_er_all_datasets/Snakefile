@@ -1,7 +1,10 @@
 configfile: "config.yaml"
 
+# Allow command-line overrides for paths
 OUTPUT_FOLDER = config["output_folder"]
 DATA_FOLDER = config["data_folder"]
+SCRIPTS_DIR = config.get("scripts_dir", ".")
+ADJUST_SCRIPT = config.get("adjust_script", "../../adjust/adjust.R")
 
 rule all: 
     input: 
@@ -13,7 +16,8 @@ rule all:
 rule plot_performance:
     priority: 60
     input:
-        aggregated_metrics_file=OUTPUT_FOLDER + "/classify_er_all/all_metrics.csv"
+        aggregated_metrics_file=OUTPUT_FOLDER + "/classify_er_all/all_metrics.csv",
+        metadata_file=DATA_FOLDER + "/geo_metadata.csv"
     output: 
         OUTPUT_FOLDER + "/classify_all_figures/absolute_scaling_MCC.png", 
         OUTPUT_FOLDER + "/classify_all_figures/absolute_scaling_ROC_AUC.png",
@@ -26,15 +30,14 @@ rule plot_performance:
     log: 
         "log/plot_performance.log"
     params:
-        fig_dir = OUTPUT_FOLDER,
-        metadata_file = DATA_FOLDER + "/geo_metadata.csv"
+        fig_dir = OUTPUT_FOLDER + "/classify_all_figures",
     shell:
         """
         set -euo pipefail
-        Rscript plot_performance.R \
-            --metrics_file {input} \
+        Rscript {SCRIPTS_DIR}/plot_performance.R \
+            --metrics_file {input.aggregated_metrics_file} \
             --figures_dir {params.fig_dir} \
-            --metadata_file {params.metadata_file} \
+            --metadata_file {input.metadata_file} \
             &> {log}
         """
 
@@ -46,8 +49,7 @@ rule aggregate_metrics:
             adjuster=config["adjuster"],
             k=list(range(1,15)),
             test_source=config["dataset_ids"]
-        ),
-        metrics_dir=OUTPUT_FOLDER + "/metrics"
+        )
     output:
         output_path=OUTPUT_FOLDER + "/classify_er_all/all_metrics.csv"
     resources: 
@@ -56,10 +58,12 @@ rule aggregate_metrics:
     threads: 1
     log: 
         "log/aggregate.log"
+    params:
+        metrics_dir=OUTPUT_FOLDER + "/metrics"
     shell:
         """
         set -euo pipefail
-        python aggregate_metrics.py --metrics-dir {metrics_dir} --output {output_path} &> {log}
+        python {SCRIPTS_DIR}/aggregate_metrics.py --metrics-dir {params.metrics_dir} --output {output.output_path} &> {log}
         """
 
 rule classify:
@@ -76,11 +80,11 @@ rule classify:
     threads: 1
     params:
         output_dir = OUTPUT_FOLDER + "/metrics",
-        bootstrap = 100
+        bootstrap = config.get("bootstrap", 100)
     shell:
         """
         set -euo pipefail
-        python run_classifier.py \
+        python {SCRIPTS_DIR}/run_classifier.py \
             --csv {input.adjusted_csv} \
             --outdir {params.output_dir} \
             --bootstrap {params.bootstrap} \
@@ -94,19 +98,24 @@ rule adjust:
     output: 
         DATA_FOLDER + "/adjusted_data/{adjuster}/{adjuster}_{k}studies_test_{test_source}.csv"
     resources: 
-        mem_mb=16000,
-        runtime=60
+        mem_mb=4000,
+        runtime=30
     threads: 1
     log: 
         "log/adjust/{adjuster}_{k}_{test_source}_adjust.log"
+    params:
+        output_dir = DATA_FOLDER + "/adjusted_data",
+        adjust_script = ADJUST_SCRIPT
     shell:
         """
         set -euo pipefail
-        Rscript run_scaling_experiment.R \
+        Rscript {SCRIPTS_DIR}/run_scaling_experiment.R \
             --adjuster {wildcards.adjuster} \
             --subset-path {input} \
             --k {wildcards.k} \
             --test {wildcards.test_source} \
+            --output-dir {params.output_dir} \
+            --adjust-script {params.adjust_script} \
             &> {log}
         """
 
@@ -126,7 +135,7 @@ rule subset:
     shell:
         """
         set -euo pipefail
-        Rscript subset_prep.R \
+        Rscript {SCRIPTS_DIR}/subset_prep.R \
         --input {input.combined_file} \
         --test {wildcards.test_source} \
         --order {input.order_file} \
@@ -146,16 +155,20 @@ rule make_order_files:
     threads: 1
     log: 
         "log/order/{test_source}_order.log"
+    params:
+        output_dir = DATA_FOLDER + "/all_combined/gse_order_files"
     shell:
         """
         set -euo pipefail
-        python make_order_files.py {input.combined_file} {output} &> {log}
-        
+        python {SCRIPTS_DIR}/make_order_files.py \
+            --input {input.combined_file} \
+            --output {output.order_file} \
+            &> {log}
         """
 
 rule combine:
     input: 
-        DATA_FOLDER + "/gold"
+        gold_dir = DATA_FOLDER + "/gold"
     output:
         DATA_FOLDER + "/all_combined/all_combined.csv"
     resources: 
@@ -166,5 +179,5 @@ rule combine:
         "log/combine.log"
     shell:
         """
-        python combine_all.py --input-dir {input} --output-file {output} &> {log}
+        python {SCRIPTS_DIR}/combine_all.py --input-dir {input.gold_dir} --output-file {output} &> {log}
         """

@@ -516,27 +516,29 @@ adjust_liger <- function(df_, batch, data_are_counts, debug = FALSE) {
   message("Adjusting with LIGER.")
   prep_list <- prep_seurat_like(df_, batch, data_are_counts)
   
-  liger_obj <- seuratToLiger(prep_list$obj)
+  liger_obj <- rliger::seuratToLiger(prep_list$obj) 
   
   if (data_are_counts) {
-    liger_obj <- normalize(liger_obj)
-    liger_obj <- selectGenes(liger_obj)
+    liger_obj <- rliger::normalize(liger_obj)
+    liger_obj <- rliger::selectGenes(liger_obj)
   } else {
     message("Data is pre-normalized. Bypassing LIGER's normalize() and selectGenes().")
-    hvf_data <- GetAssayData(prep_list$obj, layer = "data")
+    
+    hvf_data <- Seurat::GetAssayData(prep_list$obj, layer = "data")
+    
     variances <- apply(hvf_data, 1, var, na.rm = TRUE)
     top_features <- names(sort(variances, decreasing = TRUE)[1:2000])
     liger_obj@var.features <- top_features
   }
   
-  liger_obj <- scaleNotCenter(liger_obj)
-  liger_obj <- runIntegration(liger_obj, k = 20, verbose = FALSE)
-  liger_obj <- quantileNorm(liger_obj, verbose = FALSE)
+  liger_obj <- rliger::scaleNotCenter(liger_obj)
+  liger_obj <- rliger::runIntegration(liger_obj, k = 20, verbose = FALSE)
+  liger_obj <- rliger::quantileNorm(liger_obj, verbose = FALSE)
   
   if (debug) message("DEBUG: Available slots in liger object: ", paste(slotNames(liger_obj), collapse = ", "))
   
   corrected_matrix_sanitized <- liger_obj@W %*% t(liger_obj@H.norm)
-  final_matrix_sanitized <- as.matrix(GetAssayData(prep_list$obj, layer = "data"))
+  final_matrix_sanitized <- as.matrix(Seurat::GetAssayData(prep_list$obj, layer = "data"))
   
   common_features <- intersect(rownames(corrected_matrix_sanitized), rownames(final_matrix_sanitized))
   if (debug) message("DEBUG: Liger - Found ", length(common_features), " common features between corrected and target matrices.")
@@ -566,10 +568,10 @@ adjust_mnn <- function(df_, batch, test_source, data_are_counts, debug = FALSE) 
   batch_levels <- c(setdiff(batch_levels, test_source), test_source)
   
   sce_list <- lapply(batch_levels, function(b) 
-    as.SingleCellExperiment(prep_list$obj[, prep_list$obj$Batch == b]))
+    Seurat::as.SingleCellExperiment(prep_list$obj[, prep_list$obj$Batch == b]))
 
   sce_corrected <- do.call(batchelor::mnnCorrect, c(sce_list, list(assay.type = "logcounts")))
-  corrected_matrix <- as.matrix(assay(sce_corrected, "corrected"))
+  corrected_matrix <- as.matrix(Seurat::assay(sce_corrected, "corrected"))
 
   # Restore original rownames and order
   corrected_matrix <- restore_names_safe(corrected_matrix, prep_list)

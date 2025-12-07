@@ -17,6 +17,8 @@ parser$add_argument('--adjuster', required=TRUE, help='Desired adjuster (gmm, mi
 parser$add_argument('--subset-path', required=TRUE, help='Subset .csv file to be adjusted.')
 parser$add_argument('--k', required=TRUE, help='Number of datasets in the subset, k.')
 parser$add_argument('--test', required=TRUE, help='Test source name/ID.')
+parser$add_argument('--output-dir', required=TRUE, help='Output directory for adjusted datasets.')
+parser$add_argument('--adjust-script', required=TRUE, help='Path to adjust.R script.')
 
 args <- parser$parse_args()
 
@@ -24,11 +26,13 @@ adjuster <- args$adjuster
 subset_path <- args$subset_path
 subset_index <- args$k
 test_source <- args$test
+output_dir <- args$output_dir
+adjust_script <- args$adjust_script
 
 cat("Running scaling experiment with adjuster:", adjuster, "on file: ", subset_path, "\n")
 
 # ---- Source adjustment functions ----
-source("~/confounded_analysis/scripts/adjust/adjust.R")
+source(adjust_script)
 
 # ---- Adjustment wrapper ----
 apply_adjustment <- function(df, method, test_source) {
@@ -103,13 +107,13 @@ cat("\n--- Processing test source:", test_source, "---\n")
   tryCatch({
     adjusted_df <- apply_adjustment(df, method = adjuster, test_source = test_source)
     
-    out_dir <- file.path("/grphome/grp_batch_effects/data/adjusted_datasets", adjuster)
+    out_dir <- file.path(output_dir, adjuster)
     if (!dir.exists(out_dir)) dir.create(out_dir, recursive = TRUE)
 
     cat("  Preparing to write CSV: ", nrow(adjusted_df), "rows x", ncol(adjusted_df), "columns\n")
     cat("  Column names (first few):", paste(head(colnames(adjusted_df), 5), collapse = ", "), "\n")
 
-    out_path <- file.path(out_dir, sprintf("%sstudies_test_%s.csv", subset_index, test_source))
+    out_path <- file.path(out_dir, sprintf("%s_%sstudies_test_%s.csv", adjuster, subset_index, test_source))
     write_csv(adjusted_df, out_path)
     cat("Saved adjusted dataset to:", out_path, "\n")
   }, error = function(e) {

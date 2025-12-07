@@ -13,7 +13,7 @@ pixi run snakemake \
     --default-resources slurm_account=srp33 slurm_partition="(auto)" \
     --jobs 300 \
     --resources mem_mb=100000 runtime=4320 \
-    --rerun-incomplete 
+    --rerun-incomplete
 
 
 

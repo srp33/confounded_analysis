@@ -15,16 +15,16 @@ library(argparse)
 # --- Parse Arguments ---
 parser <- ArgumentParser(description = "Generate performance plots from aggregated data.")
 
-parser$add_argument('--aggregated_metrics_file', required = TRUE,
+parser$add_argument('--metrics_file', required = TRUE,
     help = "Path to CSV containing aggregated metrics")
 parser$add_argument('--figures_dir', required = TRUE, 
     help = "Directory to save figures")
-parser$add_argument('--metadata_file', required = FALSE,
+parser$add_argument('--metadata_file', required = TRUE,
     help = "Path to CSV containing dataset metadata")
 
 args <- parser$parse_args()
 
-metrics_file <- args$aggregated_metrics_file
+metrics_file <- args$metrics_file
 figures_dir <- args$figures_dir
 metadata_file <- args$metadata_file
 
