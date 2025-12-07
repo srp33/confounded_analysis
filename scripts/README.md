@@ -53,4 +53,4 @@ rm -rf data/.cache/gdown/              # Downloads only
 
 ---
 
-> **Navigation**: [← Main README](../README.md) | [Batch Correction Methods →](adjust/README.md) | [Ev
+> **Navigation**: [← Main README](../README.md) | [Batch Correction Methods →](adjust/README.md) | [Evaluation Framework →](evaluations/README.md) | [Data Preparation →](prepdata/README.md)
