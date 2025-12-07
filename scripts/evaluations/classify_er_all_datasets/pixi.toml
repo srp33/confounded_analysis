@@ -7,140 +7,52 @@ platforms = ["linux-64"]
 
 [dependencies]
 # === R Base ===
-r-base = ">=4.4"
+r-base = ">=4.3"
 
-# === Core Infrastructure ===
-r-rcpp = "*"
-r-rcpparmadillo = "*"
-r-rcppeigen = "*"
-r-bh = "*"
-"r-data.table" = "*"
-r-matrix = "*"
-r-foreach = "*"
-r-doparallel = "*"
-r-future = "*"
-r-matrixstats = "*"
-r-remotes = { version="*", channel="conda-forge" }
+# === Data Manipulation ===
+r-tidyverse = "*"        # Core tidyverse (dplyr, ggplot2, readr, stringr, tidyr, purrr)
+r-patchwork = "*"        # plot_performance.R (multi-panel plots)
+r-vroom = "*"            # adjust.R (fast CSV reading)
+"r-data.table" = "*"     # adjust.R (fast CSV writing)
 
+# === Batch Correction (Core) ===
+bioconductor-sva = "*"                      # ComBat (adjust.R)
+bioconductor-batchelor = "*"                # MNN (adjust.R)
+bioconductor-summarizedexperiment = "*"     # Data structures (adjust.R)
+bioconductor-singlecellexperiment = "*"     # Required for MNN via Seurat (adjust.R)
+bioconductor-limma = "*"                    # removeBatchEffect (adjust.R)
+bioconductor-genomeinfodb = "*"             # Required by GenomicRanges
+bioconductor-genomeinfodbdata = "*"         # Required by GenomeInfoDb
 
-# === Tidyverse ===
-r-tidyverse = "*"
-r-readxl = "*"
+# === Batch Correction (Additional Methods) ===
+r-huge = "*"                                # NPN transformation (adjust.R)
 
-# === Statistical Packages ===
-r-glmnet = "*"
-r-e1071 = "*"
-r-ranger = "*"
-r-caret = "*"
-r-lme4 = "*"
-r-mclust = "*"
-r-mcmcpack = "*"
-r-huge = "*"
-r-nnls = "*"
-r-moments = "*"
-r-pracma = "*"
-
-# === Visualization ===
-r-gridextra = "*"
-r-gplots = "*"
-r-rcolorbrewer = "*"
-r-plotly = "*"
-r-heatmaply = "*"
-r-ggpubr = "*"
-r-ggtext = "*"
-r-corrplot = "*"
-r-png = "*"
-r-colorspace = "*"
-r-scales = "*"
-r-dt = "*"
-r-kableextra = "*"
-r-magick = "*"
-
-# === Batch Correction ===
-bioconductor-sva = "*"
-bioconductor-batchelor = "*"
-bioconductor-batchqc = "*"
-bioconductor-ruvseq = "*"
-
-# === Machine Learning ===
-r-rocr = "*"
-r-xgboost = "*"
-
-# === Dimensionality Reduction ===
-r-rtsne = "*"
-r-umap = "*"
+# === Statistical/ML Packages ===
+r-mclust = "*"           # GMM adjustment (gmm_adjust.R)
+r-foreach = "*"          # Parallel loops (gmm_adjust.R)
+r-doparallel = "*"       # Parallel backend (gmm_adjust.R)
 
 # === Utilities ===
 r-argparse = "*"
-r-stringi = "*"
-r-languageserver = "*"
-r-rmarkdown = "*"
 
-# === Specialized ===
-r-seurat = "*"
-r-logspline = "*"
-
-# === Python ===
+# === Python (Classifier) ===
 python = ">=3.12"
 numpy = "*"
 pandas = "*"
 scikit-learn = "*"
-matplotlib = "*"
-seaborn = "*"
-jupyter = "*"
 
-# === Packages Moved from post-install ===
-r-itertools = "*"
-r-bigmemory = "*"
-"r-r.devices" = "*"
-r-pacman = "*"
-r-lightgbm = "*"
-r-parsnip = "*"
-r-tidymodels = "*"
-
-
-# === Bioconductor Core ===
-bioconductor-summarizedexperiment = "*"
-bioconductor-limma = "*"
-bioconductor-vsn = "*"
-bioconductor-annotationdbi = "*"
-bioconductor-biomart = "*"
-bioconductor-experimenthub = "*"
-bioconductor-complexheatmap = "*"
-bioconductor-biostrings = "*"
-bioconductor-iranges = "*"
-bioconductor-s4vectors = "*"
-bioconductor-zlibbioc = "*"
-bioconductor-genefilter = ">=1.88.0,<2"
-bioconductor-genomeinfodb = ">=1.42.0,<2"
-bioconductor-genomeinfodbdata = ">=1.2.13,<2"
+# === Workflow ===
 snakemake = ">=9.13.7,<10"
-bioconductor-geoquery = { version = ">=2.74.0,<3", channel = "bioconda" }
-"bioconductor-hugene11sttranscriptcluster.db" = { version = ">=8.8.0,<9", channel = "bioconda" }
-
-# === NCBI/SRA Tools ===
-r-rentrez = "*"
 snakemake-executor-plugin-slurm = ">=1.9.2,<2"
 
-[pypi-dependencies]
-sklearn-rvm = ">=0.1.1, <0.2"
-
 [tasks]
-test-r-core = "R --vanilla -e 'library(Matrix); library(data.table); library(tidyverse); cat(\"✓ R core packages loaded successfully\\n\")'"
-test-r-bioc = "R --vanilla -e 'library(SummarizedExperiment); cat(\"✓ Bioconductor packages loaded successfully\\n\")'"
-test-r-ml = "R --vanilla -e 'library(glmnet); library(ranger); library(caret); cat(\"✓ R ML packages loaded successfully\\n\")'"
-test-r-viz = "R --vanilla -e 'library(ggplot2); library(plotly); library(corrplot); cat(\"✓ R visualization packages loaded successfully\\n\")'"
-test-python-core = "python -c 'import numpy; import pandas; import sklearn; print(\"✓ Python core packages loaded successfully\")'"
-test-python-viz = "python -c 'import matplotlib; import seaborn; print(\"✓ Python visualization packages loaded successfully\")'"
-
-
-extra-install = "Rscript --vanilla install_github.R"
-
-
-test-github-packages = "R --vanilla -e 'if(requireNamespace(\"polyester\", quietly=TRUE) && requireNamespace(\"fairadapt\", quietly=TRUE)) cat(\"✓ GitHub packages available\\n\") else cat(\"⚠ Some GitHub packages missing\\n\")'"
-test-r = { depends-on = ["test-r-core", "test-r-bioc", "test-r-ml", "test-r-viz"] }
-test-python = { depends-on = ["test-python-core", "test-python-viz"] }
-test-all = { depends-on = ["extra-install", "test-r", "test-python", "test-github-packages"] }
+# Test essential packages
+test-r-core = "R --vanilla -q -e 'library(dplyr); library(ggplot2); library(patchwork); library(vroom); library(data.table); cat(\"✓ R core packages loaded\\n\")'"
+test-r-bioc = "R --vanilla -q -e 'library(SummarizedExperiment); library(SingleCellExperiment); library(sva); library(batchelor); library(limma); cat(\"✓ Bioconductor packages loaded\\n\")'"
+test-r-batch = "R --vanilla -q -e 'library(huge); library(mclust); cat(\"✓ Batch correction packages loaded\\n\")'"
+test-dbdata = "R --vanilla -q -e 'library(GenomeInfoDbData); cat(\"✓ GenomeInfoDbData loaded\\n\")'"
+test-python = "python -c 'import numpy; import pandas; from sklearn.ensemble import HistGradientBoostingClassifier; print(\"✓ Python packages loaded\")'"
+test-all = { depends-on = ["test-r-core", "test-r-bioc", "test-r-batch", "test-dbdata", "test-python"] }
 
 [activation]
 env={RETICULATE_PYTHON = ".pixi/envs/default/bin/python"}

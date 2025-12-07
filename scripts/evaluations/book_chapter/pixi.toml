@@ -69,10 +69,12 @@ sklearn-rvm = ">=0.1.1, <0.2"  # RVC classifier via reticulate
 
 [tasks]
 # Test essential packages
-test-r-core = "R --vanilla -e 'library(dplyr); library(ggplot2); library(glmnet); cat(\"✓ R core packages loaded\\n\")'"
-test-r-bioc = "R --vanilla -e 'library(SummarizedExperiment); library(sva); library(batchelor); cat(\"✓ Bioconductor packages loaded\\n\")'"
+test-r-core = "R --vanilla -q -e 'library(dplyr); library(ggplot2); library(glmnet); library(reshape2); library(dabestr); cat(\"✓ R core packages loaded\\n\")'"
+test-r-bioc = "R --vanilla -q -e 'library(SummarizedExperiment); library(sva); library(batchelor); library(limma); library(DESeq2); cat(\"✓ Bioconductor packages loaded\\n\")'"
+test-r-ml = "R --vanilla -q -e 'library(e1071); library(ranger); library(nnet); library(class); library(xgboost); library(ROCR); cat(\"✓ ML packages loaded\\n\")'"
+test-dbdata = "R --vanilla -q -e 'library(GenomeInfoDbData); cat(\"✓ GenomeInfoDbData loaded\\n\")'"
 test-python = "python -c 'import numpy; import sklearn_rvm; print(\"✓ Python packages loaded\")'"
-test-all = { depends-on = ["test-r-core", "test-r-bioc", "test-python"] }
+test-all = { depends-on = ["test-r-core", "test-r-bioc", "test-r-ml", "test-python", "test-dbdata"] }
 
 [activation]
 env={RETICULATE_PYTHON = ".pixi/envs/default/bin/python"}
