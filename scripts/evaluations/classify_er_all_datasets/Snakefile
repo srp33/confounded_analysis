@@ -84,7 +84,7 @@ rule classify:
         "log/classify/{adjuster}_{k}_{test_source}_chunk{chunk}.log"
     resources: 
         mem_mb=16000,
-        runtime=90
+        runtime=360
     threads: 1
     params:
         output_dir = DATA_FOLDER + "/classify_metrics",
@@ -109,7 +109,7 @@ rule adjust:
     output: 
         DATA_FOLDER + "/adjusted_data/{adjuster}/{adjuster}_{k}studies_test_{test_source}.csv"
     resources: 
-        mem_mb=lambda wildcards: 16000 if wildcards.adjuster == "gmm" else 12000,
+        mem_mb=24000,
         runtime=45
     threads: 1
     log: 
