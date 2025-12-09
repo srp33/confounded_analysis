@@ -36,6 +36,7 @@ rule plot_performance:
         "log/plot_performance.log"
     params:
         fig_dir = OUTPUT_FOLDER + "/classify_all_figures",
+        cv_file = DATA_FOLDER + "/cv_metrics.csv"
     shell:
         """
         set -euo pipefail
@@ -43,6 +44,7 @@ rule plot_performance:
             --metrics_file {input.aggregated_metrics_file} \
             --figures_dir {params.fig_dir} \
             --metadata_file {input.metadata_file} \
+            --cv_file {params.cv_file} \
             &> {log}
         """
 
@@ -50,14 +52,14 @@ rule aggregate_metrics:
     priority: 70
     input: 
         metrics_data=expand(
-            OUTPUT_FOLDER + "/metrics/{adjuster}/{adjuster}_{k}studies_test_{test_source}_chunk{chunk}_metrics.csv",
+            DATA_FOLDER + "/classify_metrics/{adjuster}/{adjuster}_{k}studies_test_{test_source}_chunk{chunk}_metrics.csv",
             adjuster=config["adjuster"],
             k=list(range(1,15)),
             test_source=config["dataset_ids"],
             chunk = CHUNKS
         )
     output:
-        output_path=OUTPUT_FOLDER + "/classify_er_all/all_metrics.csv"
+        output_path=DATA_FOLDER + "/classify_metrics/all_metrics.csv"
     resources: 
         mem_mb=4000,
         runtime=20
@@ -65,7 +67,7 @@ rule aggregate_metrics:
     log: 
         "log/aggregate.log"
     params:
-        metrics_dir=OUTPUT_FOLDER + "/metrics"
+        metrics_dir=DATA_FOLDER + "/classify_metrics"
     shell:
         """
         set -euo pipefail
@@ -77,7 +79,7 @@ rule classify:
     input:
         adjusted_csv = DATA_FOLDER + "/adjusted_data/{adjuster}/{adjuster}_{k}studies_test_{test_source}.csv"
     output: 
-        metrics_file = OUTPUT_FOLDER + "/metrics/{adjuster}/{adjuster}_{k}studies_test_{test_source}_chunk{chunk}_metrics.csv"
+        metrics_file = DATA_FOLDER + "/classify_metrics/{adjuster}/{adjuster}_{k}studies_test_{test_source}_chunk{chunk}_metrics.csv"
     log: 
         "log/classify/{adjuster}_{k}_{test_source}_chunk{chunk}.log"
     resources: 
@@ -85,7 +87,7 @@ rule classify:
         runtime=90
     threads: 1
     params:
-        output_dir = OUTPUT_FOLDER + "/metrics",
+        output_dir = DATA_FOLDER + "/classify_metrics",
         bootstrap = BOOTSTRAP_PER_JOB,
         hvg = N_HVG
     shell:
@@ -173,7 +175,7 @@ rule cross_validate:
         set -euo pipefail
         python {SCRIPTS_DIR}"/run_cv_per_test.py \
             --combined_csv {input.combined_file} \
-            --outdir {DATA_DIR} \
+            --outdir {DATA_FOLDER} \
             --k_folds {params.k_folds} \
             &> {log}
         """
