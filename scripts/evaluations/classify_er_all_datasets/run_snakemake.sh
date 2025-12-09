@@ -3,8 +3,8 @@
 #SBATCH --ntasks=1 
 #SBATCH --cpus-per-task=1
 #SBATCH --mem=4G
-#SBATCH --time=10:00:00
-#SBATCH --output=logs/snakemake_%A.log
+#SBATCH --time=48:00:00
+#SBATCH --output=log/snakemake_%A.log
 #SBATCH --requeue  # allow job to be requeued if killed
 
 pixi run snakemake \

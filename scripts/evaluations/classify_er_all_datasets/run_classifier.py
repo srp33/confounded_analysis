@@ -62,7 +62,7 @@ def main():
                     help="Number of highly variable genes to select")
     parser.add_argument("--chunk", type=int, default=0, help="Bootstrap chunk index (0-based)")
     parser.add_argument("--chunk-size", type=int, default=10, help="How many bootstraps per job")
-
+    
     args = parser.parse_args()
 
     csv_file = args.csv
