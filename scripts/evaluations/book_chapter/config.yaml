@@ -32,8 +32,9 @@ adjusters:
   - "ruvr"
   - "gmm"
 
-# Subser of adjusters to visualize
+# Subset of adjusters to visualize (within_study_cv is always included as baseline)
 viz_adjusters:
+  - "within_study_cv"
   - "unadjusted"
   - "combat"
   - "combat_mean"

@@ -31,23 +31,23 @@ generate_relative_plot_aggregated <- function(mxe_data, top_adjuster, top_adjust
       next
     }
     
-    # Get classifier-specific ordering and best adjuster
+    # Get classifier-specific ordering (within_study_cv will be first)
     classifier_adjuster_order <- get_classifier_ordering(mxe_data, classifier)
     classifier_specific_labels <- create_adjuster_labels(classifier_adjuster_order)
-    classifier_best_adjuster <- classifier_adjuster_order$adjuster[1]
-    classifier_best_label <- classifier_specific_labels[1]
+    reference_adjuster <- "within_study_cv"
+    reference_label <- "Within-Study CV"
     
-    cat(sprintf("Classifier %s: best adjuster is %s\n", classifier, classifier_best_label))
+    cat(sprintf("Classifier %s: using %s as reference baseline\n", classifier, reference_label))
     
-    # Calculate relative values (negative = worse than best)
+    # Calculate performance gap (negative = worse than within-study CV baseline)
     raw_data <- classifier_data %>%
       select(adjuster, classifier, classifier_label, n_datasets, test_study, value) %>%
       mutate(condition_id = paste(classifier, n_datasets, test_study, sep = "_")) %>%
       group_by(condition_id) %>%
-      mutate(best_value = value[adjuster == classifier_best_adjuster]) %>%
+      mutate(baseline_value = value[adjuster == reference_adjuster]) %>%
       ungroup() %>%
-      mutate(relative_value = value - best_value) %>%
-      select(-best_value, -condition_id)
+      mutate(relative_value = value - baseline_value) %>%
+      select(-baseline_value, -condition_id)
     
     # Apply ordering
     raw_data$adjuster_label <- factor(raw_data$adjuster,
@@ -57,12 +57,12 @@ generate_relative_plot_aggregated <- function(mxe_data, top_adjuster, top_adjust
     # Statistical testing: one p-value per adjuster (pooling across all n_datasets)
     pval_data <- data.frame()
     
-    for (adj_label in classifier_specific_labels[-1]) {  # Skip first (best)
+    for (adj_label in classifier_specific_labels[-1]) {  # Skip first (within_study_cv)
       adj_data <- raw_data[raw_data$adjuster_label == adj_label, ]
       
       if (nrow(adj_data) > 1) {
         # One-sample t-test: is relative_value significantly < 0?
-        # (negative means this adjuster is worse than best)
+        # (negative means this adjuster is worse than within-study CV baseline)
         t_result <- t.test(adj_data$relative_value, mu = 0, alternative = "less")
         
         pval_data <- rbind(pval_data, data.frame(
@@ -91,7 +91,7 @@ generate_relative_plot_aggregated <- function(mxe_data, top_adjuster, top_adjust
       
       # Add classifier info
       pval_data$classifier <- classifier
-      pval_data$best_adjuster <- classifier_best_label
+      pval_data$reference_adjuster <- reference_label
       
       all_sig_results <- rbind(all_sig_results, pval_data)
     }
@@ -134,7 +134,7 @@ generate_relative_plot_aggregated <- function(mxe_data, top_adjuster, top_adjust
         plot.title = element_text(size = 14, hjust = 0.5, face = "bold")
       ) +
       labs(
-        y = sprintf("Relative MCC (vs. %s)", classifier_best_label),
+        y = sprintf("Performance Gap\n(vs. %s)", reference_label),
         title = classifier
       )
     

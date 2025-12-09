@@ -15,8 +15,8 @@ parser <- ArgumentParser(description = "Aggregate individual CSV results from pa
 
 parser$add_argument("--input-dir", 
                    type = "character", 
-                   required = TRUE,
-                   help = "Input directory containing individual CSV result files")
+                   action = "append",
+                   help = "Input directory containing individual CSV result files (can be specified multiple times)")
 
 parser$add_argument("-o", "--output", 
                    type = "character", 
@@ -31,9 +31,15 @@ parser$add_argument("--verbose",
 # Parse arguments
 opt <- parser$parse_args()
 
-# Validate input directory exists
-if (!dir.exists(opt$input_dir)) {
-  stop("Input directory does not exist: ", opt$input_dir)
+# Validate input directories exist
+if (is.null(opt$input_dir) || length(opt$input_dir) == 0) {
+  stop("At least one --input-dir must be specified")
+}
+
+for (dir in opt$input_dir) {
+  if (!dir.exists(dir)) {
+    stop("Input directory does not exist: ", dir)
+  }
 }
 
 # Create output directory if it doesn't exist
@@ -321,13 +327,40 @@ anti_join_manual <- function(x, y) {
 # Main execution
 main <- function() {
   cat("=== AGGREGATE RESULTS SCRIPT ===\n")
-  cat("Input directory:", opt$input_dir, "\n")
+  cat("Input directories:", paste(opt$input_dir, collapse = ", "), "\n")
   cat("Output file:", opt$output, "\n")
   cat("Verbose mode:", opt$verbose, "\n\n")
   
-  # Discover and read all CSV files
+  # Discover and read all CSV files from all input directories
   cat("=== READING CSV FILES ===\n")
-  results <- discover_and_read_csv_files(opt$input_dir, opt$verbose)
+  all_results_list <- list()
+  total_files <- 0
+  total_successful <- 0
+  all_failed_files <- character(0)
+  
+  for (input_dir in opt$input_dir) {
+    cat("\nProcessing directory:", input_dir, "\n")
+    dir_results <- discover_and_read_csv_files(input_dir, opt$verbose)
+    all_results_list[[length(all_results_list) + 1]] <- dir_results$data
+    total_files <- total_files + dir_results$total_files
+    total_successful <- total_successful + dir_results$successful_files
+    all_failed_files <- c(all_failed_files, dir_results$failed_files)
+  }
+  
+  # Combine results from all directories
+  combined_data <- do.call(rbind, all_results_list)
+  
+  results <- list(
+    data = combined_data,
+    total_files = total_files,
+    successful_files = total_successful,
+    failed_files = all_failed_files
+  )
+  
+  cat("\n=== COMBINED RESULTS ===\n")
+  cat("Total files across all directories:", total_files, "\n")
+  cat("Successfully processed:", total_successful, "\n")
+  cat("Failed:", length(all_failed_files), "\n")
   
   # Validate job completeness
   completeness <- validate_job_completeness(results$data, opt$input_dir, opt$verbose)

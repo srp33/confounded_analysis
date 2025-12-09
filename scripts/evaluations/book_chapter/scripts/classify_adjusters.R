@@ -51,7 +51,7 @@ import_reticulate <- function() {
 parser <- ArgumentParser(description = "Execute single adjuster comparison job for batch correction analysis")
 
 parser$add_argument("--adjuster", type = "character", required = TRUE,
-                   help = "Batch correction method: unadjusted, combat, combat_mean, combat_sup, mnn, mnn_centered, ruvr, or gmm")
+                   help = "Batch correction method: unadjusted, combat, combat_mean, combat_sup, mnn, mnn_centered, ruvr, ruvg, or gmm")
 parser$add_argument("--classifier", type = "character", required = TRUE,
                    help = "Classifier type: logistic, elnet, elasticnet, svm, rf, nnet, knn, xgboost, or rvc")
 parser$add_argument("--num-datasets", type = "integer", required = TRUE,
@@ -67,7 +67,7 @@ args <- parser$parse_args()
 # Arguments are automatically validated as required by argparse
 
 # Parameter validation
-valid_adjusters <- c("unadjusted", "combat", "combat_mean", "combat_sup", "mnn", "mnn_centered", "ruvr", "gmm")
+valid_adjusters <- c("unadjusted", "combat", "combat_mean", "combat_sup", "mnn", "mnn_centered", "ruvr", "ruvg", "gmm")
 valid_classifiers <- c("logistic", "elnet", "elasticnet", "svm", "rf", "nnet", "knn", "xgboost", "rvc")
 valid_num_datasets <- c(3, 4, 5, 6)
 
@@ -495,6 +495,64 @@ main_analysis_function <- function() {
       }
       
       cat("RUVr correction complete\n")
+      
+      return(list(dat_corrected = dat_corrected, dat_test_corrected = dat_test_corrected))
+    } else if (method == "ruvg") {
+      # RUVg: Remove Unwanted Variation using housekeeping genes
+      # Uses negative control genes to estimate unwanted variation
+      cat("Applying RUVg correction...\n")
+      
+      # Define housekeeping genes
+      housekeeping_genes <- c("GAPDH", "ACTG1", "RPS18", "POM121C", "MRPL18", 
+                             "TOMM5", "YTHDF1", "TPT1", "RPS27")
+      
+      # Find which housekeeping genes are present in the data
+      available_hk <- intersect(housekeeping_genes, rownames(dat))
+      
+      if (length(available_hk) == 0) {
+        stop("None of the housekeeping genes found in data. Cannot apply RUVg.")
+      }
+      
+      cat(sprintf("Using %d housekeeping genes: %s\n", 
+                  length(available_hk), paste(available_hk, collapse=", ")))
+      
+      # Extract housekeeping gene expression
+      hk_dat <- dat[available_hk, , drop = FALSE]
+      
+      # Step 1: Estimate unwanted variation factors from housekeeping genes using SVD
+      k <- min(3, length(available_hk) - 1)  # Number of factors (limited by number of HK genes)
+      cat(sprintf("Estimating %d unwanted variation factors from housekeeping genes...\n", k))
+      
+      # Center housekeeping gene data
+      hk_centered <- hk_dat - rowMeans(hk_dat)
+      
+      svd_res <- svd(hk_centered)
+      W <- svd_res$u[, 1:k, drop = FALSE]  # Factor loadings (HK genes x k)
+      alpha <- svd_res$v[, 1:k, drop = FALSE] %*% diag(svd_res$d[1:k])  # Factor scores (samples x k)
+      
+      # Step 2: Correct training data by regressing out the factors
+      dat_corrected <- dat
+      for (i in 1:nrow(dat)) {
+        fit <- lm(dat[i, ] ~ alpha)
+        dat_corrected[i, ] <- residuals(fit) + mean(dat[i, ])
+      }
+      
+      # Step 3: Estimate factors for test data using housekeeping genes
+      cat("Estimating unwanted variation in test data...\n")
+      hk_test <- dat_test[available_hk, , drop = FALSE]
+      hk_test_centered <- hk_test - rowMeans(hk_dat)  # Use training means for centering
+      
+      # Project test housekeeping genes onto factor space
+      alpha_test <- t(hk_test_centered) %*% W
+      
+      # Step 4: Correct test data
+      dat_test_corrected <- dat_test
+      for (i in 1:nrow(dat_test)) {
+        fit <- lm(dat_test[i, ] ~ alpha_test)
+        dat_test_corrected[i, ] <- residuals(fit) + mean(dat_test[i, ])
+      }
+      
+      cat("RUVg correction complete\n")
       
       return(list(dat_corrected = dat_corrected, dat_test_corrected = dat_test_corrected))
     } else if (method == "gmm") {
