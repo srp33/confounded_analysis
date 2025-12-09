@@ -41,7 +41,8 @@ rule all:
         # batch_fig=OUTPUT_FOLDER + "/batch_on_classifiers.png",
         adjuster_main=OUTPUT_FOLDER + "/adjusters_on_classifiers.png",
         adjuster_relative=OUTPUT_FOLDER + "/adjusters_on_classifiers_relative.png",
-        adjuster_relative_agg=OUTPUT_FOLDER + "/adjusters_on_classifiers_relative_aggregated.png"
+        adjuster_relative_agg=OUTPUT_FOLDER + "/adjusters_on_classifiers_relative_aggregated.png",
+        within_study_baseline=OUTPUT_FOLDER + "/within_study_baseline.csv"
         # viz_figs=VIZ_TARGETS
 
 
@@ -202,10 +203,23 @@ def get_adjuster_combinations():
                     )
     return combinations
 
-# Step 2.2: Aggregate all individual adjuster results
+# Helper to generate within-study CV combinations
+def get_within_study_cv_combinations():
+    """Generate all valid classifier × n_datasets × test_study combinations for within-study CV"""
+    combinations = []
+    for classifier in config["classifiers"]:
+        for n in config["num_datasets"]:
+            for test_study in get_test_studies_for_n(n):
+                combinations.append(
+                    f"{OUTPUT_FOLDER}/results/within_study_cv/individual/{classifier}_{n}_{test_study}.csv"
+                )
+    return combinations
+
+# Step 2.2: Aggregate all individual adjuster results (including within-study CV baseline)
 rule aggregate_adjusters:
     input:
-        data=get_adjuster_combinations(),
+        adjuster_data=get_adjuster_combinations(),
+        within_study_data=get_within_study_cv_combinations(),
         script=SCRIPTS_FOLDER + "/aggregate_results.R"
     output:
         OUTPUT_FOLDER + "/adjusters_on_classifiers.csv"
@@ -216,16 +230,19 @@ rule aggregate_adjusters:
         mem_mb=8000,
         runtime=20
     params:
-        input_dir=OUTPUT_FOLDER + "/results/adjusters/individual"
+        adjuster_dir=OUTPUT_FOLDER + "/results/adjusters/individual",
+        within_study_dir=OUTPUT_FOLDER + "/results/within_study_cv/individual"
     shell:
         """
         Rscript {input.script} \
-            --input-dir {params.input_dir} -o {output} \
+            --input-dir {params.adjuster_dir} \
+            --input-dir {params.within_study_dir} \
+            -o {output} \
             &> {log}
         """
 
 
-# Step 2.1: Run classification on real data
+# Step 2.1a: Run classification on real data with batch correction
 rule classify_adjusters:
     input:
         data=DATA_FOLDER + "/TB_real_data.RData",
@@ -248,6 +265,59 @@ rule classify_adjusters:
             --num-datasets {wildcards.n_datasets} \
             --test-study {wildcards.test_study} \
             |& tee {log}
+        """
+
+
+# Step 2.1b: Within-study cross-validation baseline (no batch effects)
+rule classify_within_study_cv:
+    input:
+        data=DATA_FOLDER + "/TB_real_data.RData",
+        script=SCRIPTS_FOLDER + "/classify_within_study_cv.R",
+        helper=SCRIPTS_FOLDER + "/helper.R"
+    output:
+        OUTPUT_FOLDER + "/results/within_study_cv/individual/{classifier}_{n_datasets}_{test_study}.csv"
+    log:
+        OUTPUT_FOLDER + "/logs/within_study_cv/{classifier}_{n_datasets}_{test_study}.log"
+    group: "within_study_cv_group"
+    threads: 1
+    resources:
+        mem_mb=lambda wildcards: 32000 if wildcards.classifier in ["nnet", "logistic"] else 8000,
+        runtime=180
+    params:
+        n_folds=3,
+        n_features=2000  # 0 = use all genes (no feature selection)
+    shell:
+        """
+        Rscript {input.script} -o {output} \
+            --classifier {wildcards.classifier} \
+            --num-datasets {wildcards.n_datasets} \
+            --test-study {wildcards.test_study} \
+            --n-folds {params.n_folds} \
+            --n-features {params.n_features} \
+            &> {log}
+        """
+
+
+# Step 2.1c: Aggregate within-study CV results for summary
+rule aggregate_within_study_baseline:
+    input:
+        data=get_within_study_cv_combinations(),
+        script=SCRIPTS_FOLDER + "/aggregate_results.R"
+    output:
+        OUTPUT_FOLDER + "/within_study_baseline.csv"
+    log:
+        OUTPUT_FOLDER + "/logs/aggregate_within_study_baseline.log"
+    threads: 1
+    resources:
+        mem_mb=4000,
+        runtime=10
+    params:
+        input_dir=OUTPUT_FOLDER + "/results/within_study_cv/individual"
+    shell:
+        """
+        Rscript {input.script} \
+            --input-dir {params.input_dir} -o {output} \
+            &> {log}
         """
 
 

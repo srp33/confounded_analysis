@@ -5,7 +5,7 @@ generate_relative_plot <- function(mxe_data, top_adjuster, top_adjuster_label,
                                    output_file, width = 20, height = 16, dpi = 300) {
   
   cat("\nCreating relative performance plot using estimation statistics (dabestr)...\n")
-  cat("Using classifier-specific best adjusters as reference\n")
+  cat("Using within-study CV as reference baseline\n")
   
   # Load required packages
   if (!require("dabestr", quietly = TRUE)) {
@@ -33,13 +33,13 @@ generate_relative_plot <- function(mxe_data, top_adjuster, top_adjuster_label,
       next
     }
     
-    # Get classifier-specific ordering and best adjuster
+    # Get classifier-specific ordering (within_study_cv will be first due to get_classifier_ordering)
     classifier_adjuster_order <- get_classifier_ordering(mxe_data, classifier)
     classifier_specific_labels <- create_adjuster_labels(classifier_adjuster_order)
-    classifier_best_adjuster <- classifier_adjuster_order$adjuster[1]
-    classifier_best_label <- classifier_specific_labels[1]
+    reference_adjuster <- "within_study_cv"
+    reference_label <- "Within-Study CV"
     
-    cat(sprintf("\nClassifier %s: best adjuster is %s\n", classifier, classifier_best_label))
+    cat(sprintf("\nClassifier %s: using %s as reference baseline\n", classifier, reference_label))
     
     # Prepare data for dabestr
     plot_data <- classifier_data %>%
@@ -62,10 +62,10 @@ generate_relative_plot <- function(mxe_data, top_adjuster, top_adjuster_label,
       
       if (nrow(subset_data) == 0) next
       
-      # Define comparison groups (best vs all others)
+      # Define comparison groups (within_study_cv vs all others)
       adjusters_in_subset <- unique(subset_data$adjuster_label)
-      adjusters_to_compare <- c(classifier_best_label, 
-                               classifier_specific_labels[classifier_specific_labels != classifier_best_label & 
+      adjusters_to_compare <- c(reference_label, 
+                               classifier_specific_labels[classifier_specific_labels != reference_label & 
                                                          classifier_specific_labels %in% adjusters_in_subset])
       
       if (length(adjusters_to_compare) < 2) next
@@ -167,10 +167,35 @@ generate_relative_plot <- function(mxe_data, top_adjuster, top_adjuster_label,
     
     # Create two-panel plot: raw data on top, effect sizes on bottom
     # Top panel: Raw MCC values
-    p_raw <- ggplot(plot_data, aes(x = adjuster_label, y = value)) +
+    
+    # Extract within-study CV baseline values for reference lines
+    baseline_data <- plot_data %>%
+      filter(adjuster == reference_adjuster) %>%
+      select(test_study, dataset_label, value) %>%
+      rename(baseline_value = value)
+    
+    # Filter out within_study_cv from the raw data plot (keep only as reference lines)
+    plot_data_no_baseline <- plot_data %>%
+      filter(adjuster != reference_adjuster) %>%
+      mutate(adjuster_label = droplevels(adjuster_label))  # Drop unused factor levels
+    
+    mean_data_no_baseline <- mean_data %>%
+      filter(adjuster_label != reference_label) %>%
+      mutate(adjuster_label = droplevels(adjuster_label))  # Drop unused factor levels
+    
+    # Calculate number of adjusters (excluding baseline) for vertical lines
+    n_adjusters <- length(unique(plot_data_no_baseline$adjuster_label))
+    
+    p_raw <- ggplot(plot_data_no_baseline, aes(x = adjuster_label, y = value)) +
+      # Add horizontal reference lines for within-study CV baseline (colored by test study)
+      geom_hline(data = baseline_data, 
+                aes(yintercept = baseline_value, color = test_study),
+                linetype = "dashed", linewidth = 0.5, alpha = 0.7) +
+      # Add vertical grid lines to help align columns (between each adjuster)
+      geom_vline(xintercept = seq(1.5, n_adjusters - 0.5, by = 1), color = "grey90", linewidth = 0.3) +
       geom_point(aes(color = test_study, shape = test_study), size = 2.5, alpha = 0.6, 
                 position = position_jitter(width = 0.1, height = 0)) +
-      geom_segment(data = mean_data, 
+      geom_segment(data = mean_data_no_baseline, 
                   aes(x = as.numeric(adjuster_label) - 0.35, 
                       xend = as.numeric(adjuster_label) + 0.35,
                       y = mean_value, yend = mean_value),
@@ -186,7 +211,8 @@ generate_relative_plot <- function(mxe_data, top_adjuster, top_adjuster_label,
         axis.title.y = element_text(size = 9),
         legend.position = "none",
         panel.grid.major.x = element_blank(),
-        panel.grid.minor = element_blank(),
+        panel.grid.major.y = element_line(color = "grey90", linewidth = 0.3),
+        panel.grid.minor.y = element_line(color = "grey95", linewidth = 0.2),
         strip.text = element_text(size = 9),
         plot.margin = margin(5, 5, 0, 5)
       ) +
@@ -198,12 +224,15 @@ generate_relative_plot <- function(mxe_data, top_adjuster, top_adjuster_label,
       effect_data$comparison <- factor(effect_data$comparison,
                                        levels = classifier_specific_labels)
       
+      # Calculate number of comparisons for vertical lines
+      n_comparisons <- length(unique(effect_data$comparison))
+      
       p_effect <- ggplot(effect_data, aes(x = comparison, y = mean_difference)) +
         geom_hline(yintercept = 0, linetype = "solid", color = "gray60", linewidth = 0.5) +
+        # Add vertical grid lines to match top panel (between each adjuster)
+        geom_vline(xintercept = seq(1.5, n_comparisons - 0.5, by = 1), color = "grey90", linewidth = 0.3) +
         geom_errorbar(aes(ymin = ci_lower, ymax = ci_upper), width = 0.2, linewidth = 0.8) +
-        geom_point(size = 3, shape = 21, fill = "white", stroke = 1.5) +
-        geom_text(aes(label = ifelse(p_value < 0.05, "*", "")), 
-                 vjust = -1.5, size = 5, fontface = "bold") +
+        geom_point(size = 2, shape = 21, fill = "white", stroke = 1.2) +
         facet_wrap(~ dataset_label, scales = "free_x", ncol = 4) +
         theme_bw() +
         theme(
@@ -214,7 +243,7 @@ generate_relative_plot <- function(mxe_data, top_adjuster, top_adjuster_label,
           strip.text = element_blank(),
           plot.margin = margin(0, 5, 5, 5)
         ) +
-        labs(x = "Adjuster", y = sprintf("Δ MCC\n(vs. %s)", classifier_best_label))
+        labs(x = "Adjuster", y = sprintf("Δ MCC\n(vs. %s)", reference_label))
     } else {
       # If no effect data, create empty bottom panel
       p_effect <- ggplot() + 

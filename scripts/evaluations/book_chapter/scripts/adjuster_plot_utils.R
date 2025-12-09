@@ -2,6 +2,7 @@
 # Common utility functions for adjuster plotting
 
 format_adjuster_label <- function(adjuster_name) {
+  if (adjuster_name == "within_study_cv") return("Within-Study CV")
   if (adjuster_name == "unadjusted") return("Unadjusted")
   if (adjuster_name == "combat") return("ComBat")
   if (adjuster_name == "combat_sup") return("ComBat-Sup")
@@ -12,11 +13,20 @@ format_adjuster_label <- function(adjuster_name) {
 }
 
 get_classifier_ordering <- function(mxe_data, classifier_name) {
-  mxe_data %>%
+  ordering <- mxe_data %>%
     filter(classifier_label == classifier_name & !is.na(classifier_label)) %>%
     group_by(adjuster) %>%
     summarise(mean_mcc = mean(value, na.rm = TRUE), .groups = "drop") %>%
     arrange(desc(mean_mcc))
+  
+  # Ensure within_study_cv is always first (it's the reference baseline)
+  if ("within_study_cv" %in% ordering$adjuster) {
+    within_study_row <- ordering[ordering$adjuster == "within_study_cv", ]
+    other_rows <- ordering[ordering$adjuster != "within_study_cv", ]
+    ordering <- rbind(within_study_row, other_rows)
+  }
+  
+  return(ordering)
 }
 
 create_adjuster_labels <- function(adjuster_order) {
