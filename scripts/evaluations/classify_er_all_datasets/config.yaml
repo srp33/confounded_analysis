@@ -23,3 +23,7 @@ dataset_ids:
   - "gse96058_nextseq"
   - "metabric"
 
+bootstrap_total: 100
+bootstrap_per_job: 10
+n_hvg: 1000
+k_folds: 3

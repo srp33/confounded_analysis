@@ -19,6 +19,7 @@ parser$add_argument('--k', required=TRUE, help='Number of datasets in the subset
 parser$add_argument('--test', required=TRUE, help='Test source name/ID.')
 parser$add_argument('--output-dir', required=TRUE, help='Output directory for adjusted datasets.')
 parser$add_argument('--adjust-script', required=TRUE, help='Path to adjust.R script.')
+parser$add_argument('--metadata-file', required=TRUE, help='GEO metadata CSV to create MNN order list.')
 
 args <- parser$parse_args()
 
@@ -28,6 +29,7 @@ subset_index <- args$k
 test_source <- args$test
 output_dir <- args$output_dir
 adjust_script <- args$adjust_script
+metadata_file <- args$metadata_file
 
 cat("Running scaling experiment with adjuster:", adjuster, "on file: ", subset_path, "\n")
 
@@ -35,7 +37,7 @@ cat("Running scaling experiment with adjuster:", adjuster, "on file: ", subset_p
 source(adjust_script)
 
 # ---- Adjustment wrapper ----
-apply_adjustment <- function(df, method, test_source) {
+apply_adjustment <- function(df, method, test_source, metadata_file) {
   meta_cols <- df %>% select(starts_with("meta_"))
   num_cols <- df %>% select(where(is.numeric), -starts_with("meta_"))
   if (ncol(num_cols) == 0) stop("No numeric columns found in dataset.")
@@ -50,12 +52,29 @@ apply_adjustment <- function(df, method, test_source) {
   
   if (method != "gmm" ) {
     if (any(num_cols < 0, na.rm = TRUE)) {
-      warning("Negative values found in numeric columns; consider shifting data.")
+      cat("Negative values found in numeric columns; shifting data.")
     }
     # Safe log transform (shift by min if negatives exist)
     shift <- ifelse(any(num_cols < 0, na.rm = TRUE), abs(min(num_cols, na.rm = TRUE)) + 1, 0)
     num_cols <- log1p(num_cols + shift)
     cat("Applying log transform before ", method, "\n")
+  }
+
+  # Create list of order from largest to smallest for mnn
+  if (method == "mnn") {
+    train_datasets <- df %>%
+      filter(meta_source != test_source) %>%
+      pull(meta_source) %>% 
+      unique()
+
+    geo_meta <- read_csv(metadata_file, col_types = cols()) %>%
+      select(gse_id %in% train_datasets) %>%
+      arrange(desc(sample_size))
+    
+    cat("  [apply_adjustment] MNN order (train datasets by sample size:\n")
+    print(geo_meta)
+
+    batch_levels <- c(geo_meta$gse_id, test_source)
   }
 
   # Ensure numeric matrix has proper row and column names *after* log transform
@@ -73,7 +92,7 @@ apply_adjustment <- function(df, method, test_source) {
   adjusted <- switch(method,
     min_mean = adjust_min_mean(num_cols_matrix_t, batch = df$meta_source),
     log_combat = adjust_log_combat(num_cols_matrix_t, batch = batch_vec, design = design),
-    mnn = adjust_mnn(df_ = num_cols_matrix_t, batch = batch_vec, test_source=test_source, data_are_counts = FALSE, debug = FALSE),
+    mnn = adjust_mnn(df_=num_cols_matrix_t, batch=batch_vec, test_source=test_source, data_are_counts=FALSE, batch_levels=batch_levels, debug = FALSE),
     gmm = adjust_gmm(matrix_ = num_cols_matrix_t, batch = batch_vec, debug = FALSE),
     log_transformed = num_cols_matrix_t,
     stop("Unknown adjuster: ", method)
@@ -105,7 +124,7 @@ cat("  Numeric columns:", sum(sapply(df, is.numeric)), "\n\n")
 
 cat("\n--- Processing test source:", test_source, "---\n")
   tryCatch({
-    adjusted_df <- apply_adjustment(df, method = adjuster, test_source = test_source)
+    adjusted_df <- apply_adjustment(df, method = adjuster, test_source = test_source, metadata_file=metadata_file)
     
     out_dir <- file.path(output_dir, adjuster)
     if (!dir.exists(out_dir)) dir.create(out_dir, recursive = TRUE)

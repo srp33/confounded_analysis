@@ -5,6 +5,11 @@ OUTPUT_FOLDER = config["output_folder"]
 DATA_FOLDER = config["data_folder"]
 SCRIPTS_DIR = config.get("scripts_dir", ".")
 ADJUST_SCRIPT = config.get("adjust_script", "../../adjust/adjust.R")
+BOOTSTRAP_TOTAL = config["bootstrap_total"]
+BOOTSTRAP_PER_JOB = config["bootstrap_per_job"]
+N_HVG = config["n_hvg"]
+CHUNKS = range(BOOTSTRAP_TOTAL // BOOTSTRAP_PER_JOB)
+K_FOLDS = config["k_folds"]
 
 rule all: 
     input: 
@@ -45,10 +50,11 @@ rule aggregate_metrics:
     priority: 70
     input: 
         metrics_data=expand(
-            OUTPUT_FOLDER + "/metrics/{adjuster}/{adjuster}_{k}studies_test_{test_source}_metrics.csv",
+            OUTPUT_FOLDER + "/metrics/{adjuster}/{adjuster}_{k}studies_test_{test_source}_chunk{chunk}_metrics.csv",
             adjuster=config["adjuster"],
             k=list(range(1,15)),
-            test_source=config["dataset_ids"]
+            test_source=config["dataset_ids"],
+            chunk = CHUNKS
         )
     output:
         output_path=OUTPUT_FOLDER + "/classify_er_all/all_metrics.csv"
@@ -71,23 +77,26 @@ rule classify:
     input:
         adjusted_csv = DATA_FOLDER + "/adjusted_data/{adjuster}/{adjuster}_{k}studies_test_{test_source}.csv"
     output: 
-        metrics_file = OUTPUT_FOLDER + "/metrics/{adjuster}/{adjuster}_{k}studies_test_{test_source}_metrics.csv"
+        metrics_file = OUTPUT_FOLDER + "/metrics/{adjuster}/{adjuster}_{k}studies_test_{test_source}_chunk{chunk}_metrics.csv"
     log: 
-        "log/classify/{adjuster}_{k}_{test_source}_classify.log"
+        "log/classify/{adjuster}_{k}_{test_source}_chunk{chunk}.log"
     resources: 
         mem_mb=16000,
         runtime=90
     threads: 1
     params:
         output_dir = OUTPUT_FOLDER + "/metrics",
-        bootstrap = config.get("bootstrap", 100)
+        bootstrap = BOOTSTRAP_PER_JOB,
+        hvg = N_HVG
     shell:
-        """
+        r"""
         set -euo pipefail
         python {SCRIPTS_DIR}/run_classifier.py \
             --csv {input.adjusted_csv} \
             --outdir {params.output_dir} \
-            --bootstrap {params.bootstrap} \
+            --n_hvg {params.hvg} \
+            --chunk {wildcards.chunk} \
+            --chunk-size {params.bootstrap} \
             &> {log}
         """
 
@@ -105,7 +114,8 @@ rule adjust:
         "log/adjust/{adjuster}_{k}_{test_source}_adjust.log"
     params:
         output_dir = DATA_FOLDER + "/adjusted_data",
-        adjust_script = ADJUST_SCRIPT
+        adjust_script = ADJUST_SCRIPT,
+        metadata = DATA_FOLDER + "/geo_metadata.csv" 
     shell:
         """
         set -euo pipefail
@@ -116,6 +126,7 @@ rule adjust:
             --test {wildcards.test_source} \
             --output-dir {params.output_dir} \
             --adjust-script {params.adjust_script} \
+            --metadata-file {params.metadata} \
             &> {log}
         """
 
@@ -142,6 +153,29 @@ rule subset:
         --k {wildcards.k} \
         --output {output} \
         &> {log}
+        """
+
+rule cross_validate:
+    input: 
+        combined_file = DATA_FOLDER + "/all_combined/all_combined.csv"
+    output:
+        cv_file = DATA_FOLDER + "/cv_metrics.csv"
+    resources:
+        mem_mb=4000,
+        runtime=20
+    threads: 1
+    log:
+        "log/cross_validation/cv.log"
+    params:
+        k_folds=K_FOLDS
+    shell:
+        """
+        set -euo pipefail
+        python {SCRIPTS_DIR}"/run_cv_per_test.py \
+            --combined_csv {input.combined_file} \
+            --outdir {DATA_DIR} \
+            --k_folds {params.k_folds} \
+            &> {log}
         """
 
 rule make_order_files:

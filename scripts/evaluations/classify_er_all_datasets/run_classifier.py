@@ -5,6 +5,8 @@ import numpy as np
 import argparse
 from sklearn.ensemble import HistGradientBoostingClassifier
 from sklearn.metrics import (accuracy_score, roc_auc_score, confusion_matrix, matthews_corrcoef)
+from sklearn.utils import resample
+from sklearn.feature_selection import VarianceThreshold
 
 import functools
 print = functools.partial(print, flush=True)
@@ -19,7 +21,7 @@ def parse_test_source(filename):
     return test_source
 
 def run_classifier(X_train, y_train, X_test, y_test, random_state=42):
-    model = HistGradientBoostingClassifier(max_iter=100, random_state=random_state)
+    model = HistGradientBoostingClassifier(max_iter=50, random_state=random_state)
 
     # Now fit the model
     model.fit(X_train, y_train)
@@ -56,13 +58,18 @@ def main():
 
     parser.add_argument("--csv", required=True, help="Input adjusted CSV file")
     parser.add_argument("--outdir", required=True, help="Output directory")
-    parser.add_argument("--bootstrap", type=int, default=1, help="Number of bootstrap runs (default: 1 = no bootstrap)")
+    parser.add_argument("--n_hvg", type=int, default=1000,
+                    help="Number of highly variable genes to select")
+    parser.add_argument("--chunk", type=int, default=0, help="Bootstrap chunk index (0-based)")
+    parser.add_argument("--chunk-size", type=int, default=10, help="How many bootstraps per job")
 
     args = parser.parse_args()
 
     csv_file = args.csv
     output_dir = args.outdir
-    n_boot = args.bootstrap
+    n_hvg = args.hvg
+    chunk = args.chunk
+    chunk_size = args.chunk_size
 
     if not os.path.exists(csv_file):
         raise FileNotFoundError(f"CSV not found: {csv_file}")
@@ -102,8 +109,15 @@ def main():
     X_train, y_train = train_df[feature_cols], train_df['meta_er_status']
     X_test, y_test = test_df[feature_cols], test_df['meta_er_status']
 
-    print(f"[DEBUG] X_train shape: {X_train.shape}, y_train length: {len(y_train)}")
-    print(f"[DEBUG] X_test shape: {X_test.shape}, y_test length: {len(y_test)}")
+    # Select top 1000 highly variable genes
+    gene_variances = X_train.var(axis=0)
+
+    top_genes = gene_variances.sort_values(ascending=False).head(n_hvg).index
+
+    print(f"[INFO] Selecting top {len(top_genes)} highly variable genes")
+
+    X_train = X_train[top_genes]
+    X_test = X_test[top_genes]
 
     # Assuming X_train is a DataFrame and y_train is a Series
     mask = y_train.notna()  # True for rows where y_train is not NaN
@@ -116,23 +130,39 @@ def main():
 
     # Bootstrapping logic
     results = []
-    rng = np.random.default_rng(seed=123)
+    chunk_seed_base = 10_000 + chunk * chunk_size
+    rng = np.random.default_rng(chunk_seed_base)
 
-    for b in range(n_boot):
-        print(f"\n=== Bootstrap iteration {b+1}/{n_boot} ===")
-        if n_boot == 1 or b == 0:
-            Xb, yb = X_train_clean, y_train_clean
-        else:
-            indices = rng.integers(0, len(X_train_clean), len(X_train_clean))
-            Xb = X_train_clean.iloc[indices]
-            yb = y_train_clean.iloc[indices]
+    for local_iter in range(chunk_size):
+        global_iter = chunk * chunk_size + local_iter
+        bootstrap_seed = int(rng.integers(1_000_000_000)) # seed for this iteration
 
-        metrics = run_classifier(Xb, yb, X_test_clean, y_test_clean, random_state=42 + b)
+        print(f"\n=== Bootstrap global iter {global_iter} (chunk {chunk}, local {local_iter}) ===")
 
-        metrics['adjuster'] = adjuster
-        metrics['subset_file'] = os.path.basename(csv_file)
-        metrics['test_source'] = test_source
-        metrics['bootstrap_iter'] = b + 1
+        X_boot, y_boot = resample(
+            X_train_clean,
+            y_train_clean,
+            replace=True,
+            n_samples=len(X_train_clean),
+            stratify=y_train_clean,        # maintains class balance
+            random_state=bootstrap_seed
+        )
+
+        metrics = run_classifier(
+            X_boot,
+            y_boot,
+            X_test_clean,
+            y_test_clean,
+            random_state=bootstrap_seed
+        )
+
+        metrics["bootstrap_global"] = global_iter
+        metrics["bootstrap_chunk"] = chunk
+        metrics["bootstrap_local"] = local_iter
+        metrics["bootstrap_seed"] = bootstrap_seed
+        metrics["adjuster"] = adjuster
+        metrics["subset_file"] = os.path.basename(csv_file)
+        metrics["test_source"] = test_source
 
         results.append(metrics)
 
@@ -142,7 +172,7 @@ def main():
 
     result_file = os.path.join(
         results_dir,
-        f"{os.path.basename(csv_file).replace('.csv', '')}_metrics.csv"
+        f"{os.path.basename(csv_file).replace('.csv', '')}_chunk{chunk}_metrics.csv"
     )
     
     df_results = pd.DataFrame(results)

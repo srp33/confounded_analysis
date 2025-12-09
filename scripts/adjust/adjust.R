@@ -553,7 +553,7 @@ adjust_liger <- function(df_, batch, data_are_counts, debug = FALSE) {
 }
 
 
-adjust_mnn <- function(df_, batch, test_source, data_are_counts, debug = FALSE) {
+adjust_mnn <- function(df_, batch, test_source, data_are_counts, batch_levels=NULL, debug = FALSE) {
   #' Adjust using the mnnCorrect method from batchelor.
   #' @param df_ The data matrix (features x samples).
   #' @param batch The batch variable vector.
@@ -564,8 +564,10 @@ adjust_mnn <- function(df_, batch, test_source, data_are_counts, debug = FALSE) 
   message("Adjusting with MNN.")
   prep_list <- prep_seurat_like(df_, batch, data_are_counts)
 
-  batch_levels <- unique(batch)
-  batch_levels <- c(setdiff(batch_levels, test_source), test_source)
+  if (is.null(batch_levels)) {
+    batch_levels <- unique(batch)
+    batch_levels <- c(setdiff(batch_levels, test_source), test_source)
+  }
   
   sce_list <- lapply(batch_levels, function(b) 
     Seurat::as.SingleCellExperiment(prep_list$obj[, prep_list$obj$Batch == b]))

@@ -21,12 +21,14 @@ parser$add_argument('--figures_dir', required = TRUE,
     help = "Directory to save figures")
 parser$add_argument('--metadata_file', required = TRUE,
     help = "Path to CSV containing dataset metadata")
+parser$add_argument('--cv_file', required = FALSE, default = NULL, help = "Path to CSV containing cv metrics for test sets.")
 
 args <- parser$parse_args()
 
 metrics_file <- args$metrics_file
 figures_dir <- args$figures_dir
 metadata_file <- args$metadata_file
+cv_file <- args$cv_file
 
 # Ensure figures directory exists
 dir.create(figures_dir, showWarnings = FALSE, recursive = TRUE)
@@ -195,30 +197,68 @@ generate_test_source_scaling_plot_absolute <- function(
   message("Saved: ", file_path)
 }
 
+get_cv_value <- function(cv_data, test_source, metric) {
+  if (is.null(cv_data)) return(NULL)
+  
+  cv_row <- cv_data %>% filter(test_source == !!test_source)
+  
+  if (nrow(cv_row) == 0) {
+    warning("Test source not found in cv_file: ", test_source)
+    return(NULL)
+  }
+  
+  if (!metric %in% colnames(cv_row)) {
+    warning("Metric not found in cv_file: ", metric)
+    return(NULL)
+  }
+  
+  cv_value <- cv_row[[metric]][1]  # take first match
+  return(cv_value)
+}
+
 
 # --- Main Processing ---
 
-# Compute delta metrics for ROC_AUC and MCC
-results <- data.frame()
-for (metric in c("ROC_AUC", "MCC")) {
-  delta_df <- prepare_delta(all_adjusters, df_unadj, metric) %>%
-    mutate(Metric = metric)
-  results <- bind_rows(results, delta_df)
-}
+# Cross-Validation line
+if (!is.null(cv_file)) {
+  cv_data <- read_csv(args$cv_file, col_types = cols())
+} else {
+  cv_data <- NULL
+} 
 
 absolute_data <- all_metrics %>%
   select(adjuster, n_studies, test_source, `ROC_AUC`, MCC) %>%
   pivot_longer(cols = c(`ROC_AUC`, MCC), names_to = "Metric", values_to = "Value")
 
+# Compute delta metrics for ROC_AUC and MCC
+results <- data.frame()
+for (metric in c("ROC_AUC", "MCC")) {
+  # Compute delta metrics
+  delta_df <- prepare_delta(all_adjusters, df_unadj, metric) %>%
+    mutate(Metric = metric)
+  
+  results <- bind_rows(results, delta_df)
+  
+  # Compute absolute data for the metric
+  abs_data <- absolute_data %>% filter(Metric == metric)
+  
+  # Example: use first test_source in the data for CV line
+  first_test_source <- unique(abs_data$test_source)[1]
+  
+  cv_value <- get_cv_value(cv_data, test_source = first_test_source, metric = metric)
+  
+  # Generate absolute scaling plot
+  generate_test_source_scaling_plot_absolute(
+    df = abs_data,
+    metric = metric,
+    gse_metadata_path = metadata_file,
+    cv_value = cv_value,
+    fig_dir = figures_dir
+  )
+}
+
 # Save combined CSV
 write_csv(results, file.path(figures_dir, "scaling_comparison_results.csv"))
-
-# Generate plots
-generate_test_source_scaling_plot(results %>% filter(Metric == "ROC_AUC"), "ROC_AUC")
-generate_test_source_scaling_plot(results %>% filter(Metric == "MCC"), "MCC")
-
-generate_test_source_scaling_plot_absolute(absolute_data, "ROC_AUC")
-generate_test_source_scaling_plot_absolute(absolute_data, "MCC")
 
 
 cat("✅ Scaling plots generated successfully in:", figures_dir, "\n")
