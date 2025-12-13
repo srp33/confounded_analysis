@@ -52,9 +52,9 @@ def compute_gaussian_pdf(data, means, variances, weights):
     return np.exp(-0.5 * scaled) * (weights / (sds * np.sqrt(2 * np.pi)))
 
 
-def update_variance_coupled(data, means, responsibilities, Nk, variance_other, alpha_v):
+def update_variance_coupled(data, means, responsibilities, Nk, variance_other, alpha_v, hyperprior_strength=0.0):
     """
-    Update variance with coupled Inverse-Gamma prior.
+    Update variance with coupled Inverse-Gamma prior and dynamic hyperprior.
     
     Computes posterior mean of Inverse-Gamma distribution where the prior
     mean is coupled to the other component's variance. This encourages
@@ -68,6 +68,7 @@ def update_variance_coupled(data, means, responsibilities, Nk, variance_other, a
     Nk : ndarray [n_genes] of effective sample counts
     variance_other : ndarray [n_genes] of other component's variances
     alpha_v : float, Inverse-Gamma shape parameter
+    hyperprior_strength : float or ndarray, strength of hyperprior regularization
     
     Returns:
     --------
@@ -77,19 +78,32 @@ def update_variance_coupled(data, means, responsibilities, Nk, variance_other, a
     centered = data - means
     S_k = (responsibilities * centered**2).sum(axis=1)
     
-    # Prior: beta0 = (alpha - 1) * variance_other
-    # This couples the prior to the other component's variance
-    beta0 = (alpha_v - 1) * variance_other
+    # 1. Base Prior (Standard Inverse-Gamma coupling)
+    beta_base = (alpha_v - 1) * variance_other * 1.0
     
-    # Posterior parameters
-    alpha_post = alpha_v + 0.5 * Nk
+    # 2. Hyperprior Injection
+    if np.any(hyperprior_strength > 0):
+        # The strength acts as 'alpha' count for the hyperprior
+        alpha_hyperprior = hyperprior_strength
+        # The 'beta' is derived assuming variance ratio is exactly 1.0
+        beta_hyperprior = hyperprior_strength * variance_other * 1.0
+        
+        alpha_prior = alpha_v + alpha_hyperprior
+        beta0 = beta_base + beta_hyperprior
+    else:
+        alpha_prior = alpha_v
+        beta0 = beta_base
+    
+    # 3. Posterior Update
+    alpha_post = alpha_prior + 0.5 * Nk
     beta_post = beta0 + 0.5 * S_k
     
     # Posterior mean: beta_post / (alpha_post - 1)
     return np.maximum(beta_post / (alpha_post - 1), 1e-6)
 
 
-def fit_gmm_batch(data_chunk, weight_alpha=None, variance_alpha=None, max_iter=100, tol=1e-4):
+def fit_gmm_batch(data_chunk, weight_alpha=None, variance_alpha=None, max_iter=100, tol=1e-4, 
+                  hyperprior_strength=None, hyperprior_decay_rate=None):
     """
     Fit GMM to multiple genes simultaneously (Fully Vectorized - No Loops).
     """
@@ -126,6 +140,14 @@ def fit_gmm_batch(data_chunk, weight_alpha=None, variance_alpha=None, max_iter=1
         variance_alpha = 6.0 + n_samples / 50.0
     alpha_v = max(variance_alpha, 1.01)
     
+    # Set hyperprior defaults
+    if hyperprior_strength is None:
+        # Default to equal weight with the data
+        hyperprior_strength = n_samples
+    
+    if hyperprior_decay_rate is None:
+        hyperprior_decay_rate = 2.0
+    
     # Track convergence
     converged = np.zeros(n_genes, dtype=bool)
     log_likelihood_old = np.full(n_genes, -np.inf)
@@ -161,12 +183,26 @@ def fit_gmm_batch(data_chunk, weight_alpha=None, variance_alpha=None, max_iter=1
         means[active_genes, 0] = (data_active * resp_k1).sum(axis=1) / (Nk1 + eps)
         means[active_genes, 1] = (data_active * resp_k2).sum(axis=1) / (Nk2 + eps)
         
-        # Update variances
+        # Calculate dynamic hyperprior strength based on component separation
+        # 1. Calculate Normalized Separation
+        # separation = difference in means / scale of variance
+        mean_sep = means[active_genes, 1] - means[active_genes, 0]
+        var_scale = np.sqrt(variances_old[:, 0] + variances_old[:, 1])
+        normalized_sep = mean_sep / (var_scale + 1e-12)
+        
+        # 2. Calculate Dynamic Strength
+        # Decay formula: Strength * e^(-rate * separation)
+        if hyperprior_strength > 0:
+            current_strength = hyperprior_strength * np.exp(-hyperprior_decay_rate * normalized_sep)
+        else:
+            current_strength = 0.0
+        
+        # Update variances with dynamic hyperprior
         variances[active_genes, 0] = update_variance_coupled(
-            data_active, means[active_genes, 0:1], resp_k1, Nk1, variances_old[:, 1], alpha_v
+            data_active, means[active_genes, 0:1], resp_k1, Nk1, variances_old[:, 1], alpha_v, current_strength
         )
         variances[active_genes, 1] = update_variance_coupled(
-            data_active, means[active_genes, 1:2], resp_k2, Nk2, variances_old[:, 0], alpha_v
+            data_active, means[active_genes, 1:2], resp_k2, Nk2, variances_old[:, 0], alpha_v, current_strength
         )
         
         # --- VECTORIZED CONVERGENCE CHECK (Replaces Loop) ---
@@ -197,15 +233,6 @@ def apply_gmm_transforms_batch(data_chunk, gmm_params, mean_mean_zero, mean1_zer
                                unit_var, means_at_1, output_counts):
     """
     Apply GMM transformations to a batch of genes (vectorized).
-    
-    Parameters:
-    -----------
-    data_chunk : ndarray [n_genes × n_samples]
-    gmm_params : dict with 'means', 'variances', 'weights'
-    
-    Returns:
-    --------
-    transformed : ndarray [n_genes × n_samples]
     """
     n_genes, n_samples = data_chunk.shape
     means = gmm_params['means'].copy()
@@ -245,19 +272,10 @@ def apply_gmm_transforms_batch(data_chunk, gmm_params, mean_mean_zero, mean1_zer
 def bimodal_normalize(data, weight_alpha=None, variance_alpha=None, mean_mean_zero=True,
                      unit_var=True, mean1_zero=False, diff_exp=False, means_at_1=False,
                      output_counts=False, log_transform=True, debug=False,
-                     num_workers=None, chunk_size=200):
+                     num_workers=None, chunk_size=200, hyperprior_strength=None, 
+                     hyperprior_decay_rate=None):
     """
     Bimodal normalization using GMM with mini-batch vectorization.
-    
-    Parameters:
-    -----------
-    data : ndarray [n_genes × n_samples]
-    chunk_size : int, number of genes per chunk
-    num_workers : int, number of parallel workers (-1 for all cores)
-    
-    Returns:
-    --------
-    bimodal_data : ndarray [n_genes × n_samples]
     """
     if diff_exp and unit_var:
         raise ValueError("Unit variance not allowed for diff exp")
@@ -315,7 +333,9 @@ def bimodal_normalize(data, weight_alpha=None, variance_alpha=None, mean_mean_ze
         
         def process_chunk(chunk_idx):
             chunk_data = data[chunk_idx, :]
-            gmm_params = fit_gmm_batch(chunk_data, weight_alpha, variance_alpha)
+            gmm_params = fit_gmm_batch(chunk_data, weight_alpha, variance_alpha, 
+                                     hyperprior_strength=hyperprior_strength, 
+                                     hyperprior_decay_rate=hyperprior_decay_rate)
             return apply_gmm_transforms_batch(chunk_data, gmm_params, mean_mean_zero,
                                              mean1_zero, unit_var, means_at_1, output_counts)
         
@@ -330,7 +350,9 @@ def bimodal_normalize(data, weight_alpha=None, variance_alpha=None, mean_mean_ze
         
         for chunk_idx in chunks:
             chunk_data = data[chunk_idx, :]
-            gmm_params = fit_gmm_batch(chunk_data, weight_alpha, variance_alpha)
+            gmm_params = fit_gmm_batch(chunk_data, weight_alpha, variance_alpha,
+                                     hyperprior_strength=hyperprior_strength,
+                                     hyperprior_decay_rate=hyperprior_decay_rate)
             bimodal_data[chunk_idx, :] = apply_gmm_transforms_batch(
                 chunk_data, gmm_params, mean_mean_zero, mean1_zero,
                 unit_var, means_at_1, output_counts)
@@ -339,6 +361,7 @@ def bimodal_normalize(data, weight_alpha=None, variance_alpha=None, mean_mean_ze
 
 
 def gmm_adjust(data, batch, genes_are_rows=False, weight_alpha=None, variance_alpha=None,
+              hyperprior_strength=None, hyperprior_decay_rate=2.0, # Added params here
               mean_mean_zero=True, mean1_zero=False, unit_var=True, diff_exp=False,
               means_at_1=False, output_counts=False, log_transform=True, debug=False,
               num_workers=None, chunk_size=200):
@@ -382,6 +405,8 @@ def gmm_adjust(data, batch, genes_are_rows=False, weight_alpha=None, variance_al
             batch_data,
             weight_alpha=weight_alpha,
             variance_alpha=variance_alpha,
+            hyperprior_strength=hyperprior_strength,
+            hyperprior_decay_rate=hyperprior_decay_rate,
             mean_mean_zero=mean_mean_zero,
             unit_var=unit_var,
             mean1_zero=mean1_zero,

@@ -45,11 +45,12 @@ compute_gaussian_pdf <- function(data, means, variances, weights) {
   exp(-0.5 * scaled) * (weights / (sds * sqrt(2 * pi)))
 }
 
-#' Update variance with coupled Inverse-Gamma prior
+#' Update variance with coupled Inverse-Gamma prior and dynamic hyperprior
 #' 
 #' Computes posterior mean of Inverse-Gamma distribution where the prior
 #' mean is coupled to the other component's variance. This encourages
-#' similar variances across components for stability.
+#' similar variances across components for stability. Includes dynamic
+#' hyperprior that enforces variance similarity when components are close.
 #' 
 #' @param data Matrix [n_genes × n_samples] of data points
 #' @param means Vector [n_genes] of component means
@@ -57,20 +58,34 @@ compute_gaussian_pdf <- function(data, means, variances, weights) {
 #' @param Nk Vector [n_genes] of effective sample counts
 #' @param variance_other Vector [n_genes] of other component's variances
 #' @param alpha_v Inverse-Gamma shape parameter
+#' @param hyperprior_strength Vector [n_genes] of hyperprior strengths (default 0.0)
 #' @return Vector [n_genes] of updated variances
-update_variance_coupled <- function(data, means, responsibilities, Nk, variance_other, alpha_v) {
+update_variance_coupled <- function(data, means, responsibilities, Nk, variance_other, alpha_v, hyperprior_strength = 0.0) {
   eps <- 1e-12
   
   # Compute sum of squared residuals weighted by responsibilities
   centered <- data - means
   S_k <- rowSums(responsibilities * centered^2)
   
-  # Prior: beta0 = (alpha - 1) * variance_other
-  # This couples the prior to the other component's variance
-  beta0 <- (alpha_v - 1) * variance_other
+  # 1. Base Prior (Standard Inverse-Gamma coupling)
+  beta_base <- (alpha_v - 1) * variance_other * 1.0
   
-  # Posterior parameters
-  alpha_post <- alpha_v + 0.5 * Nk
+  # 2. Hyperprior Injection
+  if (any(hyperprior_strength > 0)) {
+    # The strength acts as 'alpha' count for the hyperprior
+    alpha_hyperprior <- hyperprior_strength
+    # The 'beta' is derived assuming variance ratio is exactly 1.0
+    beta_hyperprior <- hyperprior_strength * variance_other * 1.0
+    
+    alpha_prior <- alpha_v + alpha_hyperprior
+    beta0 <- beta_base + beta_hyperprior
+  } else {
+    alpha_prior <- alpha_v
+    beta0 <- beta_base
+  }
+  
+  # 3. Posterior Update
+  alpha_post <- alpha_prior + 0.5 * Nk
   beta_post <- beta0 + 0.5 * S_k
   
   # Posterior mean: beta_post / (alpha_post - 1)
@@ -86,10 +101,13 @@ update_variance_coupled <- function(data, means, responsibilities, Nk, variance_
 #' @param data_chunk Matrix [n_genes × n_samples] for this chunk
 #' @param weight_alpha Prior for mixture weights
 #' @param variance_alpha Prior for variances
+#' @param hyperprior_strength Maximum weight of variance regularization (default: n_samples)
+#' @param hyperprior_decay_rate Controls how fast regularization vanishes as components separate (default: 2.0)
 #' @param max_iter Maximum EM iterations
 #' @param tol Convergence tolerance
 #' @return List with means, variances, weights matrices [n_genes × 2]
 fit_gmm_batch <- function(data_chunk, weight_alpha = NULL, variance_alpha = NULL, 
+                         hyperprior_strength = NULL, hyperprior_decay_rate = NULL,
                          max_iter = 100, tol = 1e-6) {
   # data_chunk is [n_genes × n_samples]
   n_genes <- nrow(data_chunk)
@@ -119,6 +137,15 @@ fit_gmm_batch <- function(data_chunk, weight_alpha = NULL, variance_alpha = NULL
   if (is.null(weight_alpha)) weight_alpha <- 3.0 + n_samples / 100.0
   if (is.null(variance_alpha)) variance_alpha <- 6.0 + n_samples / 50.0
   alpha_v <- max(variance_alpha, 1.01)
+  
+  # Set hyperprior defaults
+  if (is.null(hyperprior_strength)) {
+    # Default to equal weight with the data
+    hyperprior_strength <- n_samples
+  }
+  if (is.null(hyperprior_decay_rate)) {
+    hyperprior_decay_rate <- 2.0
+  }
   
   # Track convergence per gene
   converged <- rep(FALSE, n_genes)
@@ -171,12 +198,25 @@ fit_gmm_batch <- function(data_chunk, weight_alpha = NULL, variance_alpha = NULL
     weighted_sums2 <- rowSums(data_active * resp_k2)
     means[active_genes, 2] <- weighted_sums2 / (Nk2 + eps)
     
-    # 3) Update variances with coupling [n_active × K]
+    # 2.5) Calculate dynamic hyperprior strength based on component separation
+    # Calculate normalized separation: difference in means / scale of variance
+    mean_sep <- means[active_genes, 2] - means[active_genes, 1]
+    var_scale <- sqrt(variances_old[, 1] + variances_old[, 2])
+    normalized_sep <- mean_sep / (var_scale + 1e-12)
+    
+    # Calculate dynamic strength: Strength * e^(-rate * separation)
+    if (hyperprior_strength > 0) {
+      current_strength <- hyperprior_strength * exp(-hyperprior_decay_rate * normalized_sep)
+    } else {
+      current_strength <- rep(0.0, n_active)
+    }
+    
+    # 3) Update variances with coupling and dynamic hyperprior [n_active × K]
     variances[active_genes, 1] <- update_variance_coupled(
-      data_active, means[active_genes, 1], resp_k1, Nk1, variances_old[, 2], alpha_v
+      data_active, means[active_genes, 1], resp_k1, Nk1, variances_old[, 2], alpha_v, current_strength
     )
     variances[active_genes, 2] <- update_variance_coupled(
-      data_active, means[active_genes, 2], resp_k2, Nk2, variances_old[, 1], alpha_v
+      data_active, means[active_genes, 2], resp_k2, Nk2, variances_old[, 1], alpha_v, current_strength
     )
     
     # ========================================================================
@@ -274,7 +314,8 @@ setup_parallel_cluster <- function(num_workers, debug = FALSE) {
 
 #' Bimodal normalization using GMM with mini-batch vectorization and optional parallelization
 #' @param data Matrix in [genes × samples] orientation
-bimodal_normalize <- function(data, weight_alpha=NULL, variance_alpha=NULL, mean_mean_zero = TRUE, unit_var = TRUE, 
+bimodal_normalize <- function(data, weight_alpha=NULL, variance_alpha=NULL, hyperprior_strength=NULL, hyperprior_decay_rate=NULL,
+                             mean_mean_zero = TRUE, unit_var = TRUE, 
                              mean1_zero = FALSE, diff_exp = FALSE, means_at_1 = FALSE, 
                              output_counts = FALSE, log_transform = TRUE, debug = FALSE, 
                              num_workers = NULL, chunk_size = 200) {
@@ -356,7 +397,7 @@ bimodal_normalize <- function(data, weight_alpha=NULL, variance_alpha=NULL, mean
                              .errorhandling = 'pass') %dopar% {
       chunk_idx <- chunks[[i]]
       chunk_data <- data[chunk_idx, , drop = FALSE]
-      gmm_params <- fit_gmm_batch(chunk_data, weight_alpha, variance_alpha)
+      gmm_params <- fit_gmm_batch(chunk_data, weight_alpha, variance_alpha, hyperprior_strength, hyperprior_decay_rate)
       apply_gmm_transforms_batch(chunk_data, gmm_params, mean_mean_zero, 
                                 mean1_zero, unit_var, means_at_1, output_counts)
     }
@@ -381,7 +422,7 @@ bimodal_normalize <- function(data, weight_alpha=NULL, variance_alpha=NULL, mean
     
     for (chunk_idx in chunks) {
       chunk_data <- data[chunk_idx, , drop = FALSE]
-      gmm_params <- fit_gmm_batch(chunk_data, weight_alpha, variance_alpha)
+      gmm_params <- fit_gmm_batch(chunk_data, weight_alpha, variance_alpha, hyperprior_strength, hyperprior_decay_rate)
       bimodal_data[chunk_idx, ] <- apply_gmm_transforms_batch(chunk_data, gmm_params, mean_mean_zero, 
                                                               mean1_zero, unit_var, means_at_1, output_counts)
     }
@@ -397,7 +438,9 @@ bimodal_normalize <- function(data, weight_alpha=NULL, variance_alpha=NULL, mean
 #' @param data Matrix of gene expression data (samples x genes)
 #' @param batch Vector of batch labels for each sample
 #' @param weight_alpha Dirichlet prior parameter for GMM weights
-#' @param variance_alpha 
+#' @param variance_alpha Prior for variances
+#' @param hyperprior_strength Maximum weight of variance regularization
+#' @param hyperprior_decay_rate Decay rate for variance regularization
 #' @param mean_mean_zero If TRUE, center means around zero (default TRUE)
 #' @param unit_var If TRUE, scale to unit variance (default TRUE)
 #' @param diff_exp If TRUE, adjust first mean to zero for differential expression preservation (default FALSE)
@@ -408,9 +451,12 @@ bimodal_normalize <- function(data, weight_alpha=NULL, variance_alpha=NULL, mean
 #' 
 #' @details The function applies GMM-based bimodal normalization to each batch separately.
 #' Various transformation options allow control over the final distribution properties.
-gmm_adjust <- function(data, batch, genes_are_columns=TRUE, weight_alpha=NULL, variance_alpha=NULL, mean_mean_zero = TRUE,
-                      mean1_zero = FALSE, unit_var = TRUE, diff_exp = FALSE, means_at_1 = FALSE, 
-                      output_counts = FALSE, log_transform = TRUE, debug = FALSE, num_workers = NULL, chunk_size = 200) {
+gmm_adjust <- function(data, batch, genes_are_columns=TRUE, weight_alpha=NULL, variance_alpha=NULL,
+                      hyperprior_strength=NULL, hyperprior_decay_rate=2.0,
+                      mean_mean_zero = TRUE, mean1_zero = FALSE, unit_var = TRUE, diff_exp = FALSE, 
+                      means_at_1 = FALSE, output_counts = FALSE, log_transform = TRUE, 
+                      debug = FALSE, num_workers = NULL, chunk_size = 200) {
+  
   batch_factor <- as.factor(batch)
   batch_levels <- levels(batch_factor)
   
@@ -425,7 +471,7 @@ gmm_adjust <- function(data, batch, genes_are_columns=TRUE, weight_alpha=NULL, v
   
   adjusted_data <- matrix(NA, nrow = nrow(data), ncol = ncol(data))
 
-  if (debug) message("Batch: ",  batch)
+  if (debug) message("Batch: ", paste(head(batch), collapse=", "))
   
   for (b in batch_levels) {
     batch_indices <- which(batch == b)
@@ -434,11 +480,20 @@ gmm_adjust <- function(data, batch, genes_are_columns=TRUE, weight_alpha=NULL, v
     
     batch_adjusted <- bimodal_normalize(
       batch_data, 
-      weight_alpha=weight_alpha, variance_alpha=variance_alpha,
-      mean_mean_zero=mean_mean_zero, unit_var=unit_var,
-      mean1_zero=mean1_zero, diff_exp=diff_exp, means_at_1=means_at_1, 
-      output_counts=output_counts, log_transform=log_transform,
-      debug=debug, num_workers=num_workers, chunk_size=chunk_size
+      weight_alpha=weight_alpha, 
+      variance_alpha=variance_alpha,
+      hyperprior_strength=hyperprior_strength,
+      hyperprior_decay_rate=hyperprior_decay_rate,
+      mean_mean_zero=mean_mean_zero, 
+      unit_var=unit_var,
+      mean1_zero=mean1_zero, 
+      diff_exp=diff_exp, 
+      means_at_1=means_at_1, 
+      output_counts=output_counts, 
+      log_transform=log_transform,
+      debug=debug, 
+      num_workers=num_workers, 
+      chunk_size=chunk_size
     )
     
     adjusted_data[, batch_indices] <- batch_adjusted
