@@ -309,22 +309,22 @@ apply_combat_train <- function(train_data, batch, labels = NULL) {
   ComBat(train_data, batch = batch, mod = mod_matrix)
 }
 
-#' Adjust test data to match corrected training distribution
-#' @param train_corrected Corrected training data
+#' Adjust test data to match original training distribution
+#' @param train_original Original (uncorrected) training data
 #' @param test_data Test expression data
 #' @return Batch-corrected test data
-adjust_test_to_train <- function(train_corrected, test_data) {
-  combined_dat <- cbind(train_corrected, test_data)
+adjust_test_to_train <- function(train_original, test_data) {
+  combined_dat <- cbind(train_original, test_data)
   ref_batch_id <- 1  # Training data batch ID
   test_batch_id <- 2  # Test data batch ID
-  combined_batch <- c(rep(ref_batch_id, ncol(train_corrected)), 
+  combined_batch <- c(rep(ref_batch_id, ncol(train_original)), 
                      rep(test_batch_id, ncol(test_data)))
   
   combat_combined <- ComBat(combined_dat, batch = combined_batch, 
                            mod = NULL, ref.batch = ref_batch_id)
   
   # Extract corrected test data (training data unchanged as it's the reference)
-  combat_combined[, (ncol(train_corrected) + 1):ncol(combat_combined)]
+  combat_combined[, (ncol(train_original) + 1):ncol(combat_combined)]
 }
 
 #' Apply MNN correction to combined training and test data
@@ -365,19 +365,20 @@ apply_mnn_correction <- function(train_data, test_data, batch) {
 
 #' Apply all batch correction methods
 #' @param train_expr_batch Training data with batch effects
+#' @param train_expr_original Original training data (without batch effects)
 #' @param test_expr Test expression data
 #' @param batch Batch assignments
 #' @param y_train Training labels
 #' @return List with all corrected datasets
-apply_batch_corrections <- function(train_expr_batch, test_expr, batch, y_train) {
+apply_batch_corrections <- function(train_expr_batch, train_expr_original, test_expr, batch, y_train) {
   
   # ComBat unsupervised (without labels)
   train_combat <- apply_combat_train(train_expr_batch, batch, labels = NULL)
-  test_combat <- adjust_test_to_train(train_combat, test_expr)
+  test_combat <- adjust_test_to_train(train_expr_original, test_expr)
   
   # ComBat supervised (with labels)
   train_combat_sup <- apply_combat_train(train_expr_batch, batch, labels = y_train)
-  test_combat_sup <- adjust_test_to_train(train_combat_sup, test_expr)
+  test_combat_sup <- adjust_test_to_train(train_expr_original, test_expr)
   
   # MNN correction
   mnn_result <- apply_mnn_correction(train_expr_batch, test_expr, batch)
@@ -639,7 +640,7 @@ main_execution <- function() {
     
     # Apply batch corrections
     cat("Applying batch corrections (ComBat and MNN)...\n")
-    corrected_data <- apply_batch_corrections(train_expr_batch, curr_test_expr, batch, curr_y_train)
+    corrected_data <- apply_batch_corrections(train_expr_batch, curr_train_expr, curr_test_expr, batch, curr_y_train)
     
     # Train and evaluate the specified classifier
     cat(sprintf("Training and evaluating %s classifier...\n", params$classifier))
