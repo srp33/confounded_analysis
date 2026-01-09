@@ -354,6 +354,65 @@ adjust_npn <- function(matrix_, batch, debug = FALSE) {
 }
 
 
+adjust_naive <- function(matrix_, batch, reference = NULL, test_source = NULL) {
+  #' Match means and variances between batches.
+  batch_levels <- unique(batch)
+
+  global_data = matrix_
+
+  # Do not include test source in global calculations
+  if (!is.null(test_source)) {
+    if (!test_source %in% batch_levels) {
+      stop("Test source batch not found in batch levels.")
+    }
+    test_source_indices <- which(batch == test_source)
+    if (length(test_source_indices) > 0) {
+      global_data <- global_data[, -test_source_indices, drop = FALSE]
+    } else {
+      stop("Test source batch is empty.")
+    }
+  }
+  
+  global_means <- apply(global_data, 1, mean)
+  global_vars <- apply(global_data, 1, var)
+
+  # Match to reference batch if provided
+  if (!is.null(reference)) {
+    if (!reference %in% batch_levels) {
+      stop("Reference batch not found in batch levels.")
+    }
+    reference_indices <- which(batch == reference)
+    if (length(reference_indices) > 0) {
+      reference_data <- matrix_[, reference_indices, drop = FALSE]
+      global_means <- apply(reference_data, 1, mean)
+      global_vars <- apply(reference_data, 1, var)
+    } else {
+      stop("Reference batch is empty.")
+    }
+  }
+  
+  adjusted_matrix <- matrix_
+  
+  for (b in batch_levels) {
+    batch_indices <- which(batch == b)
+    if (length(batch_indices) > 0) {
+      batch_data <- matrix_[, batch_indices, drop = FALSE]
+      
+      batch_means <- apply(batch_data, 1, mean)
+      batch_vars <- apply(batch_data, 1, var)
+      
+      # Adjust by centering to global mean and scaling to global variance
+      # Formula: (x - batch_mean) * sqrt(global_var / batch_var) + global_mean
+      scale_factor <- sqrt(global_vars / pmax(batch_vars, 1e-8))  # Avoid division by zero
+      adjusted_matrix[, batch_indices] <- (batch_data - batch_means) * scale_factor + global_means
+    }
+  }
+  
+  return(adjusted_matrix)
+}
+
+
+
 adjust_seurat_scaling <- function(df_, batch, data_are_counts, debug = FALSE) {
   #' Adjust using Seurat's ScaleData regression method.
   #' @param df_ The data matrix (features x samples).
