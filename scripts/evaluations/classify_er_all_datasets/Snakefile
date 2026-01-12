@@ -23,7 +23,8 @@ rule plot_performance:
     input:
         aggregated_metrics_file=OUTPUT_FOLDER + "/classify_er_all/all_metrics.csv",
         metadata_file=DATA_FOLDER + "/geo_metadata.csv",
-        cv_file=DATA_FOLDER + "/cv_metrics.csv"
+        cv_file=DATA_FOLDER + "/cv_metrics.csv",
+        order_folder=DATA_FOLDER + "/all_combined/gse_order_files"
     output: 
         OUTPUT_FOLDER + "/classify_all_figures/absolute_scaling_MCC.png", 
         OUTPUT_FOLDER + "/classify_all_figures/absolute_scaling_ROC_AUC.png",
@@ -45,6 +46,7 @@ rule plot_performance:
             --figures_dir {params.fig_dir} \
             --metadata_file {input.metadata_file} \
             --cv_file {input.cv_file} \
+            --order_folder {input.order_folder} \
             &> {log}
         """
 
