@@ -67,7 +67,7 @@ def main():
 
     csv_file = args.csv
     output_dir = args.outdir
-    n_hvg = args.hvg
+    n_hvg = args.n_hvg
     chunk = args.chunk
     chunk_size = args.chunk_size
 

@@ -15,21 +15,21 @@ rule all:
     input: 
         OUTPUT_FOLDER + "/classify_all_figures/absolute_scaling_MCC.png", 
         OUTPUT_FOLDER + "/classify_all_figures/absolute_scaling_ROC_AUC.png",
-        OUTPUT_FOLDER + "/classify_all_figures/scaling_MCC.png",
-        OUTPUT_FOLDER + "/classify_all_figures/scaling_ROC_AUC.png"
+        # OUTPUT_FOLDER + "/classify_all_figures/scaling_MCC.png",
+        # OUTPUT_FOLDER + "/classify_all_figures/scaling_ROC_AUC.png"
 
 rule plot_performance:
     priority: 60
     input:
-        aggregated_metrics_file=OUTPUT_FOLDER + "/classify_er_all/all_metrics.csv",
+        aggregated_metrics_file=DATA_FOLDER + "/classify_metrics/all_metrics.csv",
         metadata_file=DATA_FOLDER + "/geo_metadata.csv",
         cv_file=DATA_FOLDER + "/cv_metrics.csv",
         order_folder=DATA_FOLDER + "/all_combined/gse_order_files"
     output: 
         OUTPUT_FOLDER + "/classify_all_figures/absolute_scaling_MCC.png", 
         OUTPUT_FOLDER + "/classify_all_figures/absolute_scaling_ROC_AUC.png",
-        OUTPUT_FOLDER + "/classify_all_figures/scaling_MCC.png",
-        OUTPUT_FOLDER + "/classify_all_figures/scaling_ROC_AUC.png"
+        # OUTPUT_FOLDER + "/classify_all_figures/scaling_MCC.png",
+        # OUTPUT_FOLDER + "/classify_all_figures/scaling_ROC_AUC.png"
     resources: 
         mem_mb=4000,
         runtime=20
@@ -112,7 +112,7 @@ rule adjust:
         DATA_FOLDER + "/adjusted_data/{adjuster}/{adjuster}_{k}studies_test_{test_source}.csv"
     resources: 
         mem_mb=24000,
-        runtime=45
+        runtime=90
     threads: 1
     log: 
         "log/adjust/{adjuster}_{k}_{test_source}_adjust.log"

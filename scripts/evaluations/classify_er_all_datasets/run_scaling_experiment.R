@@ -68,7 +68,7 @@ apply_adjustment <- function(df, method, test_source, metadata_file) {
       unique()
 
     geo_meta <- read_csv(metadata_file, col_types = cols()) %>%
-      select(gse_id %in% train_datasets) %>%
+      filter(gse_id %in% train_datasets) %>%
       arrange(desc(sample_size))
     
     cat("  [apply_adjustment] MNN order (train datasets by sample size:\n")
