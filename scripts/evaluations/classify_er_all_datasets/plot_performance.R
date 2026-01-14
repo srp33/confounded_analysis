@@ -21,7 +21,10 @@ parser$add_argument('--figures_dir', required = TRUE,
     help = "Directory to save figures")
 parser$add_argument('--metadata_file', required = TRUE,
     help = "Path to CSV containing dataset metadata")
-parser$add_argument('--cv_file', required = FALSE, default = NULL, help = "Path to CSV containing cv metrics for test sets.")
+parser$add_argument('--cv_file', required = FALSE, default = NULL, 
+    help = "Path to CSV containing cv metrics for test sets.")
+parser$add_argument('--order_folder', required = TRUE, 
+    help = "Path to folder containing the order files for each test set.")
 
 args <- parser$parse_args()
 
@@ -29,6 +32,7 @@ metrics_file <- args$metrics_file
 figures_dir <- args$figures_dir
 metadata_file <- args$metadata_file
 cv_file <- args$cv_file
+order_folder <- args$order_folder
 
 # Ensure figures directory exists
 dir.create(figures_dir, showWarnings = FALSE, recursive = TRUE)
@@ -68,88 +72,131 @@ prepare_delta <- function(df_adj, df_unadj, metric_col) {
     mutate(Mean_Metric = Adj - Unadj)
 }
 
-# Generate scaling plots
-generate_scaling_plot <- function(all_data, metric = "ROC_AUC", fig_dir = figures_dir) {
-  if (nrow(all_data) == 0) return()
-  
-  p <- ggplot(all_data, aes(x = adjuster, y = Mean_Metric, fill = adjuster)) +
-    geom_boxplot() +
-    facet_wrap(~ n_studies, scales = "free_y", 
-      labeller = labeller(n_studies = function(x) paste0(x, " Studies"))) +
-    theme_minimal(base_size = 13) +
-    theme(
-      axis.text.x = element_blank(),   # remove x-axis text
-      axis.ticks.x = element_blank()   # remove x-axis ticks
-    ) +
-    labs(
-      title = paste0("Distribution of Delta Performance (", metric, ")"),
-      x = "Adjuster",
-      y = paste0("Delta vs log_transformed"),
-      fill = "Adjuster"
-    )
-  
-  file_path <- file.path(fig_dir, paste0("boxplot_", metric, "_by_nstudies.png"))
-  ggsave(file_path, p, width = 12, height = 6)
-  cat("Saved: ", file_path, "\n")
+# given a test source and n_studies, return the ordered training source
+get_train_source <- function(test_source, n_studies, order_folder) {
+  order_file <- file.path(order_folder, paste0(test_source, "_order.csv"))
+
+  if (!file.exists(order_file)) {
+    stop(paste("Order file not found for test source:", test_source))
+  }
+
+  order_df <- read_csv(order_file, show_col_types = FALSE)
+
+  if (!"train_source" %in% colnames(order_df)) {
+    stop(paste("train_source column missing in", order_file))
+  }
+
+  if (n_studies == 0) {
+    return(NA_character_)
+  }
+
+  if (n_studies > nrow(order_df)) {
+    stop(paste(
+      "n_studies =", n_studies,
+      "exceeds rows in", order_file
+    ))
+  }
+
+  order_df$train_source[n_studies]
 }
 
-# Generate scaling plots
-generate_test_source_scaling_plot <- function(all_data, metric = "ROC_AUC", fig_dir = figures_dir) {
-  if (nrow(all_data) == 0) return()
-  
-  p <- ggplot(all_data, aes(x = n_studies, y = Mean_Metric, color = adjuster)) +
-    geom_line(linewidth = 1) +
+prepare_training_order_df <- function(metrics_df, order_folder) {
+  metrics_df %>%
+    rowwise() %>%
+    mutate(
+      train_source = get_train_source(
+        test_source = test_source,
+        n_studies = n_studies,
+        order_folder = order_folder
+      )
+    ) %>%
+    ungroup() %>%
+    filter(!is.na(train_source)) %>%
+    group_by(test_source) %>%
+    mutate(
+      train_source = factor(
+        train_source,
+        levels = unique(train_source[order(n_studies)])
+      )
+    ) %>%
+    ungroup()
+}
+
+plot_scaling_performance <- function(
+  metrics_df,
+  order_folder,
+  metric_col, 
+  figures_dir,
+  filename,
+  y_label = NULL,
+  cv_value
+) {
+
+  plot_df <- prepare_training_order_df(metrics_df, order_folder)
+
+  if (is.null(y_label)) {
+    y_label <- metric_col
+  }
+
+  p <- ggplot(
+    plot_df, 
+    aes(
+      x = train_source,
+      y = .data[[metric_col]],
+      color = adjuster,
+      group = interaction(adjuster, test_source)
+    )
+  ) +
+    geom_line(linewidth = 0.8) +
     geom_point(size = 2) +
-    facet_wrap(~ test_source, scales = "free_y") +
-    theme_minimal(base_size = 13) +
+    facet_wrap(~ test_source, scales = "free_x") +
     labs(
-      title = paste0("Scaling Performance (", metric, ")"),
-      x = "Number of Training Studies",
-      y = metric,
+      x = "Training dataset added",
+      y = y_label, 
       color = "Adjuster"
+    ) +
+    theme_bw() +
+    theme_minimal(base_size = 14) +
+    theme(
+      panel.grid.minor = element_blank(),
+      axis.text.x = element_text(angle = 45, hjust = 1)
     )
+
+    # Add cross-validation line if provided
+    if (!is.null(cv_value)) {
+      p <- p + geom_hline(yintercept = cv_value, linetype = "dashed", color = "black") +
+        annotate("text", x=1, y = cv_value, label = paste0("cv = ", cv_value),
+                  vjust = -0.5, hjust = 0, linewidth = 4)
+  }
   
-  file_path <- file.path(fig_dir, paste0("scaling_", metric, ".png"))
-  ggsave(file_path, p, width = 10, height = 6)
-  cat("Saved: ", file_path, "\n")
+  ggsave(
+    filename = file.path(figures_dir, filename),
+    plot = p,
+    width = 12,
+    height = 8
+  )
+  
+  return(p)
 }
 
-# Absolute scaling plot -- this is the one I am using
 generate_test_source_scaling_plot_absolute <- function(
     df,
     metric = "ROC_AUC",
-    gse_metadata_path=metadata_file,
+    gse_metadata_path = metadata_file,
+    order_folder = order_folder,
     cv_value = NULL,
     fig_dir = figures_dir
 ) {
 
   message("Generating ABSOLUTE test-source scaling plot for metric: ", metric)
 
-  # Load metadata
-  gse_meta <- read_csv(gse_metadata_path, col_types = cols()) %>%
-    select(gse_id, technology)
-
-  # Filter for desired metric
-  df <- df %>% filter(Metric == metric)
-
-  # Merge sequencing technology info
-  df <- df %>%
-    left_join(gse_meta, by = c("test_source" = "gse_id"))
-
   # Create study labels 
   study_labels <- setNames(LETTERS[seq_along(unique(df$test_source))],
                       unique(df$test_source))
 
-  df <- df %>%
-    mutate(
-      test_source_label = study_labels[test_source],
-      adjuster = factor(adjuster),
-      technology = factor(technology, levels = c("microarray", "rna-seq"))
-    )
-
   # Compute mean & SE across replicates
   df_sum <- df %>%
-    group_by(test_source, test_source_label, adjuster, n_studies) %>%
+    group_by(test_source, test_source_label, adjuster, n_studies, technology, sample_size) %>%
     summarize(
       mean_val = mean(Value, na.rm = TRUE),
       se_val   = sd(Value, na.rm = TRUE) / sqrt(n()),
@@ -164,18 +211,19 @@ generate_test_source_scaling_plot_absolute <- function(
     size = sample_size,
     group = adjuster
   )) +
-    geom_point(size = 3, position = position_dodge(width = 0.5)) +
+    geom_point(position = position_dodge(width = 0.5)) +
     geom_errorbar(aes(
       ymin = mean_val - se_val,
       ymax = mean_val + se_val
     ), width = 0.25, position = position_dodge(width = 0.5)) +
     geom_line(aes(group = adjuster), linewidth = 1, position = position_dodge(width = 0.5)) +
+    facet_wrap(~ test_source) +
     theme_minimal(base_size = 14) +
     theme(
       panel.grid.minor = element_blank(),
       axis.text.x = element_text(angle = 45, hjust = 1)
     ) +
-    scale_size_continuous(name = "Sample Size") +
+    scale_size_continuous(name = "Sample Size", range = c(2, 6)) +
     labs(
       title = paste0("Absolute Scaling Performance Across Training Sizes (", metric, ")"),
       x = "Test Study",
@@ -186,9 +234,9 @@ generate_test_source_scaling_plot_absolute <- function(
 
   # Add cross-validation line if provided
   if (!is.null(cv_value)) {
-    p <- p + geom_hline(y_intercept = cv_value, linetype = "dashed", color = "black") +
+    p <- p + geom_hline(yintercept = cv_value, linetype = "dashed", color = "black") +
       annotate("text", x=1, y = cv_value, label = paste0("cv = ", cv_value),
-                vjust = -0.5, hjust = 0, size = 4)
+                vjust = -0.5, hjust = 0, linewidth = 4)
   }
 
   file_path <- file.path(fig_dir, paste0("absolute_scaling_", metric, "_enhanced.png"))
@@ -246,14 +294,23 @@ for (metric in c("ROC_AUC", "MCC")) {
   first_test_source <- unique(abs_data$test_source)[1]
   
   cv_value <- get_cv_value(cv_data, test_source = first_test_source, metric = metric)
-  
-  # Generate absolute scaling plot
-  generate_test_source_scaling_plot_absolute(
-    df = abs_data,
-    metric = metric,
-    gse_metadata_path = metadata_file,
-    cv_value = cv_value,
-    fig_dir = figures_dir
+
+  # Generate other scaling plot DEBUG
+  # generate_absolute_scaling_plot(
+  #   df = abs_data, 
+  #   order_folder = order_folder, 
+  #   metric = metric, 
+  #   gse_metadata_path = metadata_file, 
+  #   fig_dir = figures_dir
+  # )
+
+  plot_scaling_performance(
+    metrics_df = all_metrics, 
+    order_folder = order_folder, 
+    metric_col = metric, 
+    figures_dir = figures_dir, 
+    filename = paste0("absolute_scaling_", metric, ".png"), 
+    y_label = metric, cv_value = cv_value
   )
 }
 

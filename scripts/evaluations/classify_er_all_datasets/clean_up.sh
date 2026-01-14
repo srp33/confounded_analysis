@@ -1,0 +1,78 @@
+#!/bin/bash
+#SBATCH --job-name=cleanup_job
+#SBATCH --output=log/cleanup_%j.log
+#SBATCH --cpus-per-task=1
+#SBATCH --mem=2G
+#SBATCH --time=00:30:00
+
+# -----------------------------
+# CONFIGURATION
+# -----------------------------
+
+# Directory containing CSV results
+RESULT_DIR="/grphome/grp_batch_effects/data"
+LOG_DIR="./log"
+
+# Subdirectories you may want to clean
+ADJUSTED_DIR="${RESULT_DIR}/adjusted_data"
+CLASSIFY_DIR="${RESULT_DIR}/classify_metrics"
+
+# Corresponding log subdirectories
+ADJUST_LOG_DIR="${LOG_DIR}/adjust"
+CLASSIFY_LOG_DIR="${LOG_DIR}/classify"
+
+# -----------------------------
+# CLEANUP
+# -----------------------------
+
+cleanup_dir() {
+    local dir="$1"
+    if [[ ! -d "$dir" ]]; then
+        echo "[WARN] Directory does not exist: $dir"
+        return
+    fi
+
+    echo "[INFO] Cleaning files in $dir ..."
+    for sub in "$dir"/*; do 
+        if [[ -d "$sub" ]]; then
+            csv_count=$(find "$sub" -maxdepth 1 -type f -name "*.csv" | wc -l)
+            if [[ $csv_count -gt 0 ]]; then
+                echo "  Deleting $csv_count CSV files in $sub ..."
+                rm -v "$sub"/*.csv
+            else
+                echo "  No CSV files to delete in $sub"
+            fi
+        fi 
+    done
+}
+
+cleanup_logs() {
+    local logdir="$1"
+    if [[ ! -d "$logdir" ]]; then
+        echo "[WARN] Log directory does not exist: $logdir"
+        return
+    fi
+
+    log_count=$(find "$logdir" -maxdepth 1 -type f -name "*.log" | wc -l)
+    if [[ $log_count -gt 0 ]]; then
+        echo "[INFO] Deleting $log_count log files in $logdir ..."
+        rm -v "$logdir"/*.log
+    else
+        echo "[INFO] No log files to delete in $logdir"
+    fi
+}
+
+# -----------------------------
+# SELECTIVE CLEANUP
+# -----------------------------
+# Uncomment the directories you want to clean
+
+# Clean adjusted_data
+# cleanup_dir "$ADJUSTED_DIR"
+# cleanup_logs "$ADJUST_LOG_DIR"
+
+# Clean classify_metrics
+cleanup_dir "$CLASSIFY_DIR"
+cleanup_logs "$CLASSIFY_LOG_DIR"
+
+echo "[INFO] Cleanup finished."
