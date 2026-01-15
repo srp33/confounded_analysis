@@ -13,7 +13,7 @@ suppressPackageStartupMessages({
 # ---- Parse Arguments ----
 parser <- ArgumentParser(description = "Adjust each subset with a given adjuster and subset index k.")
 
-parser$add_argument('--adjuster', required=TRUE, help='Desired adjuster (gmm, min_mean, combat, mnn, or log_transform)')
+parser$add_argument('--adjuster', required=TRUE, help='Desired adjuster (gmm, min_mean, combat, mnn, or log_transformed)')
 parser$add_argument('--subset-path', required=TRUE, help='Subset .csv file to be adjusted.')
 parser$add_argument('--k', required=TRUE, help='Number of datasets in the subset, k.')
 parser$add_argument('--test', required=TRUE, help='Test source name/ID.')
@@ -36,25 +36,37 @@ cat("Running scaling experiment with adjuster:", adjuster, "on file: ", subset_p
 # ---- Source adjustment functions ----
 source(adjust_script)
 
+# ---- Set random seed ----
+set.seed(1)
+
 # ---- Adjustment wrapper ----
 apply_adjustment <- function(df, method, test_source, metadata_file) {
   meta_cols <- df %>% select(starts_with("meta_"))
   num_cols <- df %>% select(where(is.numeric), -starts_with("meta_"))
   if (ncol(num_cols) == 0) stop("No numeric columns found in dataset.")
 
+  # Convert to matrix
+  num_cols_matrix <- as.matrix(num_cols)
+
+
   batch_vec <- df$meta_source
   design <- model.matrix(~1, data=df)
 
-  cat("  [apply_adjustment] Input matrix:", nrow(num_cols), "rows x", ncol(num_cols), "cols\n")
-  cat("  [apply_adjustment] Numeric colnames example:", paste(head(colnames(num_cols), 5), collapse = ", "), "\n")
-  cat("  [apply_adjustment] Value summary (pre-transform):\n")
-  print(summary(as.vector(as.matrix(num_cols))[1:min(1000, length(as.matrix(num_cols)))]))
+  # FIX: Add back later with verbose flag
+  # cat("  [apply_adjustment] Input matrix:", nrow(num_cols), "rows x", ncol(num_cols), "cols\n")
+  # cat("  [apply_adjustment] Numeric colnames example:", paste(head(colnames(num_cols), 5), collapse = ", "), "\n")
+  # cat("  [apply_adjustment] Value summary (pre-transform):\n")
+  # print(summary(as.vector(num_cols_matrix)[1:min(1000, length(num_cols_matrix))]))
   
   # ---- Log-scale harmonization ----
   # Heuristic: if data looksk liek counts (large max, strong skew), apply log2(x + 1)
 
-  num_vals <- as.vector(as.matrix(num_cols))
+  # Check counts
+  idx <- sample(length(num_cols_matrix),
+                min(100000, length(num_cols_matrix)))
+  num_vals <- num_cols_matrix[idx]
   num_vals <- num_vals[is.finite(num_vals)]
+
 
   looks_like_counts <- (
     max(num_vals, na.rm = TRUE) > 100 ||
@@ -63,7 +75,7 @@ apply_adjustment <- function(df, method, test_source, metadata_file) {
 
   if (looks_like_counts) {
     cat(" [preprocess] Detected count-like data: applying log2(x+1\n)")
-    num_cols <- log2(num_cols + 1)
+    num_cols_matrix <- log2(num_cols + 1)
   } else {
     cat(" [preprocess] Data appear already log-scaled; no log transform applied\n")
   }
@@ -71,16 +83,16 @@ apply_adjustment <- function(df, method, test_source, metadata_file) {
   # ---- Gene-wise centering ----
   # Center each gene (row) across samples
 
-  num_cols_matrix <- as.matrix(num_cols)
+  if (method != "log_transformed") { 
+    gene_means <- rowMeans(num_cols_matrix, na.rm = TRUE)
+    num_cols_matrix <- sweep(num_cols_matrix, 1, gene_means, FUN = "-")
 
-  gene_means <- rowMeans(num_cols_matrix, na.rm = TRUE)
-  num_cols_matrix <- sweep(num_cols_matrix, 1, gene_means, FUN = "-")
-
-  cat(" [preprocess] Applied gene-wise centering\n")
-  cat("  [preprocess] Value summary after log+centering:\n")
-  print(summary(as.vector(num_cols_matrix)[
-    1:min(1000, length(as.vector(num_cols_matrix)))
-  ]))
+    cat(" [preprocess] Applied gene-wise centering\n")
+    cat("  [preprocess] Value summary after log+centering:\n")
+    print(summary(as.vector(num_cols_matrix)[
+      1:min(1000, length(as.vector(num_cols_matrix)))
+    ]))
+  }
 
   # HVG Selection for MNN
   if (method == "mnn") {
@@ -91,14 +103,15 @@ apply_adjustment <- function(df, method, test_source, metadata_file) {
     train_idx <- which(df$meta_source != test_source)
     train_mat <- num_cols_matrix[, train_idx, drop = FALSE]
 
-    gene_vars <- apply(train_mat, 1, var)
+    gene_vars <- rowMeans(train_mat^2)
 
     # Remove genes with NA / zero variance
     valid <- is.finite(gene_vars) & gene_vars > 0
     gene_vars <- gene_vars[valid]
 
     top_n <- min(3000, length(gene_vars))
-    hvg_genes <- names(sort(gene_vars, decreasing = TRUE))[seq_len(top_n)]
+    top_idx <- order(gene_vars, decreasing = TRUE)[seq_len(top_n)]
+    hvg_genes <- names(gene_vars)[top_idx]
 
     # Subset full matrix (train + test) to HVGs
     num_cols_matrix <- num_cols_matrix[hvg_genes, , drop = FALSE]
@@ -118,7 +131,6 @@ apply_adjustment <- function(df, method, test_source, metadata_file) {
       arrange(desc(sample_size))
     
     cat("  [apply_adjustment] MNN order (train datasets by sample size:\n")
-    print(geo_meta)
 
     batch_levels <- c(geo_meta$gse_id, test_source)
   }
@@ -148,7 +160,6 @@ apply_adjustment <- function(df, method, test_source, metadata_file) {
   cat("  [apply_adjustment] Adjusted value summary:\n")
 
   # Random sampling from the full matrix for a value summary
-  set.seed(5)
   vals <- as.vector(num_cols_matrix)
   vals <- vals[is.finite(vals)]
 

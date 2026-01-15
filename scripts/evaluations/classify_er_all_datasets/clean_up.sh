@@ -68,11 +68,11 @@ cleanup_logs() {
 # Uncomment the directories you want to clean
 
 # Clean adjusted_data
-# cleanup_dir "$ADJUSTED_DIR"
-# cleanup_logs "$ADJUST_LOG_DIR"
+cleanup_dir "$ADJUSTED_DIR"
+cleanup_logs "$ADJUST_LOG_DIR"
 
-# Clean classify_metrics
-cleanup_dir "$CLASSIFY_DIR"
-cleanup_logs "$CLASSIFY_LOG_DIR"
+# # Clean classify_metrics
+# cleanup_dir "$CLASSIFY_DIR"
+# cleanup_logs "$CLASSIFY_LOG_DIR"
 
 echo "[INFO] Cleanup finished."
