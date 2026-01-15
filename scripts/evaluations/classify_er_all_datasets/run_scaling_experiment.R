@@ -50,17 +50,63 @@ apply_adjustment <- function(df, method, test_source, metadata_file) {
   cat("  [apply_adjustment] Value summary (pre-transform):\n")
   print(summary(as.vector(as.matrix(num_cols))[1:min(1000, length(as.matrix(num_cols)))]))
   
-  if (method != "gmm" ) {
-    if (any(num_cols < 0, na.rm = TRUE)) {
-      cat("Negative values found in numeric columns; shifting data.")
-    }
-    # Safe log transform (shift by min if negatives exist)
-    shift <- ifelse(any(num_cols < 0, na.rm = TRUE), abs(min(num_cols, na.rm = TRUE)) + 1, 0)
-    num_cols <- log1p(num_cols + shift)
-    cat("Applying log transform before ", method, "\n")
+  # ---- Log-scale harmonization ----
+  # Heuristic: if data looksk liek counts (large max, strong skew), apply log2(x + 1)
+
+  num_vals <- as.vector(as.matrix(num_cols))
+  num_vals <- num_vals[is.finite(num_vals)]
+
+  looks_like_counts <- (
+    max(num_vals, na.rm = TRUE) > 100 ||
+    quantile(num_vals, 0.99, na.rm = TRUE) > 50
+  )
+
+  if (looks_like_counts) {
+    cat(" [preprocess] Detected count-like data: applying log2(x+1\n)")
+    num_cols <- log2(num_cols + 1)
+  } else {
+    cat(" [preprocess] Data appear already log-scaled; no log transform applied\n")
   }
 
-  # Create list of order from largest to smallest for mnn
+  # ---- Gene-wise centering ----
+  # Center each gene (row) across samples
+
+  num_cols_matrix <- as.matrix(num_cols)
+
+  gene_means <- rowMeans(num_cols_matrix, na.rm = TRUE)
+  num_cols_matrix <- sweep(num_cols_matrix, 1, gene_means, FUN = "-")
+
+  cat(" [preprocess] Applied gene-wise centering\n")
+  cat("  [preprocess] Value summary after log+centering:\n")
+  print(summary(as.vector(num_cols_matrix)[
+    1:min(1000, length(as.vector(num_cols_matrix)))
+  ]))
+
+  # HVG Selection for MNN
+  if (method == "mnn") {
+
+    cat(" [mnn] Selecting top 3000 HVGs from training data\n")
+
+    # num_cols_matrix is genes x samples (already log-scaled and centered)
+    train_idx <- which(df$meta_source != test_source)
+    train_mat <- num_cols_matrix[, train_idx, drop = FALSE]
+
+    gene_vars <- apply(train_mat, 1, var)
+
+    # Remove genes with NA / zero variance
+    valid <- is.finite(gene_vars) & gene_vars > 0
+    gene_vars <- gene_vars[valid]
+
+    top_n <- min(3000, length(gene_vars))
+    hvg_genes <- names(sort(gene_vars, decreasing = TRUE))[seq_len(top_n)]
+
+    # Subset full matrix (train + test) to HVGs
+    num_cols_matrix <- num_cols_matrix[hvg_genes, , drop = FALSE]
+
+    cat(" [mnn] Retained", nrow(num_cols_matrix), "genes for MNN\n")
+  }
+
+  # Create list of order from largest to smallest for MNN
   if (method == "mnn") {
     train_datasets <- df %>%
       filter(meta_source != test_source) %>%
@@ -78,7 +124,6 @@ apply_adjustment <- function(df, method, test_source, metadata_file) {
   }
 
   # Ensure numeric matrix has proper row and column names *after* log transform
-  num_cols_matrix <- as.matrix(num_cols)
   if (is.null(rownames(num_cols_matrix))) {
     rownames(num_cols_matrix) <- paste0("gene_", seq_len(nrow(num_cols_matrix)))
   }
@@ -101,7 +146,17 @@ apply_adjustment <- function(df, method, test_source, metadata_file) {
   cat("  [apply_adjustment] Adjustment done.\n")
   cat("  [apply_adjustment] Adjusted matrix dimensions:", dim(adjusted), "\n")
   cat("  [apply_adjustment] Adjusted value summary:\n")
-  print(summary(as.vector(adjusted)[1:min(1000, length(as.vector(adjusted)))]))
+
+  # Random sampling from the full matrix for a value summary
+  set.seed(5)
+  vals <- as.vector(num_cols_matrix)
+  vals <- vals[is.finite(vals)]
+
+  n_show <- min(10000, length(vals))
+  sample_vals <- sample(vals, n_show)
+
+  summary(sample_vals)
+
 
   adjusted <- t(adjusted)
 
