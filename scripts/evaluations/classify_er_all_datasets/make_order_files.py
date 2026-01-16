@@ -40,22 +40,26 @@ def main():
         test_source = os.path.basename(output_file).replace("order_", "").replace(".csv", "")
     
     random.seed(234)
-    
-    # Get all unique GSE IDs
-    gse_ids = df['gse'].unique().tolist()
-    
-    # Split into training and testing
-    train_source = [x for x in gse_ids if x != test_source]
-    random.shuffle(train_source)
-    
-    out_df = pd.DataFrame({
-        "test_source": [test_source],
-        "train_source": [train_source]
-    })
 
-    # Write CSV
-    out_df.to_csv(output_file, index=False)
-    print(f"Wrote: {output_file}")
+    gse_ids = df['meta_source'].unique()
+    
+    for id in gse_ids: 
+        # Split into training and testing
+        test_source = id
+        train_source = [x for x in gse_ids if x != test_source]
+        random.shuffle(train_source)
+
+        # Build a dataframe for output
+        out_df = pd.DataFrame({
+            "train_source": train_source
+        })
+
+        out_file = os.path.join(output_dir, f"{test_source}_order.csv")
+
+        # Write CSV
+        out_df.to_csv(out_file, index=False)
+
+        print(f"Wrote: {out_file}")
 
 if __name__ == "__main__":
     main()

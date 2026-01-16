@@ -16,10 +16,12 @@ LOG_DIR="./log"
 # Subdirectories you may want to clean
 ADJUSTED_DIR="${RESULT_DIR}/adjusted_data"
 CLASSIFY_DIR="${RESULT_DIR}/classify_metrics"
+SUBSET_DIR="${RESULT_DIR}/subset_data"
 
 # Corresponding log subdirectories
 ADJUST_LOG_DIR="${LOG_DIR}/adjust"
 CLASSIFY_LOG_DIR="${LOG_DIR}/classify"
+SUBSET_LOG_DIR="${LOG_DIR}/subset"
 
 # -----------------------------
 # CLEANUP
@@ -66,6 +68,10 @@ cleanup_logs() {
 # SELECTIVE CLEANUP
 # -----------------------------
 # Uncomment the directories you want to clean
+
+# Clean subset_data
+cleanup_dir "$SUBSET_DIR"
+cleanup_logs "SUBSET_LOG_DIR"
 
 # Clean adjusted_data
 cleanup_dir "$ADJUSTED_DIR"

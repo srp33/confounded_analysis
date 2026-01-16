@@ -62,10 +62,37 @@ if (length(missing_studies) > 0) {
         warning("The following studies had no rows in combined data: ", paste(missing_studies, collapse=", "))
 }
 
+# ---- Preprocessing: per-dataset log transform and gene-wise centering ----
+
+# Identify numeric columns (gene expression)
+num_cols <- subset_data %>% select(where(is.numeric), -starts_with("meta_"))
+meta_cols <- subset_data %>% select(starts_with("meta_"))
+
+if(ncol(num_cols) == 0) stop("No numeric columns found in subset.")
+
+# Convert to matrix
+num_mat <- as.matrix(num_cols)
+
+# Apply per-dataset log transform if needed
+for(ds in unique(subset_data$meta_source)) {
+        idx <- which(subset_data$meta_source == ds)
+        mat_ds <- num_mat[idx, , drop = FALSE] # samples x genes
+        is_counts <- (max(mat_ds, na.rm = TRUE) > 100 || quantile(mat_ds, 0.99, na.rm = TRUE) > 50) && all(mat_ds >= 0)
+        if(is_counts) {
+                message(">>> Applying log2(x+1) to dataset: ", ds)
+                mat_ds <- log2(mat_ds + 1)
+        }
+        num_mat[idx, ]<- mat_ds
+}
+
+# Recombine metadata with numeric matrix
+subset_data_processed <- cbind(meta_cols, as.data.frame(num_mat))
+
+
 # ---- Write output ----
 out_dir <- dirname(output_path)
 dir.create(out_dir, recursive=TRUE, showWarnings=FALSE)
 
-write_csv(subset_data, output_path)
+write_csv(subset_data_processed, output_path)
 
-message(">>> Subset created successfully: ", output_path)
+message(">>> Subset processed and created successfully: ", output_path)

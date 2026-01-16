@@ -23,8 +23,7 @@ rule plot_performance:
     input:
         aggregated_metrics_file=DATA_FOLDER + "/classify_metrics/all_metrics.csv",
         metadata_file=DATA_FOLDER + "/geo_metadata.csv",
-        cv_file=DATA_FOLDER + "/cv_metrics.csv",
-        order_folder=DATA_FOLDER + "/all_combined/gse_order_files"
+        cv_file=DATA_FOLDER + "/cv_metrics.csv"
     output: 
         OUTPUT_FOLDER + "/classify_all_figures/absolute_scaling_MCC.png", 
         OUTPUT_FOLDER + "/classify_all_figures/absolute_scaling_ROC_AUC.png",
@@ -37,7 +36,8 @@ rule plot_performance:
     log: 
         "log/plot_performance.log"
     params:
-        fig_dir = OUTPUT_FOLDER + "/classify_all_figures"
+        fig_dir = OUTPUT_FOLDER + "/classify_all_figures",
+        order_dir = DATA_FOLDER + "/all_combined/gse_order_files"
     shell:
         """
         set -euo pipefail
@@ -46,7 +46,7 @@ rule plot_performance:
             --figures_dir {params.fig_dir} \
             --metadata_file {input.metadata_file} \
             --cv_file {input.cv_file} \
-            --order_folder {input.order_folder} \
+            --order_folder {params.order_dir} \
             &> {log}
         """
 

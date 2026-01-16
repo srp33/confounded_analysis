@@ -47,52 +47,25 @@ apply_adjustment <- function(df, method, test_source, metadata_file) {
 
   # Convert to matrix
   num_cols_matrix <- as.matrix(num_cols)
+  num_cols_matrix <- t(num_cols_matrix) # Should be genes x samples
 
+  # Check that there are more genes than samples
+  stopifnot(nrow(num_cols_matrix) > ncol(num_cols_matrix))
 
   batch_vec <- df$meta_source
   design <- model.matrix(~1, data=df)
 
-  # FIX: Add back later with verbose flag
-  # cat("  [apply_adjustment] Input matrix:", nrow(num_cols), "rows x", ncol(num_cols), "cols\n")
-  # cat("  [apply_adjustment] Numeric colnames example:", paste(head(colnames(num_cols), 5), collapse = ", "), "\n")
-  # cat("  [apply_adjustment] Value summary (pre-transform):\n")
-  # print(summary(as.vector(num_cols_matrix)[1:min(1000, length(num_cols_matrix))]))
-  
-  # ---- Log-scale harmonization ----
-  # Heuristic: if data looksk liek counts (large max, strong skew), apply log2(x + 1)
-
-  # Check counts
-  idx <- sample(length(num_cols_matrix),
-                min(100000, length(num_cols_matrix)))
-  num_vals <- num_cols_matrix[idx]
-  num_vals <- num_vals[is.finite(num_vals)]
-
-
-  looks_like_counts <- (
-    max(num_vals, na.rm = TRUE) > 100 ||
-    quantile(num_vals, 0.99, na.rm = TRUE) > 50
-  )
-
-  if (looks_like_counts) {
-    cat(" [preprocess] Detected count-like data: applying log2(x+1\n)")
-    num_cols_matrix <- log2(num_cols + 1)
-  } else {
-    cat(" [preprocess] Data appear already log-scaled; no log transform applied\n")
-  }
-
   # ---- Gene-wise centering ----
-  # Center each gene (row) across samples
-
-  if (method != "log_transformed") { 
-    gene_means <- rowMeans(num_cols_matrix, na.rm = TRUE)
-    num_cols_matrix <- sweep(num_cols_matrix, 1, gene_means, FUN = "-")
-
-    cat(" [preprocess] Applied gene-wise centering\n")
-    cat("  [preprocess] Value summary after log+centering:\n")
-    print(summary(as.vector(num_cols_matrix)[
-      1:min(1000, length(as.vector(num_cols_matrix)))
-    ]))
+  # Only center genes if adjuster is NOT the baseline
+  if (adjuster != "log_transformed") { 
+      gene_means <- rowMeans(num_cols_matrix, na.rm = TRUE)
+      num_cols_matrix <- sweep(num_cols_matrix, 1, gene_means, FUN = "-")
+      cat(" [preprocess] Applied gene-wise centering\n")
+  } else {
+      cat(" [preprocess] Skipping gene-wise centering for log_transformed baseline\n")
   }
+
+  cat("[debug] dim(num_cols_matrix):", dim(num_cols_matrix), "\n")
 
   # HVG Selection for MNN
   if (method == "mnn") {
@@ -102,6 +75,9 @@ apply_adjustment <- function(df, method, test_source, metadata_file) {
     # num_cols_matrix is genes x samples (already log-scaled and centered)
     train_idx <- which(df$meta_source != test_source)
     train_mat <- num_cols_matrix[, train_idx, drop = FALSE]
+
+    cat("[debug] length(train_idx):", length(train_idx), "\n")
+    cat("[debug] ncol(train_mat):", ncol(train_mat), "\n")
 
     gene_vars <- rowMeans(train_mat^2)
 
@@ -136,22 +112,22 @@ apply_adjustment <- function(df, method, test_source, metadata_file) {
   }
 
   # Ensure numeric matrix has proper row and column names *after* log transform
+  # genes × samples matrix
   if (is.null(rownames(num_cols_matrix))) {
-    rownames(num_cols_matrix) <- paste0("gene_", seq_len(nrow(num_cols_matrix)))
+    rownames(num_cols_matrix) <- colnames(num_cols)  # gene names
   }
   if (is.null(colnames(num_cols_matrix))) {
-    colnames(num_cols_matrix) <- colnames(num_cols)
+    colnames(num_cols_matrix) <- df$meta_Sample_ID   # or rownames(df)
   }
 
-  num_cols_matrix_t <- t(num_cols_matrix)
 
   cat("Applying adjustment method:", method, "\n")
   adjusted <- switch(method,
-    min_mean = adjust_min_mean(num_cols_matrix_t, batch = df$meta_source),
-    log_combat = adjust_log_combat(num_cols_matrix_t, batch = batch_vec, design = design),
-    mnn = adjust_mnn(df_=num_cols_matrix_t, batch=batch_vec, test_source=test_source, data_are_counts=FALSE, batch_levels=batch_levels, debug = FALSE),
-    gmm = adjust_gmm(matrix_ = num_cols_matrix_t, batch = batch_vec, debug = FALSE),
-    log_transformed = num_cols_matrix_t,
+    min_mean = adjust_min_mean(num_cols_matrix, batch = df$meta_source),
+    log_combat = adjust_log_combat(num_cols_matrix, batch = batch_vec, design = design),
+    mnn = adjust_mnn(df_=num_cols_matrix, batch=batch_vec, test_source=test_source, data_are_counts=FALSE, batch_levels=batch_levels, debug = FALSE),
+    gmm = adjust_gmm(matrix_ = num_cols_matrix, batch = batch_vec, debug = FALSE),
+    log_transformed = num_cols_matrix,
     stop("Unknown adjuster: ", method)
   )
 
@@ -160,13 +136,13 @@ apply_adjustment <- function(df, method, test_source, metadata_file) {
   cat("  [apply_adjustment] Adjusted value summary:\n")
 
   # Random sampling from the full matrix for a value summary
-  vals <- as.vector(num_cols_matrix)
+  vals <- as.vector(adjusted)
   vals <- vals[is.finite(vals)]
 
   n_show <- min(10000, length(vals))
   sample_vals <- sample(vals, n_show)
 
-  summary(sample_vals)
+  print(summary(sample_vals))
 
 
   adjusted <- t(adjusted)
