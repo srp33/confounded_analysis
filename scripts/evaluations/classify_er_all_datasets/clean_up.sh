@@ -34,18 +34,13 @@ cleanup_dir() {
         return
     fi
 
-    echo "[INFO] Cleaning files in $dir ..."
-    for sub in "$dir"/*; do 
-        if [[ -d "$sub" ]]; then
-            csv_count=$(find "$sub" -maxdepth 1 -type f -name "*.csv" | wc -l)
-            if [[ $csv_count -gt 0 ]]; then
-                echo "  Deleting $csv_count CSV files in $sub ..."
-                rm -v "$sub"/*.csv
-            else
-                echo "  No CSV files to delete in $sub"
-            fi
-        fi 
-    done
+    csv_count=$(find "$dir" -maxdepth 1 -type f -name "*.csv" | wc -l)
+    if [[ $csv_count -gt 0 ]]; then
+        echo "[INFO] Deleting $csv_count CSV files in $dir ..."
+        rm -v "$dir"/*.csv
+    else
+        echo "[INFO] No CSV files to delete in $dir"
+    fi
 }
 
 cleanup_logs() {
@@ -71,7 +66,7 @@ cleanup_logs() {
 
 # Clean subset_data
 cleanup_dir "$SUBSET_DIR"
-cleanup_logs "SUBSET_LOG_DIR"
+cleanup_logs "$SUBSET_LOG_DIR"
 
 # Clean adjusted_data
 cleanup_dir "$ADJUSTED_DIR"

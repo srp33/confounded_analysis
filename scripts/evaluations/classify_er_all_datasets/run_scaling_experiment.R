@@ -145,11 +145,15 @@ apply_adjustment <- function(df, method, test_source, metadata_file) {
   print(summary(sample_vals))
 
 
-  adjusted <- t(adjusted)
+  adjusted <- t(adjusted) # samples × genes (HVGs)
 
-  # Recombine metadata safely
-  colnames(adjusted) <- colnames(num_cols)
-  adjusted_df <- bind_cols(meta_cols, adjusted)
+  # Assign proper row & column names
+  rownames(adjusted) <- df$meta_Sample_ID  # samples
+  colnames(adjusted) <- rownames(num_cols_matrix)  # HVG gene names retained from num_cols_matrix
+
+  # Recombine with metadata
+  adjusted_df <- bind_cols(meta_cols, as.data.frame(adjusted))
+
   return(adjusted_df)
 }
 
