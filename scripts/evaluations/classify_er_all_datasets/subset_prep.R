@@ -26,28 +26,45 @@ create_subset <- function(df, test_source, order_vector, k) {
 }
 
 # -------------------------
-# 3. Per-dataset log transform
+# 3. Per-dataset log transform (training vs test separated)
 # -------------------------
-log_transform_per_dataset <- function(df) {
-  num_cols <- df %>% select(where(is.numeric), -starts_with("meta_"))
-  meta_cols <- df %>% select(starts_with("meta_"))
-  num_mat <- as.matrix(num_cols)
-  
-  for(ds in unique(df$meta_source)) {
-    idx <- which(df$meta_source == ds)
-    mat_ds <- num_mat[idx, , drop = FALSE]
-    
-    if (all(mat_ds >= 0) && (max(mat_ds, na.rm=TRUE) > 100 || quantile(mat_ds, 0.99, na.rm=TRUE) > 50)) {
-      message(">>> Applying log1p to dataset: ", ds)
-      mat_ds <- log1p(mat_ds)
-    } else {
-      message(">>> Skipping log transform for dataset: ", ds)
+log_transform_per_dataset <- function(df, test_source) {
+  # Split training and test sets
+  train_df <- df %>% filter(meta_source != test_source)
+  test_df  <- df %>% filter(meta_source == test_source)
+
+  # Helper function: log-transform any dataframe per dataset
+  log_transform_helper <- function(sub_df) {
+    num_cols <- sub_df %>% select(where(is.numeric), -starts_with("meta_"))
+    meta_cols <- sub_df %>% select(starts_with("meta_"))
+    num_mat <- as.matrix(num_cols)
+
+    for(ds in unique(sub_df$meta_source)) {
+      idx <- which(sub_df$meta_source == ds)
+      mat_ds <- num_mat[idx, , drop = FALSE]
+
+      # Apply log1p only if RNA-seq-like data
+      if(all(mat_ds >= 0) && (max(mat_ds, na.rm=TRUE) > 100 || quantile(mat_ds, 0.99, na.rm=TRUE) > 50)) {
+        # Subtract per-dataset minimum to shift to zero
+        min_val <- min(mat_ds, na.rm = TRUE)
+        message(">>> Applying log1p to dataset: ", ds, " (min=", min_val, ")")
+        mat_ds <- log1p(mat_ds - min_val)
+      } else {
+        message(">>> Skipping log transform for dataset: ", ds)
+      }
+
+      num_mat[idx, ] <- mat_ds
     }
-    
-    num_mat[idx, ] <- mat_ds
+
+    return(cbind(meta_cols, as.data.frame(num_mat)))
   }
-  
-  return(cbind(meta_cols, as.data.frame(num_mat)))
+
+  # Apply separately to training and test sets
+  train_transformed <- log_transform_helper(train_df)
+  test_transformed  <- log_transform_helper(test_df)
+
+  # Combine for output
+  return(bind_rows(train_transformed, test_transformed))
 }
 
 # -------------------------
