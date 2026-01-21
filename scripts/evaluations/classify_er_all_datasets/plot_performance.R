@@ -11,6 +11,7 @@ library(stringr)
 library(tidyr)
 library(patchwork)
 library(argparse)
+library(tidytext)
 
 # --- Parse Arguments ---
 parser <- ArgumentParser(description = "Generate performance plots from aggregated data.")
@@ -41,8 +42,14 @@ dir.create(figures_dir, showWarnings = FALSE, recursive = TRUE)
 all_metrics <- read_csv(metrics_file, show_col_types = FALSE)%>%
   mutate(
     n_studies = as.numeric(str_extract(subset_file, "(\\d+)(?=studies)"))
-  )
+  ) %>%
+  mutate(test_source = tolower(test_source))
 
+gse_metadata <- read_csv(metadata_file, show_col_types = FALSE) %>%
+  mutate(
+    gse_id = tolower(trimws(gse_id)),
+    technology = factor(technology)
+  )
 # Treat log_transformed as baseline
 df_unadj <- all_metrics %>% filter(adjuster == "log_transformed")
 
@@ -99,7 +106,7 @@ get_train_source <- function(test_source, n_studies, order_folder) {
   order_df$train_source[n_studies]
 }
 
-prepare_training_order_df <- function(metrics_df, order_folder) {
+prepare_training_order_df <- function(metrics_df, order_folder, gse_metadata) {
   order_cache <- list()
 
   get_train_cached <- function(test_source, n_studies) {
@@ -115,16 +122,16 @@ prepare_training_order_df <- function(metrics_df, order_folder) {
 
   metrics_df %>%
     mutate(
-      train_source = mapply(get_train_cached, test_source, n_studies)
-      ) %>%
-    filter(!is.na(train_source)) %>%
-    group_by(test_source) %>%
-    mutate(
-      train_source = factor(
-        train_source,
-        levels = unique(train_source[order(n_studies)])
-      )
+      train_source = mapply(get_train_cached, test_source, n_studies),
+      train_order = n_studies
     ) %>%
+    filter(!is.na(train_source)) %>%
+    left_join(
+      gse_metadata,
+      by = c("train_source" = "gse_id")
+    )  %>%
+    group_by(test_source) %>%
+    mutate(train_order = n_studies) %>%
     ungroup()
 }
 
@@ -132,40 +139,106 @@ plot_scaling_performance <- function(
   metrics_df,
   order_folder,
   metric_col, 
+  gse_metadata,
   figures_dir,
   filename,
   y_label = NULL,
-  cv_value
+  cv_value = NULL
 ) {
 
-  plot_df <- prepare_training_order_df(metrics_df, order_folder)
+  plot_df <- prepare_training_order_df(
+    metrics_df,
+    order_folder,
+    gse_metadata
+  )
+
+  plot_df <- plot_df %>%
+    group_by(test_source, adjuster, n_studies, train_source, train_order) %>%
+    summarize(
+      mean_val = mean(.data[[metric_col]], na.rm = TRUE),
+      se_val   = sd(.data[[metric_col]], na.rm = TRUE) / sqrt(n()),
+      technology = first(technology),
+      .groups = "drop"
+    )
 
   if (is.null(y_label)) {
     y_label <- metric_col
   }
 
+  all_train_sources <- plot_df %>%
+    arrange(train_order) %>%
+    pull(train_source) %>%
+    unique()
+
+  train_label_map <- setNames(LETTERS[seq_along(all_train_sources)], all_train_sources)
+
+  plot_df <- plot_df %>%
+    mutate(train_label = train_label_map[train_source])
+
+  legend_df <- data.frame(
+    train_label = names(train_label_map),
+    letter = train_label_map, 
+    gse_id = names(train_label_map)
+  )
+
+  facet_labels <- train_label_map[names(train_label_map) %in% unique(plot_df$test_source)]
+  facet_labels <- setNames(
+    paste0(names(facet_labels), " (", facet_labels, ")"),
+    names(facet_labels)
+  )
+
   p <- ggplot(
     plot_df, 
     aes(
-      x = train_source,
-      y = .data[[metric_col]],
+      x = reorder_within(train_source, train_order, test_source),
+      y = mean_val,
       color = adjuster,
-      group = interaction(adjuster, test_source)
+      shape = technology,
+      group = adjuster
     )
   ) +
-    geom_line(linewidth = 0.8) +
-    geom_point(size = 2) +
-    facet_wrap(~ test_source, scales = "free_x") +
-    labs(
-      x = "Training dataset added",
-      y = y_label, 
-      color = "Adjuster"
+    scale_x_reordered(
+      labels = function(x) {
+        # Remove the __<facet> part added by reorder_within
+        gsub("__.*$", "", x) %>%
+          { train_label_map[.] }
+      }
     ) +
-    theme_bw() +
+    geom_line(linewidth = 0.8) +
+    geom_point(size = 2.5) +
+    geom_errorbar(
+      aes(
+        ymin = mean_val - se_val,
+        ymax = mean_val + se_val
+      ),
+      width = 0.2
+    ) +
+    facet_wrap(~ test_source, scales = "free_x",
+      labeller = labeller(test_source = facet_labels)) +
+    labs(
+      x = "Training dataset added (ordered)",
+      y = y_label, 
+      color = "Adjuster",
+      shape = "Technology"
+    ) +
     theme_minimal(base_size = 14) +
     theme(
       panel.grid.minor = element_blank(),
-      axis.text.x = element_text(angle = 45, hjust = 1)
+      axis.text.x = element_text(hjust = 1)
+    )
+
+  p <- p + geom_blank(
+    data = legend_df,
+    aes(x = 0, y = 0, fill = letter),
+    inherit.aes = FALSE
+    ) + 
+    scale_fill_manual(
+      name = "Training Dataset",
+      values = setNames(rep("black", length(train_label_map)), train_label_map),
+      labels = paste0(legend_df$letter, " = ", legend_df$gse_id)
+    ) +
+    guides(
+      fill = guide_legend(override.aes = list(shape = NA))
     )
 
     # Add cross-validation line if provided
@@ -184,72 +257,6 @@ plot_scaling_performance <- function(
   
   return(p)
 }
-
-# generate_test_source_scaling_plot_absolute <- function(
-#     df,
-#     metric = "ROC_AUC",
-#     gse_metadata_path = metadata_file,
-#     order_folder = order_folder,
-#     cv_value = NULL,
-#     fig_dir = figures_dir
-# ) {
-
-#   message("Generating ABSOLUTE test-source scaling plot for metric: ", metric)
-
-#   # Create study labels 
-#   study_labels <- setNames(LETTERS[seq_along(unique(df$test_source))],
-#                       unique(df$test_source))
-
-#   # Compute mean & SE across replicates
-#   df_sum <- df %>%
-#     group_by(test_source, test_source_label, adjuster, n_studies, technology, sample_size) %>%
-#     summarize(
-#       mean_val = mean(Value, na.rm = TRUE),
-#       se_val   = sd(Value, na.rm = TRUE) / sqrt(n()),
-#       .groups = "drop"
-#     )
-
-#   p <- ggplot(df_sum, aes(
-#     x = n_studies,
-#     y = mean_val,
-#     color = adjuster, 
-#     shape = technology,
-#     size = sample_size,
-#     group = adjuster
-#   )) +
-#     geom_point(position = position_dodge(width = 0.5)) +
-#     geom_errorbar(aes(
-#       ymin = mean_val - se_val,
-#       ymax = mean_val + se_val
-#     ), width = 0.25, position = position_dodge(width = 0.5)) +
-#     geom_line(aes(group = adjuster), linewidth = 1, position = position_dodge(width = 0.5)) +
-#     facet_wrap(~ test_source) +
-#     theme_minimal(base_size = 14) +
-#     theme(
-#       panel.grid.minor = element_blank(),
-#       axis.text.x = element_text(angle = 45, hjust = 1)
-#     ) +
-#     scale_size_continuous(name = "Sample Size", range = c(2, 6)) +
-#     labs(
-#       title = paste0("Absolute Scaling Performance Across Training Sizes (", metric, ")"),
-#       x = "Test Study",
-#       y = metric,
-#       color = "Adjuster",
-#       shape = "Technology"
-#     )
-
-#   # Add cross-validation line if provided
-#   if (!is.null(cv_value)) {
-#     p <- p + geom_hline(yintercept = cv_value, linetype = "dashed", color = "black") +
-#       annotate("text", x=1, y = cv_value, label = paste0("cv = ", cv_value),
-#                 vjust = -0.5, hjust = 0, linewidth = 4)
-#   }
-
-#   file_path <- file.path(fig_dir, paste0("absolute_scaling_", metric, "_enhanced.png"))
-#   ggsave(file_path, p, width = 12, height = 7)
-
-#   message("Saved: ", file_path)
-# }
 
 get_cv_value <- function(cv_data, test_source, metric) {
   if (is.null(cv_data)) return(NULL)
@@ -321,9 +328,11 @@ for (metric in c("ROC_AUC", "MCC")) {
     metrics_df = plot_metrics, 
     order_folder = order_folder, 
     metric_col = metric, 
+    gse_metadata = gse_metadata,
     figures_dir = figures_dir, 
-    filename = paste0("absolute_scaling_", metric, ".png"), 
-    y_label = metric, cv_value = cv_value
+    filename = paste0("new_absolute_scaling_", metric, ".png"), 
+    y_label = metric, 
+    cv_value = cv_value
   )
 }
 

@@ -45,6 +45,7 @@ scikit-learn = "*"
 # === Workflow ===
 snakemake = "==9.13.7"
 snakemake-executor-plugin-slurm = ">=1.9.2,<2"
+r-tidytext = ">=0.4.3,<0.5"
 
 [tasks]
 # Test essential packages
