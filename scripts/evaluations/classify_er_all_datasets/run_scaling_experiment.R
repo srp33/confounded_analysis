@@ -1,25 +1,27 @@
-# Usage:
-#   Rscript run_scaling_experiment.R <adjuster> <subset_index>
-# Example:
-#   Rscript run_scaling_experiment.R log_combat 2
+#!/usr/bin/env Rscript
 
-# ---- Load Libraries ----
+# =============================================================================
+# run_scaling_experiment.R
+# Adjusts a subset dataset with a specified adjuster (log_combat, mnn, gmm, etc.)
+# Usage:
+#   Rscript run_scaling_experiment.R --adjuster log_combat --subset-path path.csv --k 2 --test GSE12345 --output-dir out --adjust-script adjust.R --metadata-file geo_metadata.csv
+# =============================================================================
+
 suppressPackageStartupMessages({
   library(readr)
   library(dplyr)
   library(argparse)
 })
 
-# ---- Parse Arguments ----
-parser <- ArgumentParser(description = "Adjust each subset with a given adjuster and subset index k.")
-
-parser$add_argument('--adjuster', required=TRUE, help='Desired adjuster (gmm, min_mean, combat, mnn, or log_transformed)')
-parser$add_argument('--subset-path', required=TRUE, help='Subset .csv file to be adjusted.')
-parser$add_argument('--k', required=TRUE, help='Number of datasets in the subset, k.')
-parser$add_argument('--test', required=TRUE, help='Test source name/ID.')
+# ------------------------- Parse Arguments -------------------------
+parser <- ArgumentParser(description = "Adjust subset dataset with a given adjuster.")
+parser$add_argument('--adjuster', required=TRUE, help='Adjuster (gmm, min_mean, combat, mnn, or log_transformed)')
+parser$add_argument('--subset-path', required=TRUE, help='Subset CSV file to adjust.')
+parser$add_argument('--k', required=TRUE, help='Number of datasets in subset (k).')
+parser$add_argument('--test', required=TRUE, help='Test source ID.')
 parser$add_argument('--output-dir', required=TRUE, help='Output directory for adjusted datasets.')
 parser$add_argument('--adjust-script', required=TRUE, help='Path to adjust.R script.')
-parser$add_argument('--metadata-file', required=TRUE, help='GEO metadata CSV to create MNN order list.')
+parser$add_argument('--metadata-file', required=TRUE, help='GEO metadata CSV for MNN ordering.')
 
 args <- parser$parse_args()
 
@@ -31,142 +33,115 @@ output_dir <- args$output_dir
 adjust_script <- args$adjust_script
 metadata_file <- args$metadata_file
 
-cat("Running scaling experiment with adjuster:", adjuster, "on file: ", subset_path, "\n")
+cat("=== Running scaling experiment ===\n")
+cat("Adjuster:", adjuster, "| Subset:", subset_path, "| Test source:", test_source, "\n")
 
-# ---- Source adjustment functions ----
+# ------------------------- Source Adjust Functions -------------------------
 source(adjust_script)
-
-# ---- Set random seed ----
 set.seed(1)
 
-# ---- Adjustment wrapper ----
-apply_adjustment <- function(df, method, test_source, metadata_file) {
+# ------------------------- Helper Functions -------------------------
+
+load_subset <- function(path) {
+  if (!file.exists(path)) stop("Missing subset file: ", path)
+  read_csv(path, show_col_types = FALSE)
+}
+
+extract_meta_numeric <- function(df) {
   meta_cols <- df %>% select(starts_with("meta_"))
   num_cols <- df %>% select(where(is.numeric), -starts_with("meta_"))
   if (ncol(num_cols) == 0) stop("No numeric columns found in dataset.")
+  list(meta = meta_cols, numeric = num_cols)
+}
 
-  # Convert to matrix
-  num_cols_matrix <- as.matrix(num_cols)
-  num_cols_matrix <- t(num_cols_matrix) # Should be genes x samples
+transpose_matrix_with_checks <- function(mat, col_names, row_names) {
+  if (is.null(rownames(mat))) rownames(mat) <- row_names
+  if (is.null(colnames(mat))) colnames(mat) <- col_names
+  t(mat)
+}
 
-  # Check that there are more genes than samples
-  stopifnot(nrow(num_cols_matrix) > ncol(num_cols_matrix))
+log_summary_sample <- function(mat, n = 10000) {
+  vals <- as.vector(mat)
+  vals <- vals[is.finite(vals)]
+  n_show <- min(n, length(vals))
+  print(summary(sample(vals, n_show)))
+}
+
+select_hvg <- function(mat, df, test_source, top_n = 3000) {
+  train_idx <- which(df$meta_source != test_source)
+  train_mat <- mat[, train_idx, drop = FALSE]
+  gene_vars <- apply(train_mat, 1, var)
+  valid <- is.finite(gene_vars) & gene_vars > 0
+  gene_vars <- gene_vars[valid]
+  top_n <- min(top_n, length(gene_vars))
+  hvg_genes <- names(gene_vars)[order(gene_vars, decreasing = TRUE)[seq_len(top_n)]]
+  mat[hvg_genes, , drop = FALSE]
+}
+
+get_batch_levels <- function(df, test_source, metadata_file) {
+  train_datasets <- df %>% filter(meta_source != test_source) %>% pull(meta_source) %>% unique()
+  geo_meta <- read_csv(metadata_file, col_types = cols()) %>%
+    filter(gse_id %in% train_datasets) %>%
+    arrange(desc(sample_size))
+  c(geo_meta$gse_id, test_source)
+}
+
+# ------------------------- Main Adjustment -------------------------
+apply_adjustment <- function(df, method, test_source, metadata_file) {
+  cols <- extract_meta_numeric(df)
+  meta_cols <- cols$meta
+  num_cols <- cols$numeric
+
+  num_mat <- t(as.matrix(num_cols))  # genes x samples
+  stopifnot(nrow(num_mat) > ncol(num_mat))
 
   batch_vec <- df$meta_source
   design <- model.matrix(~1, data=df)
 
-  # HVG Selection for MNN
   if (method == "mnn") {
-
-    cat(" [mnn] Selecting top 3000 HVGs from training data\n")
-
-    # num_cols_matrix is genes x samples (already log-scaled and centered)
-    train_idx <- which(df$meta_source != test_source)
-    train_mat <- num_cols_matrix[, train_idx, drop = FALSE]
-
-    cat("[debug] length(train_idx):", length(train_idx), "\n")
-    cat("[debug] ncol(train_mat):", ncol(train_mat), "\n")
-
-    gene_vars <- apply(train_mat, 1, var)
-
-    # Remove genes with NA / zero variance
-    valid <- is.finite(gene_vars) & gene_vars > 0
-    gene_vars <- gene_vars[valid]
-
-    top_n <- min(3000, length(gene_vars))
-    top_idx <- order(gene_vars, decreasing = TRUE)[seq_len(top_n)]
-    hvg_genes <- names(gene_vars)[top_idx]
-
-    # Subset full matrix (train + test) to HVGs
-    num_cols_matrix <- num_cols_matrix[hvg_genes, , drop = FALSE]
-
-    cat(" [mnn] Retained", nrow(num_cols_matrix), "genes for MNN\n")
-  }
-
-  # Create list of order from largest to smallest for MNN
-  if (method == "mnn") {
-    train_datasets <- df %>%
-      filter(meta_source != test_source) %>%
-      pull(meta_source) %>% 
-      unique()
-
-    geo_meta <- read_csv(metadata_file, col_types = cols()) %>%
-      filter(gse_id %in% train_datasets) %>%
-      arrange(desc(sample_size))
-    
-    batch_levels <- c(geo_meta$gse_id, test_source)
-  }
-
-  # Ensure numeric matrix has proper row and column names *after* log transform
-  # genes × samples matrix
-  if (is.null(rownames(num_cols_matrix))) {
-    rownames(num_cols_matrix) <- colnames(num_cols)  # gene names
-  }
-  if (is.null(colnames(num_cols_matrix))) {
-    colnames(num_cols_matrix) <- df$meta_Sample_ID   # or rownames(df)
+    cat("[mnn] Selecting top HVGs...\n")
+    num_mat <- select_hvg(num_mat, df, test_source)
+    batch_levels <- get_batch_levels(df, test_source, metadata_file)
   }
 
   adjusted <- switch(method,
-    min_mean = adjust_min_mean(num_cols_matrix, batch = df$meta_source),
-    log_combat = adjust_log_combat(num_cols_matrix, batch = batch_vec, design = design),
-    mnn = adjust_mnn(df_=num_cols_matrix, batch=batch_vec, test_source=test_source, data_are_counts=FALSE, batch_levels=batch_levels, debug = FALSE),
-    gmm = adjust_gmm(matrix_ = num_cols_matrix, batch = batch_vec, debug = FALSE),
-    log_transformed = num_cols_matrix,
+    min_mean = adjust_min_mean(num_mat, batch = batch_vec),
+    log_combat = adjust_log_combat(num_mat, batch = batch_vec, design = design),
+    mnn = adjust_mnn(df_=num_mat, batch=batch_vec, test_source=test_source, data_are_counts=FALSE, batch_levels=batch_levels, debug = FALSE),
+    gmm = adjust_gmm(matrix_ = num_mat, batch = batch_vec, debug = FALSE),
+    log_transformed = num_mat,
     stop("Unknown adjuster: ", method)
   )
 
-  cat("  [apply_adjustment] Adjustment done.\n")
-  cat("  [apply_adjustment] Adjusted matrix dimensions:", dim(adjusted), "\n")
-  cat("  [apply_adjustment] Adjusted value summary:\n")
+  cat("[apply_adjustment] Adjustment complete. Matrix dims:", dim(adjusted), "\n")
+  log_summary_sample(adjusted)
 
-  # Random sampling from the full matrix for a value summary
-  vals <- as.vector(adjusted)
-  vals <- vals[is.finite(vals)]
+  adjusted <- t(adjusted)  # samples x genes
+  rownames(adjusted) <- df$meta_Sample_ID
+  colnames(adjusted) <- rownames(num_mat)
 
-  n_show <- min(10000, length(vals))
-  sample_vals <- sample(vals, n_show)
-
-  print(summary(sample_vals))
-
-
-  adjusted <- t(adjusted) # samples × genes (HVGs)
-
-  # Assign proper row & column names
-  rownames(adjusted) <- df$meta_Sample_ID  # samples
-  colnames(adjusted) <- rownames(num_cols_matrix)  # HVG gene names retained from num_cols_matrix
-
-  # Recombine with metadata
-  adjusted_df <- bind_cols(meta_cols, as.data.frame(adjusted))
-
-  return(adjusted_df)
+  bind_cols(meta_cols, as.data.frame(adjusted))
 }
 
-# ---- Process single subset ----
-if (!file.exists(subset_path)) {
-  stop("Missing subset file:", subset_path)
-}
+# ------------------------- Process Single Subset -------------------------
+process_subset <- function(subset_path, adjuster, subset_index, test_source, output_dir, metadata_file) {
+  df <- load_subset(subset_path)
+  cat("Loaded subset:", nrow(df), "rows x", ncol(df), "cols\n")
 
-df <- read_csv(subset_path, show_col_types = FALSE)
-cat("  Loaded subset with", nrow(df), "rows and", ncol(df), "columns.\n")
-cat("  Example columns:", paste(head(colnames(df), 5), collapse = ", "), "\n")
-cat("  Numeric columns:", sum(sapply(df, is.numeric)), "\n\n")
+  out_dir <- file.path(output_dir, adjuster)
+  if (!dir.exists(out_dir)) dir.create(out_dir, recursive = TRUE)
 
-
-cat("\n--- Processing test source:", test_source, "---\n")
   tryCatch({
-    adjusted_df <- apply_adjustment(df, method = adjuster, test_source = test_source, metadata_file=metadata_file)
-    
-    out_dir <- file.path(output_dir, adjuster)
-    if (!dir.exists(out_dir)) dir.create(out_dir, recursive = TRUE)
-
-    cat("  Preparing to write CSV: ", nrow(adjusted_df), "rows x", ncol(adjusted_df), "columns\n")
-    cat("  Column names (first few):", paste(head(colnames(adjusted_df), 5), collapse = ", "), "\n")
-
+    adjusted_df <- apply_adjustment(df, adjuster, test_source, metadata_file)
     out_path <- file.path(out_dir, sprintf("%s_%sstudies_test_%s.csv", adjuster, subset_index, test_source))
     write_csv(adjusted_df, out_path)
     cat("Saved adjusted dataset to:", out_path, "\n")
   }, error = function(e) {
-    cat("⚠️  Error while processing subset", subset_index, "test source", test_source, ":", conditionMessage(e), "\n")
+    cat("⚠️  Error processing subset:", conditionMessage(e), "\n")
   })
+}
 
-cat("\n=== Finished subset", subset_index, "for adjuster:", adjuster, "===\n")
+# ------------------------- Run Experiment -------------------------
+process_subset(subset_path, adjuster, subset_index, test_source, output_dir, metadata_file)
+
+cat("=== Finished subset", subset_index, "for adjuster:", adjuster, "===\n")

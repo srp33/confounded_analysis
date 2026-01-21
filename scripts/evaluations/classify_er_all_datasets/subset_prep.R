@@ -1,103 +1,81 @@
-# Prepping breast cancer study data
-# Create new files that subset all_combined.csv based on the meta_source column
+library(readr)
+library(dplyr)
+library(argparse)
 
-# ---- Load Libraries ----
-suppressPackageStartupMessages({
-  library(readr)
-  library(dplyr)
-  library(argparse)
-})
-
-# ---- Parse Arguments ----
-parser <- ArgumentParser(description = "Create a subset of all_combined.csv using the top-K studies by sample count")
-
-parser$add_argument('--input', required=TRUE, help='Path to all_combined.csv')
-parser$add_argument('--test',required=TRUE, help='Test source name')
-parser$add_argument('--order', required=TRUE, help='Randomized, fixed vector of the order to add datasets')
-parser$add_argument('--k', required=TRUE, type='integer', help='Number of studies to include (k)')
-parser$add_argument('--output', required=TRUE, help='Output CSV path for the subset')
-args <- parser$parse_args()
-
-input_path <- args$input
-test_source <- args$test
-order_file <- args$order
-k <- args$k 
-output_path <- args$output
-
-message(">>> Input combined file: ", input_path)
-message(">>> Test source: ", test_source)
-message(">>> Order file: ", order_file)
-message(">>> Requested K = ", k)
-message(">>> Output subset file: ", output_path)
-
-# ---- Load combined data ----
-# If the first column is gene names, set col_names = TRUE and then set rownames
-combined <- read.csv(input_path, stringsAsFactors=FALSE) 
-
-# Confirm that the dataset has a column called 'meta_source'
-if (!"meta_source" %in% colnames(combined)) {
-        stop("The file must have a 'meta_source' column with study identifiers.")
+# -------------------------
+# 1. Load combined data
+# -------------------------
+load_combined <- function(input_path) {
+  df <- read.csv(input_path, stringsAsFactors = FALSE)
+  if (!"meta_source" %in% colnames(df)) stop("Missing meta_source column")
+  return(df)
 }
 
-# Create order vector from the order file
-order_df <- read_csv(order_file, col_types = cols())
-order_vector <- order_df$train_source
-
-# Check that 
-if (k < 1 || k > length(order_vector)) {
-        stop("Requested k=", k, " is outside valid range: 2-", length(order_vector))
+# -------------------------
+# 2. Create study subset
+# -------------------------
+create_subset <- function(df, test_source, order_vector, k) {
+  if (k < 1 || k > length(order_vector)) stop("Invalid k")
+  selected_studies <- unique(c(test_source, order_vector[1:k]))
+  subset_df <- df %>% filter(meta_source %in% selected_studies)
+  
+  missing_studies <- setdiff(selected_studies, unique(subset_df$meta_source))
+  if (length(missing_studies) > 0) warning("Missing studies: ", paste(missing_studies, collapse=", "))
+  
+  return(subset_df)
 }
 
-# ---- Create subset ----
-selected_studies <- unique(c(test_source, order_vector[1:k]))
-
-message(">>> Selected studies (k=", k, "): ", paste(selected_studies, collapse=", "))
-
-subset_data <- combined %>%
-        filter(meta_source %in% selected_studies)
-
-# Check for studies with no rows
-missing_studies <- setdiff(selected_studies, unique(subset_data$meta_source))
-if (length(missing_studies) > 0) {
-        warning("The following studies had no rows in combined data: ", paste(missing_studies, collapse=", "))
-}
-
-# ---- Preprocessing: per-dataset log transform ----
-
-# Identify numeric columns (gene expression)
-num_cols <- subset_data %>% select(where(is.numeric), -starts_with("meta_"))
-meta_cols <- subset_data %>% select(starts_with("meta_"))
-
-if(ncol(num_cols) == 0) stop("No numeric columns found in subset.")
-
-# Convert to matrix
-num_mat <- as.matrix(num_cols)
-
-# Apply per-dataset log transform
-for(ds in unique(subset_data$meta_source)) {
-    idx <- which(subset_data$meta_source == ds)
+# -------------------------
+# 3. Per-dataset log transform
+# -------------------------
+log_transform_per_dataset <- function(df) {
+  num_cols <- df %>% select(where(is.numeric), -starts_with("meta_"))
+  meta_cols <- df %>% select(starts_with("meta_"))
+  num_mat <- as.matrix(num_cols)
+  
+  for(ds in unique(df$meta_source)) {
+    idx <- which(df$meta_source == ds)
     mat_ds <- num_mat[idx, , drop = FALSE]
-
-    # Decide if log-transform is needed
-    # Simple heuristic: RNA-seq counts are non-negative and have high max/quantile
+    
     if (all(mat_ds >= 0) && (max(mat_ds, na.rm=TRUE) > 100 || quantile(mat_ds, 0.99, na.rm=TRUE) > 50)) {
-        message(">>> Applying log1p to dataset: ", ds)
-        mat_ds <- log1p(mat_ds)
+      message(">>> Applying log1p to dataset: ", ds)
+      mat_ds <- log1p(mat_ds)
     } else {
-        message(">>> Skipping log transform for dataset: ", ds)
+      message(">>> Skipping log transform for dataset: ", ds)
     }
-
+    
     num_mat[idx, ] <- mat_ds
+  }
+  
+  return(cbind(meta_cols, as.data.frame(num_mat)))
 }
 
-# Recombine metadata with numeric matrix
-subset_data_processed <- cbind(meta_cols, as.data.frame(num_mat))
+# -------------------------
+# 4. Write output
+# -------------------------
+write_subset <- function(df, output_path) {
+  dir.create(dirname(output_path), recursive=TRUE, showWarnings=FALSE)
+  write_csv(df, output_path)
+  message(">>> Subset written to: ", output_path)
+}
 
+# -------------------------
+# Main function
+# -------------------------
+main <- function() {
+  parser <- ArgumentParser(description = "Create study subset with preprocessing")
+  parser$add_argument('--input', required=TRUE)
+  parser$add_argument('--test', required=TRUE)
+  parser$add_argument('--order', required=TRUE)
+  parser$add_argument('--k', required=TRUE, type='integer')
+  parser$add_argument('--output', required=TRUE)
+  args <- parser$parse_args()
+  
+  df <- load_combined(args$input)
+  order_vector <- read_csv(args$order, col_types = cols())$train_source
+  subset <- create_subset(df, args$test, order_vector, args$k)
+  processed <- log_transform_per_dataset(subset)
+  write_subset(processed, args$output)
+}
 
-# ---- Write output ----
-out_dir <- dirname(output_path)
-dir.create(out_dir, recursive=TRUE, showWarnings=FALSE)
-
-write_csv(subset_data_processed, output_path)
-
-message(">>> Subset processed and created successfully: ", output_path)
+if (!interactive()) main()
