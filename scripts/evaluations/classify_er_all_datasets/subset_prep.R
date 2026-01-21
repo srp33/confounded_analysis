@@ -62,7 +62,7 @@ if (length(missing_studies) > 0) {
         warning("The following studies had no rows in combined data: ", paste(missing_studies, collapse=", "))
 }
 
-# ---- Preprocessing: per-dataset log transform and gene-wise centering ----
+# ---- Preprocessing: per-dataset log transform ----
 
 # Identify numeric columns (gene expression)
 num_cols <- subset_data %>% select(where(is.numeric), -starts_with("meta_"))
@@ -73,16 +73,21 @@ if(ncol(num_cols) == 0) stop("No numeric columns found in subset.")
 # Convert to matrix
 num_mat <- as.matrix(num_cols)
 
-# Apply per-dataset log transform if needed
+# Apply per-dataset log transform
 for(ds in unique(subset_data$meta_source)) {
-        idx <- which(subset_data$meta_source == ds)
-        mat_ds <- num_mat[idx, , drop = FALSE] # samples x genes
-        is_counts <- (max(mat_ds, na.rm = TRUE) > 100 || quantile(mat_ds, 0.99, na.rm = TRUE) > 50) && all(mat_ds >= 0)
-        if(is_counts) {
-                message(">>> Applying log2(x+1) to dataset: ", ds)
-                mat_ds <- log2(mat_ds + 1)
-        }
-        num_mat[idx, ]<- mat_ds
+    idx <- which(subset_data$meta_source == ds)
+    mat_ds <- num_mat[idx, , drop = FALSE]
+
+    # Decide if log-transform is needed
+    # Simple heuristic: RNA-seq counts are non-negative and have high max/quantile
+    if (all(mat_ds >= 0) && (max(mat_ds, na.rm=TRUE) > 100 || quantile(mat_ds, 0.99, na.rm=TRUE) > 50)) {
+        message(">>> Applying log1p to dataset: ", ds)
+        mat_ds <- log1p(mat_ds)
+    } else {
+        message(">>> Skipping log transform for dataset: ", ds)
+    }
+
+    num_mat[idx, ] <- mat_ds
 }
 
 # Recombine metadata with numeric matrix

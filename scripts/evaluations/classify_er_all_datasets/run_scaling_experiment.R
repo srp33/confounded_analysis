@@ -55,18 +55,6 @@ apply_adjustment <- function(df, method, test_source, metadata_file) {
   batch_vec <- df$meta_source
   design <- model.matrix(~1, data=df)
 
-  # ---- Gene-wise centering ----
-  # Only center genes if adjuster is NOT the baseline
-  if (adjuster != "log_transformed") { 
-      gene_means <- rowMeans(num_cols_matrix, na.rm = TRUE)
-      num_cols_matrix <- sweep(num_cols_matrix, 1, gene_means, FUN = "-")
-      cat(" [preprocess] Applied gene-wise centering\n")
-  } else {
-      cat(" [preprocess] Skipping gene-wise centering for log_transformed baseline\n")
-  }
-
-  cat("[debug] dim(num_cols_matrix):", dim(num_cols_matrix), "\n")
-
   # HVG Selection for MNN
   if (method == "mnn") {
 
@@ -79,7 +67,7 @@ apply_adjustment <- function(df, method, test_source, metadata_file) {
     cat("[debug] length(train_idx):", length(train_idx), "\n")
     cat("[debug] ncol(train_mat):", ncol(train_mat), "\n")
 
-    gene_vars <- rowMeans(train_mat^2)
+    gene_vars <- apply(train_mat, 1, var)
 
     # Remove genes with NA / zero variance
     valid <- is.finite(gene_vars) & gene_vars > 0
@@ -106,8 +94,6 @@ apply_adjustment <- function(df, method, test_source, metadata_file) {
       filter(gse_id %in% train_datasets) %>%
       arrange(desc(sample_size))
     
-    cat("  [apply_adjustment] MNN order (train datasets by sample size:\n")
-
     batch_levels <- c(geo_meta$gse_id, test_source)
   }
 
@@ -120,8 +106,6 @@ apply_adjustment <- function(df, method, test_source, metadata_file) {
     colnames(num_cols_matrix) <- df$meta_Sample_ID   # or rownames(df)
   }
 
-
-  cat("Applying adjustment method:", method, "\n")
   adjusted <- switch(method,
     min_mean = adjust_min_mean(num_cols_matrix, batch = df$meta_source),
     log_combat = adjust_log_combat(num_cols_matrix, batch = batch_vec, design = design),

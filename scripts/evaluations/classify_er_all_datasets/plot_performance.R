@@ -40,8 +40,7 @@ dir.create(figures_dir, showWarnings = FALSE, recursive = TRUE)
 # --- Load Data ---
 all_metrics <- read_csv(metrics_file, show_col_types = FALSE)%>%
   mutate(
-    n_studies = as.numeric(str_extract(subset_file, "(?<=subset)\\d+(?=studies)")),
-    n_studies = ifelse(is.na(n_studies), 0, n_studies) # default to 0 if missing
+    n_studies = as.numeric(str_extract(subset_file, "(\\d+)(?=studies)"))
   )
 
 # Treat log_transformed as baseline
@@ -101,16 +100,23 @@ get_train_source <- function(test_source, n_studies, order_folder) {
 }
 
 prepare_training_order_df <- function(metrics_df, order_folder) {
+  order_cache <- list()
+
+  get_train_cached <- function(test_source, n_studies) {
+    if (n_studies == 0) return(NA_character_)
+
+    if (!test_source %in% names(order_cache)) {
+      order_file <- file.path(order_folder, paste0(test_source, "_order.csv"))
+      order_cache[[test_source]] <<- read_csv(order_file, show_col_types = FALSE)
+    }
+
+    order_cache[[test_source]]$train_source[n_studies]
+  }
+
   metrics_df %>%
-    rowwise() %>%
     mutate(
-      train_source = get_train_source(
-        test_source = test_source,
-        n_studies = n_studies,
-        order_folder = order_folder
-      )
-    ) %>%
-    ungroup() %>%
+      train_source = mapply(get_train_cached, test_source, n_studies)
+      ) %>%
     filter(!is.na(train_source)) %>%
     group_by(test_source) %>%
     mutate(
@@ -166,7 +172,7 @@ plot_scaling_performance <- function(
     if (!is.null(cv_value)) {
       p <- p + geom_hline(yintercept = cv_value, linetype = "dashed", color = "black") +
         annotate("text", x=1, y = cv_value, label = paste0("cv = ", cv_value),
-                  vjust = -0.5, hjust = 0, linewidth = 4)
+                  vjust = -0.5, hjust = 0)
   }
   
   ggsave(
@@ -179,71 +185,71 @@ plot_scaling_performance <- function(
   return(p)
 }
 
-generate_test_source_scaling_plot_absolute <- function(
-    df,
-    metric = "ROC_AUC",
-    gse_metadata_path = metadata_file,
-    order_folder = order_folder,
-    cv_value = NULL,
-    fig_dir = figures_dir
-) {
+# generate_test_source_scaling_plot_absolute <- function(
+#     df,
+#     metric = "ROC_AUC",
+#     gse_metadata_path = metadata_file,
+#     order_folder = order_folder,
+#     cv_value = NULL,
+#     fig_dir = figures_dir
+# ) {
 
-  message("Generating ABSOLUTE test-source scaling plot for metric: ", metric)
+#   message("Generating ABSOLUTE test-source scaling plot for metric: ", metric)
 
-  # Create study labels 
-  study_labels <- setNames(LETTERS[seq_along(unique(df$test_source))],
-                      unique(df$test_source))
+#   # Create study labels 
+#   study_labels <- setNames(LETTERS[seq_along(unique(df$test_source))],
+#                       unique(df$test_source))
 
-  # Compute mean & SE across replicates
-  df_sum <- df %>%
-    group_by(test_source, test_source_label, adjuster, n_studies, technology, sample_size) %>%
-    summarize(
-      mean_val = mean(Value, na.rm = TRUE),
-      se_val   = sd(Value, na.rm = TRUE) / sqrt(n()),
-      .groups = "drop"
-    )
+#   # Compute mean & SE across replicates
+#   df_sum <- df %>%
+#     group_by(test_source, test_source_label, adjuster, n_studies, technology, sample_size) %>%
+#     summarize(
+#       mean_val = mean(Value, na.rm = TRUE),
+#       se_val   = sd(Value, na.rm = TRUE) / sqrt(n()),
+#       .groups = "drop"
+#     )
 
-  p <- ggplot(df_sum, aes(
-    x = n_studies,
-    y = mean_val,
-    color = adjuster, 
-    shape = technology,
-    size = sample_size,
-    group = adjuster
-  )) +
-    geom_point(position = position_dodge(width = 0.5)) +
-    geom_errorbar(aes(
-      ymin = mean_val - se_val,
-      ymax = mean_val + se_val
-    ), width = 0.25, position = position_dodge(width = 0.5)) +
-    geom_line(aes(group = adjuster), linewidth = 1, position = position_dodge(width = 0.5)) +
-    facet_wrap(~ test_source) +
-    theme_minimal(base_size = 14) +
-    theme(
-      panel.grid.minor = element_blank(),
-      axis.text.x = element_text(angle = 45, hjust = 1)
-    ) +
-    scale_size_continuous(name = "Sample Size", range = c(2, 6)) +
-    labs(
-      title = paste0("Absolute Scaling Performance Across Training Sizes (", metric, ")"),
-      x = "Test Study",
-      y = metric,
-      color = "Adjuster",
-      shape = "Technology"
-    )
+#   p <- ggplot(df_sum, aes(
+#     x = n_studies,
+#     y = mean_val,
+#     color = adjuster, 
+#     shape = technology,
+#     size = sample_size,
+#     group = adjuster
+#   )) +
+#     geom_point(position = position_dodge(width = 0.5)) +
+#     geom_errorbar(aes(
+#       ymin = mean_val - se_val,
+#       ymax = mean_val + se_val
+#     ), width = 0.25, position = position_dodge(width = 0.5)) +
+#     geom_line(aes(group = adjuster), linewidth = 1, position = position_dodge(width = 0.5)) +
+#     facet_wrap(~ test_source) +
+#     theme_minimal(base_size = 14) +
+#     theme(
+#       panel.grid.minor = element_blank(),
+#       axis.text.x = element_text(angle = 45, hjust = 1)
+#     ) +
+#     scale_size_continuous(name = "Sample Size", range = c(2, 6)) +
+#     labs(
+#       title = paste0("Absolute Scaling Performance Across Training Sizes (", metric, ")"),
+#       x = "Test Study",
+#       y = metric,
+#       color = "Adjuster",
+#       shape = "Technology"
+#     )
 
-  # Add cross-validation line if provided
-  if (!is.null(cv_value)) {
-    p <- p + geom_hline(yintercept = cv_value, linetype = "dashed", color = "black") +
-      annotate("text", x=1, y = cv_value, label = paste0("cv = ", cv_value),
-                vjust = -0.5, hjust = 0, linewidth = 4)
-  }
+#   # Add cross-validation line if provided
+#   if (!is.null(cv_value)) {
+#     p <- p + geom_hline(yintercept = cv_value, linetype = "dashed", color = "black") +
+#       annotate("text", x=1, y = cv_value, label = paste0("cv = ", cv_value),
+#                 vjust = -0.5, hjust = 0, linewidth = 4)
+#   }
 
-  file_path <- file.path(fig_dir, paste0("absolute_scaling_", metric, "_enhanced.png"))
-  ggsave(file_path, p, width = 12, height = 7)
+#   file_path <- file.path(fig_dir, paste0("absolute_scaling_", metric, "_enhanced.png"))
+#   ggsave(file_path, p, width = 12, height = 7)
 
-  message("Saved: ", file_path)
-}
+#   message("Saved: ", file_path)
+# }
 
 get_cv_value <- function(cv_data, test_source, metric) {
   if (is.null(cv_data)) return(NULL)
@@ -263,7 +269,6 @@ get_cv_value <- function(cv_data, test_source, metric) {
   cv_value <- cv_row[[metric]][1]  # take first match
   return(cv_value)
 }
-
 
 # --- Main Processing ---
 
@@ -304,8 +309,16 @@ for (metric in c("ROC_AUC", "MCC")) {
   #   fig_dir = figures_dir
   # )
 
+  plot_metrics <- all_metrics %>% 
+    group_by(adjuster, n_studies, test_source) %>%
+    summarise(
+      ROC_AUC = mean(ROC_AUC),
+      MCC = mean(MCC), 
+      .groups = "drop"
+    )
+
   plot_scaling_performance(
-    metrics_df = all_metrics, 
+    metrics_df = plot_metrics, 
     order_folder = order_folder, 
     metric_col = metric, 
     figures_dir = figures_dir, 

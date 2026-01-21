@@ -90,15 +90,13 @@ rule classify:
     threads: 1
     params:
         output_dir = DATA_FOLDER + "/classify_metrics",
-        bootstrap = BOOTSTRAP_PER_JOB,
-        hvg = N_HVG
+        bootstrap = BOOTSTRAP_PER_JOB
     shell:
         r"""
         set -euo pipefail
         python {SCRIPTS_DIR}/run_classifier.py \
             --csv {input.adjusted_csv} \
             --outdir {params.output_dir} \
-            --n_hvg {params.hvg} \
             --chunk {wildcards.chunk} \
             --chunk-size {params.bootstrap} \
             &> {log}

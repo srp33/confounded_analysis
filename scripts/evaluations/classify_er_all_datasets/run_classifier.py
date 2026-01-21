@@ -58,8 +58,6 @@ def main():
 
     parser.add_argument("--csv", required=True, help="Input adjusted CSV file")
     parser.add_argument("--outdir", required=True, help="Output directory")
-    parser.add_argument("--n_hvg", type=int, default=1000,
-                    help="Number of highly variable genes to select")
     parser.add_argument("--chunk", type=int, default=0, help="Bootstrap chunk index (0-based)")
     parser.add_argument("--chunk-size", type=int, default=10, help="How many bootstraps per job")
     
@@ -67,7 +65,6 @@ def main():
 
     csv_file = args.csv
     output_dir = args.outdir
-    n_hvg = args.n_hvg
     chunk = args.chunk
     chunk_size = args.chunk_size
 
@@ -95,15 +92,15 @@ def main():
     X_train, y_train = train_df[feature_cols], train_df['meta_er_status']
     X_test, y_test = test_df[feature_cols], test_df['meta_er_status']
 
-    # Select top 1000 highly variable genes
-    gene_variances = X_train.var(axis=0)
+    # # Select top 1000 highly variable genes
+    # gene_variances = X_train.var(axis=0)
 
-    top_genes = gene_variances.sort_values(ascending=False).head(n_hvg).index
+    # top_genes = gene_variances.sort_values(ascending=False).head(n_hvg).index
 
-    print(f"[INFO] Selecting top {len(top_genes)} highly variable genes")
+    # print(f"[INFO] Selecting top {len(top_genes)} highly variable genes")
 
-    X_train = X_train[top_genes]
-    X_test = X_test[top_genes]
+    # X_train = X_train[top_genes]
+    # X_test = X_test[top_genes]
 
     # Assuming X_train is a DataFrame and y_train is a Series
     mask = y_train.notna()  # True for rows where y_train is not NaN
