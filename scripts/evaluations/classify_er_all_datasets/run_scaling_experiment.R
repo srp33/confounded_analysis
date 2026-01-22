@@ -104,6 +104,14 @@ apply_adjustment <- function(df, method, test_source, metadata_file) {
     batch_levels <- get_batch_levels(df, test_source, metadata_file)
   }
 
+  # Align batch vector AFTER num_mat is finalized
+  stopifnot(!is.null(colnames(num_mat)))
+  batch_vec <- batch_vec[colnames(num_mat)]
+
+
+  # Preserve gene names
+  gene_names <- rownames(num_mat)
+
   adjusted <- switch(method,
     min_mean = adjust_min_mean(num_mat, batch = batch_vec),
     log_combat = adjust_log_combat(num_mat, batch = batch_vec, design = design),
@@ -113,14 +121,36 @@ apply_adjustment <- function(df, method, test_source, metadata_file) {
     stop("Unknown adjuster: ", method)
   )
 
-  cat("[apply_adjustment] Adjustment complete. Matrix dims:", dim(adjusted), "\n")
-  log_summary_sample(adjusted)
+  # Ensure samples x genes using names, not dimensions
+  if (all(colnames(adjusted) %in% df$meta_Sample_ID)) {
+    adjusted <- t(adjusted)
+  }
 
-  adjusted <- t(adjusted)  # samples x genes
-  rownames(adjusted) <- df$meta_Sample_ID
-  colnames(adjusted) <- rownames(num_mat)
+  if (is.null(rownames(adjusted))) {
+    rownames(adjusted) <- colnames(num_mat)
+  }
 
-  bind_cols(meta_cols, as.data.frame(adjusted))
+  colnames(adjusted) <- gene_names
+
+  # Align metadata
+  meta_aligned <- meta_cols %>%
+    mutate(meta_Sample_ID = df$meta_Sample_ID) %>%
+    slice(match(rownames(adjusted), meta_Sample_ID))
+
+  if (any(is.na(meta_aligned$meta_source))) {
+    stop("Metadata alignment failed after adjustment.")
+  }
+
+  # Safety check
+  stopifnot(nrow(meta_aligned) == nrow(adjusted))
+
+  # Build final dataframe
+  final_df <- bind_cols(
+    meta_aligned %>% select(-meta_Sample_ID),
+    as.data.frame(adjusted)
+  )
+
+  final_df
 }
 
 # ------------------------- Process Single Subset -------------------------

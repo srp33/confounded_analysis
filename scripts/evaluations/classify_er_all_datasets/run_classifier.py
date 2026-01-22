@@ -1,5 +1,6 @@
 import os
 import sys
+import re
 import pandas as pd
 import numpy as np
 import argparse
@@ -14,21 +15,19 @@ print = functools.partial(print, flush=True)
 # Filename parsing
 # -------------------------
 def parse_filename(filename):
-    """
-    Extract adjuster, n_studies, and test_source from filenames like:
-        gmm_13studies_test_gse19615.csv
-    """
     basename = os.path.basename(filename).replace(".csv", "")
-    parts = basename.split("_")
-    
-    if len(parts) < 3 or "studies" not in parts[1] or parts[-2] != "test":
+
+    pattern = r"^(?P<adjuster>.+)_(?P<n>\d+)studies_test_(?P<test>.+)$"
+    match = re.match(pattern, basename)
+
+    if not match:
         raise ValueError(f"Cannot parse filename: {basename}")
-    
-    adjuster = parts[0]
-    n_studies = int(parts[1].replace("studies", ""))
-    test_source = parts[-1]
-    
-    return adjuster, n_studies, test_source
+
+    return (
+        match.group("adjuster"),
+        int(match.group("n")),
+        match.group("test")
+    )
 
 # -------------------------
 # Classifier function

@@ -91,7 +91,7 @@ main <- function() {
   df <- load_combined(args$input)
   order_vector <- read_csv(args$order, col_types = cols())$train_source
   subset <- create_subset(df, args$test, order_vector, args$k)
-  processed <- log_transform_per_dataset(subset)
+  processed <- log_transform_per_dataset(subset, args$test)
   write_subset(processed, args$output)
 }
 

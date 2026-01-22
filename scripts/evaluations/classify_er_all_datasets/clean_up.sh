@@ -34,10 +34,10 @@ cleanup_dir() {
         return
     fi
 
-    csv_count=$(find "$dir" -maxdepth 1 -type f -name "*.csv" | wc -l)
+    csv_count=$(find "$dir" -type f -name "*.csv" | wc -l)
     if [[ $csv_count -gt 0 ]]; then
-        echo "[INFO] Deleting $csv_count CSV files in $dir ..."
-        rm -v "$dir"/*.csv
+        echo "[INFO] Deleting $csv_count CSV files under $dir ..."
+        find "$dir" -type f -name "*.csv" -delete
     else
         echo "[INFO] No CSV files to delete in $dir"
     fi
@@ -72,8 +72,8 @@ cleanup_logs "$SUBSET_LOG_DIR"
 cleanup_dir "$ADJUSTED_DIR"
 cleanup_logs "$ADJUST_LOG_DIR"
 
-# # Clean classify_metrics
-# cleanup_dir "$CLASSIFY_DIR"
-# cleanup_logs "$CLASSIFY_LOG_DIR"
+# Clean classify_metrics
+cleanup_dir "$CLASSIFY_DIR"
+cleanup_logs "$CLASSIFY_LOG_DIR"
 
 echo "[INFO] Cleanup finished."
