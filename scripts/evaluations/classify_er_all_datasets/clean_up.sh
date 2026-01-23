@@ -64,9 +64,9 @@ cleanup_logs() {
 # -----------------------------
 # Uncomment the directories you want to clean
 
-# Clean subset_data
-cleanup_dir "$SUBSET_DIR"
-cleanup_logs "$SUBSET_LOG_DIR"
+# # Clean subset_data
+# cleanup_dir "$SUBSET_DIR"
+# cleanup_logs "$SUBSET_LOG_DIR"
 
 # Clean adjusted_data
 cleanup_dir "$ADJUSTED_DIR"

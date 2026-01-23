@@ -88,69 +88,89 @@ get_batch_levels <- function(df, test_source, metadata_file) {
 
 # ------------------------- Main Adjustment -------------------------
 apply_adjustment <- function(df, method, test_source, metadata_file) {
-  cols <- extract_meta_numeric(df)
-  meta_cols <- cols$meta
-  num_cols <- cols$numeric
+  # ------------------------- Extract metadata and numeric data -------------------------
+  meta_cols <- df %>% select(starts_with("meta_"))
+  num_cols <- df %>% select(where(is.numeric), -starts_with("meta_"))
+  
+  if (ncol(num_cols) == 0) stop("No numeric columns found in dataset.")
 
-  num_mat <- t(as.matrix(num_cols))  # genes x samples
+  # ------------------------- Convert to matrix and transpose -------------------------
+  num_mat <- t(as.matrix(num_cols))  # genes × samples
+
+  # Ensure rownames (genes) exist
+  if (is.null(rownames(num_mat))) {
+    rownames(num_mat) <- colnames(num_cols)  # original column names
+  }
+
+  # Ensure colnames (samples) exist
+  if (is.null(colnames(num_mat))) {
+    if (!"meta_Sample_ID" %in% colnames(df)) {
+      stop("df is missing 'meta_Sample_ID' needed to assign column names.")
+    }
+    colnames(num_mat) <- df$meta_Sample_ID
+  }
+
+  # Safety check: more genes than samples
   stopifnot(nrow(num_mat) > ncol(num_mat))
 
+  # ------------------------- Setup batch vector & design -------------------------
   batch_vec <- df$meta_source
   design <- model.matrix(~1, data=df)
 
+  # ------------------------- HVG selection for MNN -------------------------
   if (method == "mnn") {
-    cat("[mnn] Selecting top HVGs...\n")
-    num_mat <- select_hvg(num_mat, df, test_source)
-    batch_levels <- get_batch_levels(df, test_source, metadata_file)
+    cat("[mnn] Selecting top 3000 HVGs from training data\n")
+    
+    train_idx <- which(df$meta_source != test_source)
+    train_mat <- num_mat[, train_idx, drop = FALSE]
+
+    gene_vars <- apply(train_mat, 1, var)
+    valid <- is.finite(gene_vars) & gene_vars > 0
+    gene_vars <- gene_vars[valid]
+
+    top_n <- min(3000, length(gene_vars))
+    top_idx <- order(gene_vars, decreasing = TRUE)[seq_len(top_n)]
+    hvg_genes <- names(gene_vars)[top_idx]
+
+    # Subset matrix to HVGs
+    num_mat <- num_mat[hvg_genes, , drop = FALSE]
+    cat("[mnn] Retained", nrow(num_mat), "genes for MNN\n")
+    
+    # Create batch levels for MNN ordering
+    train_datasets <- df %>% filter(meta_source != test_source) %>% pull(meta_source) %>% unique()
+    geo_meta <- read_csv(metadata_file, col_types = cols()) %>% 
+      filter(gse_id %in% train_datasets) %>%
+      arrange(desc(sample_size))
+    batch_levels <- c(geo_meta$gse_id, test_source)
   }
 
-  # Align batch vector AFTER num_mat is finalized
-  stopifnot(!is.null(colnames(num_mat)))
-  batch_vec <- batch_vec[colnames(num_mat)]
-
-
-  # Preserve gene names
-  gene_names <- rownames(num_mat)
-
-  adjusted <- switch(method,
-    min_mean = adjust_min_mean(num_mat, batch = batch_vec),
-    log_combat = adjust_log_combat(num_mat, batch = batch_vec, design = design),
-    mnn = adjust_mnn(df_=num_mat, batch=batch_vec, test_source=test_source, data_are_counts=FALSE, batch_levels=batch_levels, debug = FALSE),
-    gmm = adjust_gmm(matrix_ = num_mat, batch = batch_vec, debug = FALSE),
+  # ------------------------- Run adjustment -------------------------
+  adjusted <- switch(
+    method,
+    min_mean       = adjust_min_mean(num_mat, batch = batch_vec),
+    log_combat     = adjust_log_combat(num_mat, batch = batch_vec, design = design),
+    mnn            = adjust_mnn(df_ = num_mat, batch = batch_vec, test_source = test_source, 
+                                data_are_counts = FALSE, batch_levels = batch_levels, debug = FALSE),
+    gmm            = adjust_gmm(matrix_ = num_mat, batch = batch_vec, debug = FALSE),
     log_transformed = num_mat,
     stop("Unknown adjuster: ", method)
   )
 
-  # Ensure samples x genes using names, not dimensions
-  if (all(colnames(adjusted) %in% df$meta_Sample_ID)) {
-    adjusted <- t(adjusted)
+  # ------------------------- Ensure proper row/col names after adjustment -------------------------
+  adjusted <- t(adjusted)  # samples × genes
+  rownames(adjusted) <- df$meta_Sample_ID      # samples
+  colnames(adjusted) <- rownames(num_mat)      # genes (or HVGs)
+
+  # ------------------------- Combine with metadata -------------------------
+  final_df <- bind_cols(meta_cols, as.data.frame(adjusted))
+
+  # ------------------------- Safety check -------------------------
+  if (nrow(final_df) != nrow(df)) {
+    stop("Row count mismatch after adjustment.")
   }
 
-  if (is.null(rownames(adjusted))) {
-    rownames(adjusted) <- colnames(num_mat)
-  }
-
-  colnames(adjusted) <- gene_names
-
-  # Align metadata
-  meta_aligned <- meta_cols %>%
-    mutate(meta_Sample_ID = df$meta_Sample_ID) %>%
-    slice(match(rownames(adjusted), meta_Sample_ID))
-
-  if (any(is.na(meta_aligned$meta_source))) {
-    stop("Metadata alignment failed after adjustment.")
-  }
-
-  # Safety check
-  stopifnot(nrow(meta_aligned) == nrow(adjusted))
-
-  # Build final dataframe
-  final_df <- bind_cols(
-    meta_aligned %>% select(-meta_Sample_ID),
-    as.data.frame(adjusted)
-  )
-
-  final_df
+  cat("[apply_adjustment] Adjustment complete. Adjusted matrix:", dim(adjusted), "\n")
+  return(final_df)
 }
 
 # ------------------------- Process Single Subset -------------------------
