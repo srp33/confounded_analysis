@@ -17,11 +17,13 @@ LOG_DIR="./log"
 ADJUSTED_DIR="${RESULT_DIR}/adjusted_data"
 CLASSIFY_DIR="${RESULT_DIR}/classify_metrics"
 SUBSET_DIR="${RESULT_DIR}/subset_data"
+FEATURE_DIR="${RESULT_DIR}/feature_importance"
 
 # Corresponding log subdirectories
 ADJUST_LOG_DIR="${LOG_DIR}/adjust"
 CLASSIFY_LOG_DIR="${LOG_DIR}/classify"
 SUBSET_LOG_DIR="${LOG_DIR}/subset"
+FEATURE_LOG_DIR="${LOG_DIR}/features"
 
 # -----------------------------
 # CLEANUP
@@ -68,12 +70,16 @@ cleanup_logs() {
 # cleanup_dir "$SUBSET_DIR"
 # cleanup_logs "$SUBSET_LOG_DIR"
 
-# Clean adjusted_data
-cleanup_dir "$ADJUSTED_DIR"
-cleanup_logs "$ADJUST_LOG_DIR"
+# # Clean adjusted_data
+# cleanup_dir "$ADJUSTED_DIR"
+# cleanup_logs "$ADJUST_LOG_DIR"
 
-# Clean classify_metrics
-cleanup_dir "$CLASSIFY_DIR"
-cleanup_logs "$CLASSIFY_LOG_DIR"
+# # Clean classify_metrics
+# cleanup_dir "$CLASSIFY_DIR"
+# cleanup_logs "$CLASSIFY_LOG_DIR"
+
+# Clean feature importance
+cleanup_dir "$FEATURE_DIR"
+cleanup_logs "$FEATURE_LOG_DIR"
 
 echo "[INFO] Cleanup finished."

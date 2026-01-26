@@ -1,46 +1,36 @@
 #!/bin/bash
 #SBATCH --job-name=features
-#SBATCH --output=log/features_%j.log
-#SBATCH --ntasks=1
-#SBATCH --cpus-per-task=8
+#SBATCH --output=log/features/features_%j.log
+#SBATCH --array=0-1049
+#SBATCH --cpus-per-task=4
 #SBATCH --mem=16G
 #SBATCH --time=10:00:00
 
 # -----------------------------
 # CONFIGURATION
 # -----------------------------
+# Runs permutation importance on each adjusted CSV file as a job array
 
 # Directory containing CSV results
 FEATURE_SCRIPT="classify_feature_importance.py"
 DATA_DIR="/grphome/grp_batch_effects/data/adjusted_data"
 OUT_DIR="/grphome/grp_batch_effects/data/feature_importance"
+CSV_LIST="csv_list.txt"
 
-# ----------------------------
-# Loop through adjusted data
-# ----------------------------
-mapfile -t CSV_FILES < <(find "$DATA_DIR" -type f -name "*.csv")
+CSV_FILE=$(sed -n "$((SLURM_ARRAY_TASK_ID+1))p" "$CSV_LIST")
 
-if [ ${#CSV_FILES[@]} -eq 0 ]; then
-    echo "No CSV files found under $DATA_DIR"
+if [ -z "$CSV_FILE" ]; then
+    echo "No CSV for task ${SLURM_ARRAY_TASK_ID}"
     exit 1
-fi 
+fi
 
-echo "Found ${#CSV_FILES[@]} CSV files"
+echo "Processing $CSV_FILE"
 
-# -----------------------------
-# Classify feature importance
-# -----------------------------
-for CSV_FILE in "${CSV_FILES[@]}"; do
-    echo "Processing $CSV_FILE..."
+pixi run python "$FEATURE_SCRIPT" \
+    --csv "$CSV_FILE" \
+    --outdir "$OUT_DIR" \
+    --metric roc_auc \
+    --n_jobs $SLURM_CPUS_PER_TASK
 
-    pixi run python "$FEATURE_SCRIPT" --csv "$CSV_FILE" --outdir "$OUT_DIR"
-    STATUS=$?
-
-    if [ "$STATUS" -eq 0 ]; then
-        echo "Classifier finished successfully for $CSV_FILE"
-    else 
-        echo "ERROR: Classifier failed for $CSV_FILE" >&2
-    fi 
-done
-
-echo "Finished all remaining datasets for $DATA_DIR"
+# Submission line:
+# sbatch --array=0-$(($(wc -l < csv_list.txt)-1)) run_features_array.sh

@@ -3,6 +3,7 @@
 import os
 import re
 import time
+import json
 import pandas as pd
 import numpy as np
 import argparse
@@ -34,7 +35,7 @@ def parse_filename(filename):
 # -------------------------
 # Classifier function
 # -------------------------
-def run_classifier(X_train, y_train, X_test, y_test, random_state=42):
+def run_classifier(X_train, y_train, X_test, y_test, metric, random_state=42, n_jobs=1):
     """Train classifier and compute metrics."""
     start_time = time.time()
     
@@ -51,23 +52,29 @@ def run_classifier(X_train, y_train, X_test, y_test, random_state=42):
     y_pred = model.predict(X_test)
     y_proba = model.predict_proba(X_test)[:, 1]
     
+    mcc = matthews_corrcoef(y_test, y_pred)
+
     try:
         auc = roc_auc_score(y_test, y_proba)
     except ValueError:
         auc = np.nan
     
-    mcc = matthews_corrcoef(y_test, y_pred)
-    
-    # Get permutation importance using MCC
     perm_start_time = time.time()
-    mcc_scorer = make_scorer(matthews_corrcoef)
-
+    if metric.lower() == "mcc":
+        # Get permutation importance using MCC
+        scorer = make_scorer(matthews_corrcoef)
+    elif metric.lower() == "roc_auc":
+        # Get permutation importance using ROC_AUC
+        scorer = make_scorer(roc_auc_score)
+    else:
+        raise ValueError(f"Unknown metric: {metric}, choose 'roc_auc' or 'mcc'.")
+    
     perm_importance = permutation_importance(
         model, X_test, y_test,
         n_repeats=3,
         random_state=random_state,
-        n_jobs=-1,
-        scoring=mcc_scorer
+        n_jobs=n_jobs,
+        scoring=scorer
     )
 
     perm_time = time.time() - perm_start_time
@@ -92,6 +99,8 @@ def main():
     parser = argparse.ArgumentParser(description="Run bootstrapped classifier on adjusted dataset")
     parser.add_argument("--csv", required=True, help="Input adjusted CSV file")
     parser.add_argument("--outdir", required=True, help="Output directory")
+    parser.add_argument("--metric", default="roc_auc", help="Which metric to use in permutation importance: mcc or roc_auc")
+    parser.add_argument("--n_jobs", type=int, default=1)
     
     args = parser.parse_args()
     
@@ -127,12 +136,17 @@ def main():
     # -------------------------
     # Run classifier and calculate feature importance
     # -------------------------
-    results = run_classifier(X_train, y_train, X_test, y_test)
+    results = run_classifier(X_train, y_train, X_test, y_test, metric = args.metric, n_jobs=args.n_jobs)
 
     results["adjuster"] = adjuster
     results["n_studies"] = n_studies
     results["test_source"] = test_source
 
+    # -------------------------
+    # Convert lists to JSON strings for CSV
+    # -------------------------
+    for key in ["feature_names", "perm_importances_mean", "perm_importances_std"]:
+        results[key] = json.dumps(results[key])
     # -------------------------
     # Save results
     # -------------------------
@@ -145,3 +159,12 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+# When you need to read it: 
+# import pandas as pd
+# import json
+
+# df = pd.read_csv("feature_importance_single_row.csv")
+# df["feature_names"] = df["feature_names"].apply(json.loads)
+# df["perm_importances_mean"] = df["perm_importances_mean"].apply(json.loads)
+# df["perm_importances_std"] = df["perm_importances_std"].apply(json.loads)
