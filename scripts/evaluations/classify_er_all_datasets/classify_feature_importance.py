@@ -83,8 +83,8 @@ def run_classifier(X_train, y_train, X_test, y_test, metric, random_state=42, n_
     results =  {
         "ROC_AUC": auc,
         "MCC": mcc,
-        "perm_importances_mean": perm_importance.importances_mean,
-        "perm_importances_std": perm_importance.importances_std,
+        "perm_importances_mean": perm_importance.importances_mean.tolist(),
+        "perm_importances_std": perm_importance.importances_std.tolist(),
         'feature_names': X_train.columns.tolist(),
         'train_time': train_time,
         'perm_time': perm_time

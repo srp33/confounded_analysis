@@ -6,6 +6,12 @@
 #SBATCH --mem=16G
 #SBATCH --time=10:00:00
 
+export OMP_NUM_THREADS=1
+export OPENBLAS_NUM_THREADS=1
+export MKL_NUM_THREADS=1
+export VECLIB_MAXIMUM_THREADS=1
+export NUMEXPR_NUM_THREADS=1
+
 # -----------------------------
 # CONFIGURATION
 # -----------------------------
@@ -32,5 +38,6 @@ pixi run python "$FEATURE_SCRIPT" \
     --metric roc_auc \
     --n_jobs $SLURM_CPUS_PER_TASK
 
+echo "Finished processing $CSV_FILE in $OUT_DIR"
 # Submission line:
 # sbatch --array=0-$(($(wc -l < csv_list.txt)-1)) run_features_array.sh

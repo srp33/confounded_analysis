@@ -11,6 +11,9 @@ suppressPackageStartupMessages({
   library(readr)
   library(dplyr)
   library(argparse)
+  library(GenomeInfoDbData)
+  library(GenomeInfoDb)
+  library(SingleCellExperiment)
 })
 
 # ------------------------- Parse Arguments -------------------------

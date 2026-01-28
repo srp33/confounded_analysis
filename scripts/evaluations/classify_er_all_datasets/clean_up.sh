@@ -1,6 +1,6 @@
 #!/bin/bash
 #SBATCH --job-name=cleanup_job
-#SBATCH --output=log/cleanup_%j.log
+#SBATCH --output=log/cleanup/cleanup_%j.log
 #SBATCH --cpus-per-task=1
 #SBATCH --mem=2G
 #SBATCH --time=00:30:00
@@ -18,6 +18,7 @@ ADJUSTED_DIR="${RESULT_DIR}/adjusted_data"
 CLASSIFY_DIR="${RESULT_DIR}/classify_metrics"
 SUBSET_DIR="${RESULT_DIR}/subset_data"
 FEATURE_DIR="${RESULT_DIR}/feature_importance"
+
 
 # Corresponding log subdirectories
 ADJUST_LOG_DIR="${LOG_DIR}/adjust"
