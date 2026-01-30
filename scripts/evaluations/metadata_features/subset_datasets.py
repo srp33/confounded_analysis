@@ -8,13 +8,15 @@ import numpy as np
 
 # Load and concatenate datasets
 def load_combined_data(input_csv):
-    combined = pd.read_csv(input_csv)
+    combined = pd.read_csv(input_csv, low_memory=False)
     return combined
 
 # Create subset
 def create_subset(df, data_list):
     selected_studies = set(data_list)
-    all_studies = set(df["meta_source"].unique())
+    print("Unique Meta Source: ")
+    print(df["meta_source"].unique())
+    all_studies = set(df["meta_source"].dropna().astype(str).unique())
 
     missing = selected_studies - all_studies
     if missing:

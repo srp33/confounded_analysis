@@ -12,14 +12,9 @@ def combine_gold_unadjusted_files(gold_dir: Path, output_file: Path):
     Each file gets a 'meta_source' column from its parent folder (e.g., GSE1234).
     Saves combined file to 'output_file'.
     """
-    # Check if file already exists
-    if output_file.exists():
-        print_now(f"{output_file} already exists, skipping combination.")
-        return
-    
+
     # Collect GSE folders
     gse_files = list(gold_dir.glob("gse*/unadjusted.csv"))
-
     metabric_file = list(gold_dir.glob("metabric/unadjusted.csv"))
     drop_files = ['gse115577', 'gse123845', 'gse163882']
     gse_files = [x for x in gse_files if x.parent.name not in drop_files]
@@ -33,24 +28,28 @@ def combine_gold_unadjusted_files(gold_dir: Path, output_file: Path):
 
     for f in unadjusted_files:
         df = pd.read_csv(f, low_memory=False)
-        # if 'meta_Sample_ID' in df.columns and 'meta_sample_id' not in df.columns:
-        #     df.rename(columns={'meta_Sample_ID': 'meta_sample_id'}, inplace=True)
         gse_id = f.parent.name
         df['meta_source'] = gse_id
         print_now(f"Loaded {f} with shape {df.shape}")
         dfs.append(df)
 
-    # Compute common columns across all files
-    common_cols = set(dfs[0].columns)
-    for df in dfs[1:]:
-        common_cols.intersection_update(df.columns)
+    # Shared expression columns
+    expr_cols_sets = [set(c for c in df.columns if not c.startswith('meta_')) for df in dfs]
+    shared_expr_cols = set.intersection(*expr_cols_sets)
 
-    extra_cols = {'meta_sample_id', 'meta_source'}
-    available_extra_cols = {col for col in extra_cols if any(col in df.columns for df in dfs)}
-    final_cols = list(common_cols.union(available_extra_cols))
+    # All meta columns
+    all_meta_cols = set()
+    for df in dfs:
+        meta_cols = {c for c in df.columns if c.startswith('meta_')}
+        all_meta_cols.update(meta_cols)
+        
+    # Final columns = shared expression + all meta
+    final_cols = list(shared_expr_cols.union(all_meta_cols))
 
-    print_now(f"Using {len(final_cols)} columns across datasets (including meta_sample_id if available).")
 
+    print_now(f"Using {len(final_cols)} columns (meta + shared expression).")
+
+    # Fill in missing columns for each df
     for i, df in enumerate(dfs):
         missing = set(final_cols) - set(df.columns)
         for col in missing:
@@ -63,11 +62,11 @@ def combine_gold_unadjusted_files(gold_dir: Path, output_file: Path):
     print_now("Unique meta_source values:", combined_df['meta_source'].unique())
 
     # DEBUG: Checking for meta columns and their values
-    meta_cols = [col for col in combined_df.columns if col.startswith("meta")]
+    meta_cols = [col for col in combined_df.columns if col.startswith("meta_")]
     for col in meta_cols:
         print_now(f"{col}: unique values ->", combined_df[col].unique()[:10])
 
-
+    # Save
     output_file.parent.mkdir(parents=True, exist_ok=True)
     combined_df.to_csv(output_file, index=False)
     print_now(f"Saved combined data to {output_file} with shape {combined_df.shape}")
