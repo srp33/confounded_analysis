@@ -79,7 +79,7 @@ def main():
         description="Create study subset with preprocessing (Python version)"
     )
     parser.add_argument("--input", required=True,
-                        help="CSV listing dataset CSV paths (one per row)")
+                        help="All combined file")
     parser.add_argument("--test", required=True,
                         help="Test dataset meta_source")
     parser.add_argument("--dataset_list", required=True,

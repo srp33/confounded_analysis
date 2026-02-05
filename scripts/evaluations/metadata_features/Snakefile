@@ -1,0 +1,172 @@
+configfile: "config.yaml"
+
+import os 
+import glob 
+
+
+# Config 
+META_DIR = config["output_folder"]
+DATA_DIR = config["data_folder"]
+SCRIPTS_DIR = config.get("scripts_dir", ".")
+ADJUST_SCRIPT = config.get("adjust_script", "../../adjust/adjust.R")
+
+# Helper functions
+def get_adjuster(fname):
+    basename = os.path.basename(fname).replace(".csv", "")
+    return basename.split("_")[0]
+
+csv_files = glob.glob(os.path.join(META_DIR, "*.csv"))
+
+# Rules
+rule all: 
+    input: 
+        expand(
+            os.path.join(META_DIR, "{adjuster}", "{target}_permutation_importance_heatmap.png"),
+            adjuster=[get_adjuster(f) for f in csv_files],
+            target=config["targets"]
+        )
+
+rule plot_and_select_genes:
+    input:
+        importance=os.path.join(META_DIR, "{adjuster}", "{adjuster}_permutation_importance.csv")
+    output:
+        heatmap=os.path.join(META_DIR, "{adjuster}", "{target}_permutation_importance_heatmap.png"),
+        filtered_csv=os.path.join(META_DIR, "{adjuster}", "filtered_{target}_permutation_importance.csv")
+    params:
+        top_k=TOP_K,
+        threshold=THRESHOLD
+    shell:
+        """
+        python 3_plot_and_gene_selection.py \
+            --importance_csv {input.importance} \
+            --outdir {RESULTS_DIR}/{wildcards.adjuster} \
+            --top_k {params.top_k} \
+            --threshold {params.threshold}
+        """  
+
+rule permutation_importance:
+    input:
+        csv=os.path.join(META_DIR, "{adjuster}", "{adjuster}.csv"),
+        models_dir=os.path.join(META_DIR, "{adjuster}", "models")
+    output:
+        importance=os.path.join(META_DIR, "{adjuster}", "{target}_permutation_importance.csv")
+    params:
+        n_repeats=N_REPEATS,
+        n_jobs=N_JOBS,
+        random_state=RANDOM_STATE
+    shell:
+        """
+        python 2_permutation_importance.py \
+            --csv {input.csv} \
+            --target {wildcards.target} \
+            --outdir {META_DIR}/{wildcards.adjuster} \
+            --n_repeats {params.n_repeats} \
+            --n_jobs {params.n_jobs} \
+            --random_state {params.random_state}
+        """
+
+rule train_metrics:
+    input: 
+        csv=os.path.join(META_DIR, "{adjuster}", "{adjuster}.csv")
+    output:
+        metrics=os.path.join(META_DIR, "{adjuster}", "{adjuster}_metrics.csv"),
+        models_dir=os.path.join(META_DIR, "{adjuster}", "models")
+    params: 
+        random_state=RANDOM_STATE 
+    shell:
+        """
+        mkdir -p {output.models_dir}
+        python train_and_metrics.py \
+        --csv {input.csv} \
+        --outdir {META_DIR}/{wildcards.adjuster} \
+        -- random_state {params.random_state}
+        """
+
+rule adjust: 
+    input: 
+        META_DIR + "/subset_data/{k}studies_test_{test_source}.csv"
+    output: 
+        META_DIR + "/labeled_adjusted/{adjuster}/{adjuster}_{k}studies_test_{test_source}.csv"
+    resources: 
+        mem_mb=24000,
+        runtime=90
+    threads: 1
+    log: 
+        "logs/adjust/{adjuster}_{k}_{test_source}_adjust.log"
+    params:
+        output_dir = META_DIR + "/labeled_adjusted",
+        adjust_script = ADJUST_SCRIPT,
+        metadata = META_DIR + "/geo_metadata.csv" 
+    shell:
+        """
+        set -euo pipefail
+        Rscript {SCRIPTS_DIR}/run_scaling_experiment.R \
+            --adjuster {wildcards.adjuster} \
+            --subset-path {input} \
+            --k {wildcards.k} \
+            --test {wildcards.test_source} \
+            --output-dir {params.output_dir} \
+            --adjust-script {params.adjust_script} \
+            --metadata-file {params.metadata} \
+            &> {log}
+        """
+
+rule align_metadata:
+    input: 
+        combined_file = META_DIR + "/subset/labeled_subset.csv"
+    output:
+        aligned_file = META_DIR + "/subset/aligned_subset"
+    resources:
+        mem_mb=16000,
+        runtime=360
+    threads: 1
+    log:
+        "logs/align/alignment.log"
+    shell:
+        """
+        set -euo pipefail
+        python {SCRIPTS_DIR}/align_metadata.py \
+            --input {combined_file} \
+            --output {aligned_file} \
+            &> {log}
+        """
+
+rule subset:
+    input: 
+        combined_file = DATA_DIR + "/all_combined/all_combined.csv"
+    output: 
+        subset_file = META_DIR + "/subset/labeled_subset.csv"
+    resources: 
+        mem_mb=8000,
+        runtime=10
+    threads: 1
+    log: 
+        "logs/subset/tese_{test_source}_subset.log"DATA_DIR + "/all_combined/gse_order_files"
+    params:
+        data_list = config['dataset_list']
+    shell:
+        """
+        set -euo pipefail
+        python {SCRIPTS_DIR}/subset_datasets.py \
+            --input {input.combined_file} \
+            --test {test_source} \
+            --dataset_list {params.data_list} \
+            --output {output.subset_file} \
+            &> {log}
+        """
+
+rule combine:
+    input: 
+        gold_dir = DATA_DIR + "/gold"
+    output:
+        DATA_DIR + "/all_combined/all_combined.csv"
+    resources: 
+        mem_mb=16000,
+        runtime=60
+    threads: 1
+    log: 
+        "log/combine.log"
+    shell:
+        """
+        python {SCRIPTS_DIR}/combine_all.py --input-dir {input.gold_dir} --output-file {output} &> {log}
+        """

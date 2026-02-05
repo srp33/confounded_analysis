@@ -8,7 +8,7 @@
 
 # Set up fixed inputs
 SCALING_EXPERIMENT_FILE="../classify_er_all_datasets/run_scaling_experiment.R"
-SUBSET_PATH="/grphome/grp_batch_effects/outputs/metadata_features/subset/labeled_subset.csv"
+SUBSET_PATH="/grphome/grp_batch_effects/outputs/metadata_features/subset/aligned_subset.csv"
 K=2
 TEST_SOURCE="metabric"
 OUTPUT_DIR="/grphome/grp_batch_effects/outputs/metadata_features/labeled_adjusted"

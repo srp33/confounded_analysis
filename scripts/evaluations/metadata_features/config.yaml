@@ -1,0 +1,41 @@
+# config.yaml
+
+output_folder: "/grphome/grp_batch_effects/outputs/metadata_features"
+data_folder: "/grphome/grp_batch_effects/data"
+scripts_dir: "."
+adjust_script: "../../adjust/adjust.R"
+
+adjuster: ["gmm", "min_mean", "mnn", "log_combat", "log_transformed"]
+dataset_ids:
+  - "gse19615"
+  - "gse20194"
+  - "gse20271"
+  - "gse23720"
+  - "gse25055"
+  - "gse25065"
+  - "gse31448"
+  - "gse45255"
+  - "gse58644"
+  - "gse62944_tumor"
+  - "gse76275"
+  - "gse81538"
+  - "gse96058_hiseq"
+  - "gse96058_nextseq"
+  - "metabric"
+
+targets: [
+  'meta_er_status', 
+  'meta_her2_status', 
+  'meta_sex', 
+  'meta_chemotherapy', 
+  'meta_age_at_diagnosis_combined_lt50', 
+  'meta_age_at_diagnosis_combined_50_69', 
+  'meta_age_at_diagnosis_combined_ge70', 
+  'meta_menopause_status',
+  'meta_histological_type'
+]
+
+dataset_list: [
+  'metabric',
+  'gse62944_tumor'
+]

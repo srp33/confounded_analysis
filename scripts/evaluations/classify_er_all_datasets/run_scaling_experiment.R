@@ -107,10 +107,10 @@ apply_adjustment <- function(df, method, test_source, metadata_file) {
 
   # Ensure colnames (samples) exist
   if (is.null(colnames(num_mat))) {
-    if (!"meta_Sample_ID" %in% colnames(df)) {
-      stop("df is missing 'meta_Sample_ID' needed to assign column names.")
+    if (!"meta_source" %in% colnames(df)) {
+      stop("df is missing 'meta_source' needed to assign column names.")
     }
-    colnames(num_mat) <- df$meta_Sample_ID
+    colnames(num_mat) <- df$meta_source
   }
 
   # Safety check: more genes than samples
@@ -161,7 +161,7 @@ apply_adjustment <- function(df, method, test_source, metadata_file) {
 
   # ------------------------- Ensure proper row/col names after adjustment -------------------------
   adjusted <- t(adjusted)  # samples × genes
-  rownames(adjusted) <- df$meta_Sample_ID      # samples
+  rownames(adjusted) <- df$meta_source      # samples
   colnames(adjusted) <- rownames(num_mat)      # genes (or HVGs)
 
   # ------------------------- Combine with metadata -------------------------
