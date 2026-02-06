@@ -22,7 +22,7 @@ def combine_columns(df):
         ("meta_age_at_diagnosis_combined", "meta_age_at_diagnosis", "meta_AGE_AT_DIAGNOSIS"),
         ("meta_chemotherapy_combined", "meta_history_neoadjuvant_treatment", "meta_CHEMOTHERAPY"),
         ("meta_histological_type_combined", "meta_histological_type", "meta_HISTOLOGICAL_SUBTYPE"),
-        ("meta_her2_status_combined", "meta_her2_status", "meta_THREEGENE"),
+        ("meta_her2_status_combined", "meta_THREEGENE", "meta_her2_status"),
     ]
 
     for final_name, col1, col2 in column_mapping:

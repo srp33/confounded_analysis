@@ -43,7 +43,8 @@ def run_classifier(X_train, y_train, X_test, y_test, random_state=42):
     y_pred = clf.predict(X_test)
     y_proba = clf.predict_proba(X_test)
 
-    n_classes = len(np.unique(y_train))
+    n_classes = min(y_train.nunique(), y_test.nunique())
+    
     metrics = {
         "n_classes": n_classes,
         "Accuracy": accuracy_score(y_test, y_pred),
@@ -96,7 +97,7 @@ def run_classifier(X_train, y_train, X_test, y_test, random_state=42):
 # Main function
 # -------------------------
 def main():
-    parser = argparse.ArgumentParser(description="Run bootstrapped classifier on adjusted dataset")
+    parser = argparse.ArgumentParser(description="Run classifier on adjusted dataset")
     parser.add_argument("--csv", required=True, help="Input adjusted CSV file")
     parser.add_argument("--outdir", required=True, help="Output directory")
     parser.add_argument("--random_state", type=int, default=42)
@@ -144,11 +145,11 @@ def main():
         print(f"Training target: {target}")
 
         y_train = train_df[target]
-        y_test = train_df[target]
+        y_test = test_df[target]
 
         # Drop NaNs PER TARGET
         train_mask = y_train.notna()
-        test_mask = y_train.notna()
+        test_mask = y_test.notna()
 
         X_train = X_train_all.loc[train_mask]
         X_test = X_test_all.loc[test_mask]
@@ -156,8 +157,10 @@ def main():
         y_test = y_test.loc[test_mask]
 
         # Skip degenerate targets
-        if y_train.nunique() < 2:
-            print(f"Skipping {target}: <2 classes")
+        print(f"Classes present in train dataset: {y_train.unique()}")
+        print(f"Classes present in test dataset: {y_test.unique()}")
+        if y_train.nunique() < 2 or y_test.nunique() < 2:
+            print(f">>> Skipping {target}: <2 classes")
             continue
         
         clf, metrics = run_classifier(
