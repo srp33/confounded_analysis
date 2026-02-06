@@ -6,16 +6,6 @@
 #   compute permutation importance
 #   store importance vector
 
-# You have three clean parallelization axes:
-
-# per target (best)
-
-# n_jobs inside permutation_importance
-
-# subsampling test set
-
-# This file benefits the most from HPC.
-
 import os
 import re
 import argparse
@@ -88,10 +78,10 @@ def main():
 
     X_test_all = test_df[feature_cols]
 
-        # -------------------------
+    # -------------------------
     # Load models directory
     # -------------------------
-    models_dir = os.path.join(args.outdir, adjuster, "models")
+    models_dir = os.path.join(args.outdir, "classify", adjuster, "models")
     if not os.path.isdir(models_dir):
         raise FileNotFoundError(f"Models directory not found: {models_dir}")
 
@@ -121,14 +111,28 @@ def main():
             print(f"  Skipping {target}: <2 classes in test set")
             continue
 
+        # Check class alignment
+        model_classes = clf.classes_
+        test_classes = np.unique(y_test)
+
+        if len(test_classes) != len(model_classes):
+            print(
+                f"  Skipping {target}: "
+                f"model has classes {model_classes}, "
+                f"test has {test_classes}"
+            )
+            continue
+
         # -------------------------
         # Permutation importance
         # -------------------------
+        scoring = "roc_auc" if len(clf.classes_) == 2 else "roc_auc_ovr"
+
         r = permutation_importance(
             clf,
             X_test,
             y_test,
-            scoring="roc_auc_ovr",   # works for binary + multiclass
+            scoring=scoring, 
             n_repeats=args.n_repeats,
             n_jobs=args.n_jobs,
             random_state=args.random_state,
@@ -139,7 +143,7 @@ def main():
     # -------------------------
     # Save importance table
     # -------------------------
-    out_dir = os.path.join(args.outdir, adjuster)
+    out_dir = os.path.join(args.outdir, "permutation_importance", adjuster)
     os.makedirs(out_dir, exist_ok=True)
 
     importance_df = pd.DataFrame(

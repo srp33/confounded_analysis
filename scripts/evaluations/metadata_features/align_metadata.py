@@ -166,9 +166,9 @@ def main():
 
     # Step 2: Map tricky columns with regex
     df = map_column_with_regex(df, 'meta_menopause_status_combined', [
-        (r"indeterminate", 3),
+        (r"indeterminate", np.nan),
         (r"pre", 0),
-        (r"peri", 2),
+        (r"peri", np.nan),
         (r"post", 1)
     ])
     df = map_column_with_regex(df, 'meta_her2_status_combined', [
@@ -181,10 +181,10 @@ def main():
         (r"infiltrating lobular|lobular", 1),
         (r"medullary", 2),
         (r"metaplastic", 3),
-        (r"mixed", 4),
-        (r"mucinous", 5),
-        (r"other|nos", 6),
-        (r"tubular", 7)
+        (r"mucinous", 4),
+        (r"tubular", 5),
+        (r"mixed", 6),
+        (r"other|nos", 7)
     ])
 
     # Step 3: One-hot encode age

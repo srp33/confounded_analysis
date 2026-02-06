@@ -69,9 +69,10 @@ def log_transform_per_dataset(df, test_source):
 
     return pd.concat([train_t, test_t], axis=0, ignore_index=True)
 
-def write_subset(df, output_path):
+def write_subset(df, output_path, n_studies, test):
     os.makedirs(os.path.dirname(output_path), exist_ok=True)
-    df.to_csv(output_path, index=False)
+    output_filename = os.path.join(output_path, f"{n_studies}studies_test_{test}_subset.csv")
+    df.to_csv(output_filename, index=False)
     print(f">>> Subset written to: {output_path}")
 
 def main():
@@ -84,7 +85,7 @@ def main():
                         help="Test dataset meta_source")
     parser.add_argument("--dataset_list", required=True,
                         help="List of GSE ids for datasets to include")
-    parser.add_argument("--output", required=True)
+    parser.add_argument("--out_dir", required=True)
 
     args = parser.parse_args()
 
@@ -94,7 +95,7 @@ def main():
 
     subset = create_subset(df, data_list)
     processed = log_transform_per_dataset(subset, args.test)
-    write_subset(processed, args.output)
+    write_subset(processed, args.output, len(data_list), args.test)
 
 if __name__ == "__main__":
     main()

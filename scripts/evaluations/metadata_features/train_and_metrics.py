@@ -196,7 +196,7 @@ def main():
     os.makedirs(out_dir, exist_ok=True)
     
     metrics_df = pd.DataFrame(metrics_rows)
-    metrics_path = os.path.join(out_dir, f"{adjuster}_metrics.csv")
+    metrics_path = os.path.join(out_dir, f"{adjuster}_{n_studies}studies_test_{test_source}_metrics.csv")
     metrics_df.to_csv(metrics_path, index=False)
 
     print(f"Saved metrics to: {metrics_path}")

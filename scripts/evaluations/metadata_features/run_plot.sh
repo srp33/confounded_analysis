@@ -1,9 +1,9 @@
 #!/bin/bash
-#SBATCH --job-name=permute_data
+#SBATCH --job-name=plot_and_select
 #SBATCH --array=0-4
 #SBATCH --cpus-per-task=4
 #SBATCH --mem=32G
-#SBATCH --time=16:00:00
+#SBATCH --time=04:00:00
 #SBATCH --output=logs/permutation_importance/importance_%A_%a.out
 
 set -euo pipefail
@@ -12,9 +12,8 @@ set -euo pipefail
 IMPORTANCE_SCRIPT="permutation_importance.py"
 ADJUST_DIR="/grphome/grp_batch_effects/outputs/metadata_features/labeled_adjusted"
 OUTPUT_DIR="/grphome/grp_batch_effects/outputs/metadata_features"
-RANDOM_STATE=42
-N_REPEATS=3
-N_JOBS=${SLURM_CPUS_PER_TASK}
+TOP_K=100
+THRESHOLD=0.005
 
 # Collect all adjusted CSVs
 mapfile -t CSV_FILES < <(find "${ADJUST_DIR}" -name "*.csv" | sort)
@@ -43,10 +42,9 @@ echo "======================================"
 
 # Run classifier
 pixi run python "${IMPORTANCE_SCRIPT}" \
-    --csv "${CSV}" \
+    --importance_csv "${CSV}" \
     --outdir "${OUTPUT_DIR}" \
-    --n_repeats "${N_REPEATS}" \
-    --n_jobs "${N_JOBS}" \
-    --random_state "${RANDOM_STATE}"
+    --top_k "${N_REPEATS}" \
+    --threshold "${}
 
 echo "Finished permutation importance ${FILE_IDX}."
