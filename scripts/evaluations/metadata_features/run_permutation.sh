@@ -3,7 +3,7 @@
 #SBATCH --array=0-4
 #SBATCH --cpus-per-task=4
 #SBATCH --mem=32G
-#SBATCH --time=16:00:00
+#SBATCH --time=10:00:00
 #SBATCH --output=logs/permutation_importance/importance_%A_%a.out
 
 set -euo pipefail
@@ -33,6 +33,9 @@ FILE_IDX=$((SLURM_ARRAY_TASK_ID))
 
 CSV="${CSV_FILES[$FILE_IDX]}"
 
+ADJ=$(basename "$CSV" | sed -E 's/_([0-9]+)studies_test_.*$//')
+MODELS_DIR="/grphome/grp_batch_effects/outputs/metadata_features/classify/${ADJ}/models"
+
 mkdir -p "${OUTPUT_DIR}"
 
 echo "======================================"
@@ -44,6 +47,7 @@ echo "======================================"
 # Run permutation importance
 pixi run python "${IMPORTANCE_SCRIPT}" \
     --csv "${CSV}" \
+    --models_dir "${MODELS_DIR}" \
     --outdir "${OUTPUT_DIR}" \
     --n_repeats "${N_REPEATS}" \
     --n_jobs "${N_JOBS}" \

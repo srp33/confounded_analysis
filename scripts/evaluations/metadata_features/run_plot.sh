@@ -1,50 +1,53 @@
-#!/bin/bash
-#SBATCH --job-name=plot_and_select
-#SBATCH --array=0-4
-#SBATCH --cpus-per-task=4
-#SBATCH --mem=32G
-#SBATCH --time=04:00:00
-#SBATCH --output=logs/plot/plot_%A_%a.out
-
+#!/usr/bin/env bash
+#SBATCH --job-name=perm-heatmaps
+#SBATCH --output=logs/heatmaps_%j.out
+#SBATCH --error=logs/heatmaps_%j.err
+#SBATCH --time=01:00:00
+#SBATCH --cpus-per-task=1
+#SBATCH --mem=8G
 set -euo pipefail
 
-# Set up fixed inputs
-IMPORTANCE_SCRIPT="permutation_importance.py"
-ADJUST_DIR="/grphome/grp_batch_effects/outputs/metadata_features/labeled_adjusted"
-OUTPUT_DIR="/grphome/grp_batch_effects/outputs/metadata_features"
-TOP_K=100
+# -------------------------
+# User-configurable paths
+# -------------------------
+PLOT_SCRIPT="plot_heatmaps.py"
+PERM_DIR="/grphome/grp_batch_effects/outputs/metadata_features/permutation_importance"
+OUTDIR="/grphome/grp_batch_effects/outputs/metadata_features/plots"
+
+# Optional parameters
 THRESHOLD=0.005
 
-# Collect all adjusted CSVs
-mapfile -t CSV_FILES < <(find "${ADJUST_DIR}" -name "*.csv" | sort)
+export OMP_NUM_THREADS=1
+export OPENBLAS_NUM_THREADS=1
+export MKL_NUM_THREADS=1
+export NUMEXPR_NUM_THREADS=1
 
-NUM_FILES=${#CSV_FILES[@]}
+# -------------------------
+# Collect CSVs (one per adjuster)
+# -------------------------
+CSV_FILES=$(find "${PERM_DIR}" -type f -name "*_permutation_importance.csv" | sort)
 
-TOTAL_TASKS=$((NUM_FILES))
-
-if [[ "$SLURM_ARRAY_TASK_ID" -ge "$TOTAL_TASKS" ]]; then
-    echo "Task ${SLURM_ARRAY_TASK_ID} exceeds total tasks ${TOTAL_TASKS}"
-    exit 0
+if [[ -z "${CSV_FILES}" ]]; then
+  echo "ERROR: No permutation importance CSVs found in ${PERM_DIR}"
+  exit 1
 fi
 
-# Decode task index
-FILE_IDX=$((SLURM_ARRAY_TASK_ID))
+echo "Found permutation importance CSVs:"
+echo "${CSV_FILES}"
+echo
 
-CSV="${CSV_FILES[$FILE_IDX]}"
+# -------------------------
+# Create output directory
+# -------------------------
+mkdir -p "${OUTDIR}"
 
-mkdir -p "${OUTPUT_DIR}"
+# -------------------------
+# Run heatmap plotting
+# -------------------------
+python "${PLOT_SCRIPT}" \
+  --csvs ${CSV_FILES} \
+  --outdir "${OUTDIR}" \
+  --threshold "${THRESHOLD}"
 
-echo "======================================"
-echo "SLURM job: $SLURM_JOB_ID"
-echo "Task ID: $SLURM_ARRAY_TASK_ID"
-echo "CSV file: $CSV"
-echo "======================================"
-
-# Run classifier
-pixi run python "${IMPORTANCE_SCRIPT}" \
-    --importance_csv "${CSV}" \
-    --outdir "${OUTPUT_DIR}" \
-    --top_k "${N_REPEATS}" \
-    --threshold "${}
-
-echo "Finished permutation importance ${FILE_IDX}."
+echo
+echo "All heatmaps written to: ${OUTDIR}"

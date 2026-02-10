@@ -1,7 +1,7 @@
 #!/bin/bash
 #SBATCH --job-name=adjust_data
 #SBATCH --array=0-4 # 5 adjusters
-#SBATCH --cpus-per-task=4
+#SBATCH --cpus-per-task=1
 #SBATCH --mem=32G
 #SBATCH --time=06:00:00
 #SBATCH --output=logs/adjust/adjuster_%A_%a.out

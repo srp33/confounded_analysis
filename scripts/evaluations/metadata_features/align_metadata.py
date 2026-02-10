@@ -177,14 +177,13 @@ def main():
         (r"her2\+|positive", 1)
     ])
     df = map_column_with_regex(df, 'meta_histological_type_combined', [
-        (r"infiltrating ductal|ductal", 0),
+        (r"infiltrating ductal|ductal|tubular", 0),
         (r"infiltrating lobular|lobular", 1),
         (r"medullary", 2),
         (r"metaplastic", 3),
         (r"mucinous", 4),
-        (r"tubular", 5),
-        (r"mixed", 6),
-        (r"other|nos", 7)
+        (r"mixed", 5),
+        (r"other|nos", np.nan)
     ])
 
     # Step 3: One-hot encode age

@@ -1,9 +1,9 @@
 #!/bin/bash
 #SBATCH --job-name=classify_data
 #SBATCH --array=0-4
-#SBATCH --cpus-per-task=4
+#SBATCH --cpus-per-task=2
 #SBATCH --mem=32G
-#SBATCH --time=04:00:00
+#SBATCH --time=00:30:00
 #SBATCH --output=logs/classify/classifier_%A_%a.out
 
 set -euo pipefail
@@ -37,6 +37,12 @@ echo "SLURM job: $SLURM_JOB_ID"
 echo "Task ID: $SLURM_ARRAY_TASK_ID"
 echo "CSV file: $CSV"
 echo "======================================"
+
+# Set up threading
+export OMP_NUM_THREADS=$SLURM_CPUS_PER_TASK
+export OPENBLAS_NUM_THREADS=$SLURM_CPUS_PER_TASK
+export MKL_NUM_THREADS=$SLURM_CPUS_PER_TASK
+export NUMEXPR_NUM_THREADS=$SLURM_CPUS_PER_TASK
 
 # Run classifier
 pixi run python "${CLASSIFY_SCRIPT}" \

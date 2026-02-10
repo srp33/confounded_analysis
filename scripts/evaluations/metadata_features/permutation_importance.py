@@ -7,6 +7,11 @@
 #   store importance vector
 
 import os
+os.environ["OMP_NUM_THREADS"] = "1"
+os.environ["OPENBLAS_NUM_THREADS"] = "1"
+os.environ["MKL_NUM_THREADS"] = "1"
+os.environ["NUMEXPR_NUM_THREADS"] = "1"
+
 import re
 import argparse
 import pandas as pd
@@ -115,7 +120,7 @@ def main():
         model_classes = clf.classes_
         test_classes = np.unique(y_test)
 
-        if len(test_classes) != len(model_classes):
+        if set(test_classes) != set(model_classes):
             print(
                 f"  Skipping {target}: "
                 f"model has classes {model_classes}, "
@@ -150,7 +155,10 @@ def main():
         index=feature_cols
     )
 
-    out_path = os.path.join(args.outdir, f"{n_studies}_{test_source}_permutation_importance.csv")
+    out_dir = os.path.join(args.outdir, "permutation_importance", adjuster)
+    os.makedirs(out_dir, exist_ok=True)
+
+    out_path = os.path.join(out_dir, f"{n_studies}_{test_source}_permutation_importance.csv")
     importance_df.to_csv(out_path)
 
     print(f"Saved permutation importance to: {out_path}")

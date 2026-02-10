@@ -216,7 +216,7 @@ rule aggregate_and_plot_heatmap:
         aggregation="mean"
     shell:
         """
-        python {SCRIPTS_DIR}/aggregate_and_plot_heatmap.py \
+        python {SCRIPTS_DIR}/plot_heatmap.py \
             --csvs {input.importance} \
             --outdir {PLOT_DIR} \
             --target {wildcards.target} \
