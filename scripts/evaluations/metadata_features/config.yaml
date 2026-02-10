@@ -4,6 +4,7 @@ output_folder: "/grphome/grp_batch_effects/outputs/metadata_features"
 data_folder: "/grphome/grp_batch_effects/data"
 scripts_dir: "."
 adjust_script: "../../adjust/adjust.R"
+scaling_script: "../classify_er_all_datasets/run_scaling_experiment.R"
 
 adjusters: ["gmm", "min_mean", "mnn", "log_combat", "log_transformed"]
 dataset_ids:
@@ -35,7 +36,12 @@ targets: [
   'meta_histological_type'
 ]
 
-dataset_list: 'metabric gse62944_tumor'
+test_sources:
+- "metabric"
+
+dataset_list: 
+- "metabric" 
+- "gse62944_tumor"
 
 # Permutation importance
 n_repeats: 3

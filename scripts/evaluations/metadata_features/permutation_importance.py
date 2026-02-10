@@ -40,6 +40,7 @@ def parse_filename(filename):
 def main():
     parser = argparse.ArgumentParser(description="Compute permutation importance per target")
     parser.add_argument("--csv", required=True, help="Input CSV")
+    parser.add_argument("--models_dir", required=True, help="Directory containing trained models.")
     parser.add_argument("--outdir", required=True, help="Output directory")
     parser.add_argument("--n_repeats", type=int, default=5)
     parser.add_argument("--n_jobs", type=int, default=1)
@@ -79,11 +80,10 @@ def main():
     X_test_all = test_df[feature_cols]
 
     # -------------------------
-    # Load models directory
+    # Check models directory
     # -------------------------
-    models_dir = os.path.join(args.outdir, "classify", adjuster, "models")
-    if not os.path.isdir(models_dir):
-        raise FileNotFoundError(f"Models directory not found: {models_dir}")
+    if not os.path.isdir(args.models_dir):
+        raise FileNotFoundError(f"Models directory not found: {args.models_dir}")
 
     # -------------------------
     # Compute permutation importance per target
@@ -93,7 +93,7 @@ def main():
     for target in target_cols:
         print(f"Permutation importance for target: {target}")
 
-        model_path = os.path.join(models_dir, f"{target}.joblib")
+        model_path = os.path.join(args.models_dir, f"{target}.joblib")
         if not os.path.exists(model_path):
             print(f"  Model not found for {target}, skipping")
             continue
@@ -143,15 +143,14 @@ def main():
     # -------------------------
     # Save importance table
     # -------------------------
-    out_dir = os.path.join(args.outdir, "permutation_importance", adjuster)
-    os.makedirs(out_dir, exist_ok=True)
+    os.makedirs(args.outdir, exist_ok=True)
 
     importance_df = pd.DataFrame(
         importance_dict,
         index=feature_cols
     )
 
-    out_path = os.path.join(out_dir, f"{adjuster}_permutation_importance.csv")
+    out_path = os.path.join(args.outdir, f"{n_studies}_{test_source}_permutation_importance.csv")
     importance_df.to_csv(out_path)
 
     print(f"Saved permutation importance to: {out_path}")

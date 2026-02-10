@@ -41,7 +41,7 @@ echo "Task ID: $SLURM_ARRAY_TASK_ID"
 echo "CSV file: $CSV"
 echo "======================================"
 
-# Run classifier
+# Run permutation importance
 pixi run python "${IMPORTANCE_SCRIPT}" \
     --csv "${CSV}" \
     --outdir "${OUTPUT_DIR}" \

@@ -5,16 +5,23 @@ import pandas as pd
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Select top genes per target from permutation importance across adjusters"
+        description="Select top genes per target from permutation importance CSVs"
     )
-    parser.add_argument("--importance_dir", required=True,
-                        help="Directory with permutation importance CSVs per adjuster")
-    parser.add_argument("--outdir", required=True)
+    parser.add_argument(
+        "--csvs",
+        nargs="+",
+        required=True,
+        help="List of permutation importance CSVs to aggregate"
+    )
+    parser.add_argument("--outdir", required=True, help="Output directory")
     parser.add_argument("--top_k", type=int, default=20, help="Top k genes per target")
-    parser.add_argument("--threshold", type=float, default=None,
-                        help="Optional minimum importance (applied after top-k)")
-    parser.add_argument("--agg", default="mean", choices=["mean", "max", "median"],
-                        help="How to aggregate importance across adjusters")
+    parser.add_argument("--threshold", type=float, default=None, help="Minimum importance")
+    parser.add_argument(
+        "--agg",
+        default="mean",
+        choices=["mean", "median", "max"],
+        help="Aggregation across adjusters"
+    )
 
     args = parser.parse_args()
     os.makedirs(args.outdir, exist_ok=True)
@@ -22,21 +29,22 @@ def main():
     # -------------------------
     # Load all CSVs
     # -------------------------
-    all_files = [os.path.join(args.importance_dir, f)
-                 for f in os.listdir(args.importance_dir) if f.endswith(".csv")]
-    if not all_files:
-        raise ValueError(f"No CSV files found in {args.importance_dir}")
+    dfs = []
+    for f in args.csvs:
+        if not os.path.exists(f):
+            raise FileNotFoundError(f"CSV not found: {f}")
+        df = pd.read_csv(f, index_col=0)
+        dfs.append(df)
 
-    dfs = [pd.read_csv(f, index_col=0) for f in all_files]
     combined_df = pd.concat(dfs, axis=0)
 
     # Aggregate by gene
     if args.agg == "mean":
         agg_df = combined_df.groupby(combined_df.index).mean()
-    elif args.agg == "max":
-        agg_df = combined_df.groupby(combined_df.index).max()
     elif args.agg == "median":
         agg_df = combined_df.groupby(combined_df.index).median()
+    elif args.agg == "max":
+        agg_df = combined_df.groupby(combined_df.index).max()
 
     selected_features = set()
 
