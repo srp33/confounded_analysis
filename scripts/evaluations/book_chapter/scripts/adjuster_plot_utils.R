@@ -4,11 +4,15 @@
 format_adjuster_label <- function(adjuster_name) {
   if (adjuster_name == "within_study_cv") return("Within-Study CV")
   if (adjuster_name == "unadjusted") return("Unadjusted")
+  if (adjuster_name == "naive") return("Naive")
+  if (adjuster_name == "rank_samples") return("Rank Samples")
+  if (adjuster_name == "rank_twice") return("Rank Twice")
+  if (adjuster_name == "npn") return("NPN")
   if (adjuster_name == "combat") return("ComBat")
   if (adjuster_name == "combat_sup") return("ComBat-Sup")
   if (adjuster_name == "combat_mean") return("Combat_mean")
   if (adjuster_name == "mnn") return("MNN")
-  if (adjuster_name == "mnn_centered") return("Mnn_centered")
+  if (adjuster_name == "fast_mnn") return("FastMNN")
   return(tools::toTitleCase(adjuster_name))
 }
 

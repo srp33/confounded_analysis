@@ -69,7 +69,7 @@ generate_differences_plot <- function(mxe_data, top_adjuster, top_adjuster_label
   cat("\nGenerating Gardner-Altman plot...\n")
   
   # Save plot
-  png(filename = output_file, width = 12, height = 8, units = "in", res = dpi)
+  png(filename = output_file, width = 12, height = 8, units = "in", res = dpi, bg = "white")
   
   plot(dabest_diff, 
        rawplot.ylabel = "Matthews Correlation Coefficient (MCC)",

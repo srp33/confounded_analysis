@@ -1,0 +1,24 @@
+POSSE Validation Suite v2.0 - Failure Report
+==================================================
+
+❌ 19 VALIDATION FAILURES:
+
+1. Silence Test: RMSE too high: 6.63e-01 > 1.00e-09
+2. Injection Test: shift_+2.0: Beta recovery error 2.000 > 0.1
+3. Injection Test: scale_0.5: Alpha recovery error 1.000 > 0.1
+4. Injection Test: shift_scale: Alpha recovery error 0.333 > 0.1
+5. Injection Test: shift_scale: Beta recovery error 0.667 > 0.1
+6. Frankenstein Monitor: Trust violation in pathway_0: trust=0.418 < 0.5, α_dev=0.933 > 0.2
+7. Frankenstein Monitor: Trust violation in pathway_3: trust=0.418 < 0.5, α_dev=0.919 > 0.2
+8. Frankenstein Monitor: Trust violation in pathway_6: trust=0.418 < 0.5, α_dev=0.910 > 0.2
+9. Frankenstein Monitor: Trust violation in pathway_9: trust=0.418 < 0.5, α_dev=0.904 > 0.2
+10. Frankenstein Monitor: Trust violation in pathway_12: trust=0.418 < 0.5, α_dev=0.899 > 0.2
+11. Frankenstein Monitor: Trust violation in pathway_0: trust=0.451 < 0.5, α_dev=0.493 > 0.2
+12. Frankenstein Monitor: Trust violation in pathway_3: trust=0.451 < 0.5, α_dev=0.388 > 0.2
+13. Frankenstein Monitor: Trust violation in pathway_6: trust=0.451 < 0.5, α_dev=0.319 > 0.2
+14. Frankenstein Monitor: Trust violation in pathway_9: trust=0.451 < 0.5, α_dev=0.274 > 0.2
+15. Frankenstein Monitor: Trust violation in pathway_12: trust=0.451 < 0.5, α_dev=0.240 > 0.2
+16. Topology Stress: Topology test crashed on Africa→GSE37250_M: memoryview: invalid slice key
+17. Topology Stress: Topology test crashed on GSE37250_M→GSE37250_SA: memoryview: invalid slice key
+18. Compositional Imbalance: Composition test crashed on Africa→GSE37250_M: memoryview: invalid slice key
+19. Compositional Imbalance: Composition test crashed on GSE37250_M→GSE37250_SA: memoryview: invalid slice key

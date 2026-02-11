@@ -34,8 +34,8 @@ if (!is.null(args$adjusters)) {
 
 mxe_data <- data[data$metric == "mcc" & !is.na(data$n_datasets), ]
 mxe_data$classifier_label <- factor(mxe_data$classifier,
-  levels = c("logistic", "elasticnet", "svm", "rf", "knn", "xgboost", "nnet", "rvc"),
-  labels = c("Logistic", "ElasticNet", "SVM", "Random Forest", "KNN", "XGBoost", "Neural Net", "RVC"))
+  levels = c("logistic", "elasticnet", "svm", "rf", "knn", "xgboost", "nnet", "shrinkageLDA"),
+  labels = c("Logistic", "ElasticNet", "SVM", "Random Forest", "KNN", "XGBoost", "Neural Net", "Shrinkage LDA"))
 
 # Calculate ordering
 adjuster_performance <- mxe_data %>%

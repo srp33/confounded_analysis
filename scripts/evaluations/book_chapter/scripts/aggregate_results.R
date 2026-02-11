@@ -139,7 +139,7 @@ validate_job_completeness <- function(results_data, input_dir, verbose = FALSE) 
     cat("Detected job type: Batch Effects Analysis\n")
     
     # Expected parameters from config
-    expected_classifiers <- c("logistic", "elasticnet", "svm", "rf", "knn", "xgboost", "nn", "rvc")
+    expected_classifiers <- c("logistic", "elasticnet", "svm", "rf", "knn", "xgboost", "nn", "shrinkageLDA")
     expected_means <- c(5)
     expected_variances <- c(1, 3, 5)
     expected_seeds <- 42:141  # 100 seeds starting from 42
@@ -175,8 +175,8 @@ validate_job_completeness <- function(results_data, input_dir, verbose = FALSE) 
     cat("Detected job type: Adjusters Analysis\n")
     
     # Expected parameters from config
-    expected_adjusters <- c("unadjusted", "combat", "mnn")
-    expected_classifiers <- c("logistic", "elasticnet", "svm", "rf", "knn", "xgboost", "nn", "rvc")
+    expected_adjusters <- c("unadjusted", "naive", "rank_samples", "rank_twice", "npn", "combat", "mnn", "fast_mnn")
+    expected_classifiers <- c("logistic", "elasticnet", "svm", "rf", "knn", "xgboost", "nn", "shrinkageLDA")
     expected_n_datasets <- c(3, 4, 5, 6)
     # For adjusters, we use test_study instead of seed
     all_studies <- c("GSE37250_SA", "USA", "India", "GSE37250_M", "Africa", "GSE39941_M")
@@ -273,31 +273,40 @@ validate_job_completeness <- function(results_data, input_dir, verbose = FALSE) 
     cat("\nFailure Analysis:\n")
     
     # Look for corresponding log files to understand failures
-    log_dir <- gsub("/results/", "/logs/", input_dir)
-    if (job_type == "batch_effects") {
-      log_dir <- file.path(log_dir, "classify_batch_effects")
-    } else if (job_type == "adjusters") {
-      log_dir <- file.path(log_dir, "classify_adjusters")
-    }
-    
-    if (dir.exists(log_dir)) {
-      log_files <- list.files(log_dir, pattern = "\\.log$", full.names = FALSE)
-      cat("  Found", length(log_files), "log files in", log_dir, "\n")
-      
-      # Simple heuristic: if we have log files but no results, those are likely failures
-      result_files <- list.files(input_dir, pattern = "\\.csv$", full.names = FALSE)
-      result_basenames <- gsub("\\.csv$", "", result_files)
-      log_basenames <- gsub("\\.log$", "", log_files)
-      
-      failed_jobs <- setdiff(log_basenames, result_basenames)
-      if (length(failed_jobs) > 0) {
-        cat("  Identified", length(failed_jobs), "failed jobs (have logs but no results)\n")
-        if (verbose && length(failed_jobs) > 0) {
-          cat("  Sample failed jobs:", paste(head(failed_jobs, 5), collapse = ", "), "\n")
-        }
+    # Only check log directories for the main job type (adjusters or batch_effects)
+    # Skip within_study_cv directories as they have different log structure
+    for (single_input_dir in input_dir) {
+      # Skip within_study_cv directories for log analysis
+      if (grepl("within_study_cv", single_input_dir)) {
+        next
       }
-    } else {
-      cat("  Log directory not found:", log_dir, "\n")
+      
+      log_dir <- gsub("/results/", "/logs/", single_input_dir)
+      if (job_type == "batch_effects") {
+        log_dir <- file.path(log_dir, "classify_batch_effects")
+      } else if (job_type == "adjusters") {
+        log_dir <- file.path(log_dir, "classify_adjusters")
+      }
+      
+      if (dir.exists(log_dir)) {
+        log_files <- list.files(log_dir, pattern = "\\.log$", full.names = FALSE)
+        cat("  Found", length(log_files), "log files in", log_dir, "\n")
+        
+        # Simple heuristic: if we have log files but no results, those are likely failures
+        result_files <- list.files(single_input_dir, pattern = "\\.csv$", full.names = FALSE)
+        result_basenames <- gsub("\\.csv$", "", result_files)
+        log_basenames <- gsub("\\.log$", "", log_files)
+        
+        failed_jobs <- setdiff(log_basenames, result_basenames)
+        if (length(failed_jobs) > 0) {
+          cat("  Identified", length(failed_jobs), "failed jobs (have logs but no results)\n")
+          if (verbose && length(failed_jobs) > 0) {
+            cat("  Sample failed jobs:", paste(head(failed_jobs, 5), collapse = ", "), "\n")
+          }
+        }
+      } else {
+        cat("  Log directory not found:", log_dir, "\n")
+      }
     }
   }
   

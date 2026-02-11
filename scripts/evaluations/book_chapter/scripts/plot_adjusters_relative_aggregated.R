@@ -30,6 +30,8 @@ data <- read.csv(opt$input, stringsAsFactors = FALSE)
 # Filter adjusters if specified
 if (!is.null(opt$adjusters)) {
   selected_adjusters <- trimws(strsplit(opt$adjusters, ",")[[1]])
+  # Always include within_study_cv as it's needed as baseline reference
+  selected_adjusters <- unique(c(selected_adjusters, "within_study_cv"))
   data <- data[data$adjuster %in% selected_adjusters, ]
   cat("Filtered to", length(selected_adjusters), "adjusters\n")
 }
@@ -37,8 +39,8 @@ if (!is.null(opt$adjusters)) {
 # Filter to MCC metric and add classifier labels
 mxe_data <- data[data$metric == "mcc" & !is.na(data$n_datasets), ]
 mxe_data$classifier_label <- factor(mxe_data$classifier,
-  levels = c("logistic", "elasticnet", "svm", "rf", "knn", "xgboost", "nnet", "rvc"),
-  labels = c("Logistic", "ElasticNet", "SVM", "Random Forest", "KNN", "XGBoost", "Neural Net", "RVC"))
+  levels = c("logistic", "elasticnet", "svm", "rf", "knn", "xgboost", "nnet", "shrinkageLDA"),
+  labels = c("Logistic", "ElasticNet", "SVM", "Random Forest", "KNN", "XGBoost", "Neural Net", "Shrinkage LDA"))
 
 # Generate aggregated relative plot
 generate_relative_plot_aggregated(

@@ -13,27 +13,9 @@ suppressMessages(suppressWarnings({
   required_packages <- c("glmnet", "SummarizedExperiment", "sva", "DESeq2", 
                         "ROCR", "ggplot2", "gridExtra", "reshape2", 
                         "dplyr", "purrr", "nnls", "batchelor",
-                        "argparse", "class", "xgboost", "caret")
+                        "argparse", "class", "xgboost", "caret", "sda")
   sapply(required_packages, require, character.only=TRUE, quietly=TRUE)
 }))
-
-# RVC setup (same as classify_adjusters.R)
-RVC_py <- NULL
-np_py <- NULL
-
-import_reticulate <- function() {
-  tryCatch({
-    library(reticulate) 
-    cat("Attempting to import Python modules for RVC...\n")
-    rvm_module <- import("sklearn_rvm")
-    RVC_py <<- rvm_module$em_rvm$EMRVC
-    np_py <<- import("numpy")
-    cat("Successfully imported sklearn_rvm and numpy.\n")
-  }, error = function(e) {
-    cat("[WARNING] Could not import Python modules for RVC.\n")
-    cat(sprintf("[WARNING] Python Error: %s\n", e$message))
-  })
-}
 
 # ====================================================================
 # COMMAND-LINE ARGUMENT PARSING
@@ -63,7 +45,7 @@ n_folds <- args$n_folds
 n_features <- args$n_features
 output_file <- args$output
 
-valid_classifiers <- c("logistic", "elnet", "elasticnet", "svm", "rf", "nnet", "knn", "xgboost", "rvc")
+valid_classifiers <- c("rda", "logistic", "elnet", "elasticnet", "svm", "rf", "nnet", "knn", "xgboost", "shrinkageLDA")
 
 if (!classifier %in% valid_classifiers) {
   cat(sprintf("Error: Invalid classifier '%s'\n", classifier))
@@ -97,13 +79,6 @@ main_analysis <- function() {
   
   load(data_path)
   source("scripts/helper.R")
-  
-  if (classifier == "rvc") {
-    import_reticulate()
-    if (is.null(RVC_py) || is.null(np_py)) {
-      stop("RVC classifier requested but Python dependencies unavailable")
-    }
-  }
   
   # Extract the test study data
   if (!test_study %in% names(dat_lst)) {
@@ -168,22 +143,36 @@ main_analysis <- function() {
                 length(train_idx), length(test_idx)))
     
     # Train classifier
-    if (classifier == "rvc") {
-      # RVC special handling
-      X_train_t <- t(dat_train)
-      X_test_t <- t(dat_test)
+    if (classifier == "shrinkageLDA") {
+      # Shrinkage LDA using sda package
+      X_train <- t(dat_train)  # Transpose to samples x features
+      X_test <- t(dat_test)
+      y_train <- as.factor(labels_train)
       
-      X_train_py <- r_to_py(X_train_t)
-      y_train_r <- as.numeric(as.factor(labels_train)) - 1
-      y_train_py <- r_to_py(y_train_r)
-      X_test_py <- r_to_py(X_test_t)
+      # Ensure data is in matrix format (sda requires matrix, not data.frame)
+      if (!is.matrix(X_train)) {
+        X_train <- as.matrix(X_train)
+      }
+      if (!is.matrix(X_test)) {
+        X_test <- as.matrix(X_test)
+      }
       
-      model_py <- RVC_py(kernel = "rbf")
-      model_py$fit(X_train_py, y_train_py)
+      # Train shrinkage LDA model
+      lda_fit <- sda(
+        Xtrain = X_train,
+        L = y_train,
+        diagonal = FALSE
+      )
       
-      preds_py <- model_py$predict_proba(X_test_py)
-      preds_r <- py_to_r(preds_py)
-      predictions <- preds_r[, 2]
+      # Generate predictions
+      pred <- predict(lda_fit, X_test)
+      
+      # Extract probabilities for binary classification
+      if (nlevels(y_train) == 2) {
+        predictions <- pred$posterior[, 2]  # Probability of positive class
+      } else {
+        predictions <- apply(pred$posterior, 1, max)
+      }
       
     } else if (classifier == "nnet" || classifier == "nn") {
       # Neural network with increased MaxNWts for all genes

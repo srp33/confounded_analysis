@@ -1,0 +1,146 @@
+# PACE/POSSE Independent Snakefile
+# Workflow for PACE and POSSE batch effect correction analysis
+
+configfile: "config.yaml"
+
+OUTPUT_FOLDER = config["output_folder"]
+DATA_FOLDER = config["data_folder"]
+SCRIPTS_FOLDER = config["scripts_folder"]
+
+# Define variants to test
+PACE_VARIANTS = config.get("pace_variants", ["default", "v22", "v34"])
+POSSE_VARIANTS = config.get("posse_variants", ["v5", "v6"])
+
+wildcard_constraints:
+    variant=r"[a-zA-Z0-9_]+",
+    dataset=r"[a-zA-Z0-9_]+",
+    method=r"[a-zA-Z0-9_]+"
+
+rule all:
+    input:
+        pace_validation=expand(OUTPUT_FOLDER + "/pace_validation_{variant}.csv", variant=PACE_VARIANTS),
+        posse_validation=expand(OUTPUT_FOLDER + "/posse_validation_{variant}.csv", variant=POSSE_VARIANTS),
+        pace_report=OUTPUT_FOLDER + "/pace_summary_report.md",
+        posse_report=OUTPUT_FOLDER + "/posse_summary_report.md"
+
+# PACE validation rule
+rule validate_pace:
+    input:
+        data=DATA_FOLDER + "/TB_real_data.RData",
+        script=SCRIPTS_FOLDER + "/validate_pace.py"
+    output:
+        OUTPUT_FOLDER + "/pace_validation_{variant}.csv"
+    log:
+        OUTPUT_FOLDER + "/logs/pace_validation_{variant}.log"
+    threads: 1
+    resources:
+        mem_mb=16000,
+        runtime=120
+    shell:
+        """
+        python {input.script} \
+            --variant {wildcards.variant} \
+            --output {output} \
+            &> {log}
+        """
+
+# POSSE validation rule
+rule validate_posse:
+    input:
+        data=DATA_FOLDER + "/TB_real_data.RData",
+        script=SCRIPTS_FOLDER + "/posse_wrapper.py"
+    output:
+        OUTPUT_FOLDER + "/posse_validation_{variant}.csv"
+    log:
+        OUTPUT_FOLDER + "/logs/posse_validation_{variant}.log"
+    threads: 1
+    resources:
+        mem_mb=16000,
+        runtime=120
+    shell:
+        """
+        python {input.script} \
+            --variant {wildcards.variant} \
+            --output {output} \
+            &> {log}
+        """
+
+# Aggregate PACE results
+rule aggregate_pace_results:
+    input:
+        data=expand(OUTPUT_FOLDER + "/pace_validation_{variant}.csv", variant=PACE_VARIANTS),
+        script=SCRIPTS_FOLDER + "/aggregate_pace_diagnostics.py"
+    output:
+        OUTPUT_FOLDER + "/pace_summary_report.md"
+    log:
+        OUTPUT_FOLDER + "/logs/aggregate_pace.log"
+    threads: 1
+    resources:
+        mem_mb=4000,
+        runtime=10
+    shell:
+        """
+        python {input.script} \
+            --input-dir {OUTPUT_FOLDER} \
+            --output {output} \
+            &> {log}
+        """
+
+# Aggregate POSSE results
+rule aggregate_posse_results:
+    input:
+        data=expand(OUTPUT_FOLDER + "/posse_validation_{variant}.csv", variant=POSSE_VARIANTS),
+        script=SCRIPTS_FOLDER + "/aggregate_posse_diagnostics.py"
+    output:
+        OUTPUT_FOLDER + "/posse_summary_report.md"
+    log:
+        OUTPUT_FOLDER + "/logs/aggregate_posse.log"
+    threads: 1
+    resources:
+        mem_mb=4000,
+        runtime=10
+    shell:
+        """
+        python {input.script} \
+            --input-dir {OUTPUT_FOLDER} \
+            --output {output} \
+            &> {log}
+        """
+
+# Run comparative validation
+rule comparative_validation:
+    input:
+        script="comparative_validation_suite.py"
+    output:
+        OUTPUT_FOLDER + "/comparative_validation_results.csv"
+    log:
+        OUTPUT_FOLDER + "/logs/comparative_validation.log"
+    threads: 1
+    resources:
+        mem_mb=32000,
+        runtime=180
+    shell:
+        """
+        python {input.script} \
+            --output {output} \
+            &> {log}
+        """
+
+# Run cross-study tests
+rule cross_study_test:
+    input:
+        script="cross_study_test.py"
+    output:
+        OUTPUT_FOLDER + "/cross_study_results.csv"
+    log:
+        OUTPUT_FOLDER + "/logs/cross_study.log"
+    threads: 1
+    resources:
+        mem_mb=16000,
+        runtime=120
+    shell:
+        """
+        python {input.script} \
+            --output {output} \
+            &> {log}
+        """

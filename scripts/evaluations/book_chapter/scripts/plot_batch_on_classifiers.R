@@ -63,8 +63,8 @@ metric_data <- data[data$metric == metric, ]
 
 cat("Filtered to", nrow(metric_data), " observations\n")
 
-classifier_levels = c("logistic", "elasticnet", "svm", "rf", "knn", "xgboost", "nnet", "rvc")
-classifier_labels = c("Logistic", "ElasticNet", "SVM", "Random Forest", "KNN", "XGBoost", "Neural Net", "RVC")
+classifier_levels = c("logistic", "elasticnet", "svm", "rf", "knn", "xgboost", "nnet", "shrinkageLDA")
+classifier_labels = c("Logistic", "ElasticNet", "SVM", "Random Forest", "KNN", "XGBoost", "Neural Net", "Shrinkage LDA")
 
 # Create better labels and groupings
 metric_data$classifier_label <- factor(metric_data$classifier,
@@ -216,7 +216,8 @@ ggsave(
   width = args$width,
   height = args$height,
   dpi = args$dpi,
-  units = "in"
+  units = "in",
+  bg = "white"
 )
 
 cat("Plot saved successfully!\n")

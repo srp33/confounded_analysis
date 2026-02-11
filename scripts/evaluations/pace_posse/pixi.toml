@@ -1,0 +1,39 @@
+[workspace]
+name = "pace_posse"
+version = "0.1.0"
+description = "PACE/POSSE analysis environment"
+channels = ["conda-forge", "bioconda"]
+platforms = ["linux-64"]
+
+[dependencies]
+# === Python Core ===
+python = ">=3.12"
+numpy = "*"
+scipy = ">=1.16.3,<2"
+pandas = "*"
+
+# === Machine Learning ===
+scikit-learn = "*"
+
+# === Pathway Analysis ===
+gseapy = ">=1.0.0"
+
+# === Workflow ===
+snakemake = ">=9.13.7,<10"
+snakemake-executor-plugin-slurm = ">=1.9.2,<2"
+
+# === Visualization ===
+matplotlib = "*"
+seaborn = ">=0.13.2,<0.14"
+
+# === R (for data loading compatibility) ===
+r-base = ">=4.3"
+rpy2 = ">=3.5.11,<4"
+
+[tasks]
+test-python = "python -c 'import numpy; import scipy; import gseapy; print(\"✓ Python packages loaded\")'"
+test-imports = "python -c 'import sys; sys.path.insert(0, \"scripts\"); from pace import PACE_v22; from posse import POSSE; from posse_v6 import POSSEv6; print(\"✓ PACE/POSSE modules loaded\")'"
+test-all = { depends-on = ["test-python", "test-imports"] }
+
+[activation]
+env={PYTHONPATH = "scripts"}

@@ -158,7 +158,7 @@ generate_relative_plot_aggregated <- function(mxe_data, top_adjuster, top_adjust
   
   cat("Saving aggregated relative performance plot to:", output_file, "\n")
   ggsave(filename = output_file, plot = relative_final_plot, 
-         width = width, height = height, dpi = dpi, units = "in")
+         width = width, height = height, dpi = dpi, units = "in", bg = "white")
   
   cat("Aggregated relative performance plot saved successfully!\n")
   

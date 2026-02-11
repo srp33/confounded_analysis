@@ -5,7 +5,7 @@ data_folder: "/grphome/grp_batch_effects/data"
 scripts_dir: "."
 adjust_script: "../../adjust/adjust.R"
 
-adjuster: ["gmm", "min_mean", "mnn", "log_combat", "log_transformed"]
+adjuster: ["gmm", "min_mean", "naive", "log_combat", "log_transformed"] # mnn
 dataset_ids:
   - "gse19615"
   - "gse20194"

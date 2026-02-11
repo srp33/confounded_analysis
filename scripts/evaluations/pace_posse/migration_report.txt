@@ -1,0 +1,26 @@
+PACE/POSSE MIGRATION REPORT
+================================================================================
+
+[PHASE] Migrating core modules
+[COPIED] scripts/evaluations/book_chapter/scripts/pace.py -> pace_posse/scripts/pace.py
+[COPIED] scripts/evaluations/book_chapter/scripts/posse.py -> pace_posse/scripts/posse.py
+[COPIED] scripts/evaluations/book_chapter/scripts/posse_v6.py -> pace_posse/scripts/posse_v6.py
+[COPIED] scripts/evaluations/book_chapter/scripts/pace_wrapper.py -> pace_posse/scripts/pace_wrapper.py
+[COPIED] scripts/evaluations/book_chapter/scripts/posse_wrapper.py -> pace_posse/scripts/posse_wrapper.py
+[COPIED] scripts/evaluations/book_chapter/scripts/validate_pace.py -> pace_posse/scripts/validate_pace.py
+[PHASE] Migrating diagnostic scripts
+[COPIED] scripts/evaluations/book_chapter/scripts/aggregate_pace_diagnostics.py -> pace_posse/scripts/aggregate_pace_diagnostics.py
+[COPIED] scripts/evaluations/book_chapter/scripts/aggregate_posse_diagnostics.py -> pace_posse/scripts/aggregate_posse_diagnostics.py
+[COPIED] scripts/evaluations/book_chapter/scripts/analyze_pace_diagnostics.py -> pace_posse/scripts/analyze_pace_diagnostics.py
+[COPIED] scripts/evaluations/book_chapter/scripts/analyze_pathway_coherence.py -> pace_posse/scripts/analyze_pathway_coherence.py
+[COPIED] scripts/evaluations/book_chapter/scripts/compare_correctors.py -> pace_posse/scripts/compare_correctors.py
+[COPIED] scripts/evaluations/book_chapter/scripts/run_full_diagnostics.py -> pace_posse/scripts/run_full_diagnostics.py
+[PHASE] Migrating test scripts
+[COPIED] scripts/evaluations/book_chapter/comparative_validation_suite.py -> pace_posse/comparative_validation_suite.py
+[COPIED] scripts/evaluations/book_chapter/cross_study_test.py -> pace_posse/cross_study_test.py
+[COPIED] scripts/evaluations/book_chapter/quick_comparative_test.py -> pace_posse/quick_comparative_test.py
+[COPIED] scripts/evaluations/book_chapter/run_comparative_validation.py -> pace_posse/run_comparative_validation.py
+[COPIED] scripts/evaluations/book_chapter/test_v34_full_transcriptome.py -> pace_posse/test_v34_full_transcriptome.py
+[PHASE] Migrating utility files
+[COPIED] scripts/evaluations/book_chapter/download_pathways.py -> pace_posse/download_pathways.py
+[PHASE] Updating all imports in pace_posse directory

@@ -1,6 +1,6 @@
 #!/bin/bash
 
-#SBATCH --time 6:00:00
+#SBATCH --time 18:00:00
 #SBATCH --ntasks=1      # Processes per task
 #SBATCH --cpus-per-task=2 # Allocate num CPUs (threads) to each task
 #SBATCH --mem-per-cpu=4G
@@ -29,12 +29,12 @@ pixi run snakemake -s $BOOK_CHAPTER_DIR/Snakefile \
     --scheduler-ilp-solver COIN_CMD \
     --executor slurm \
     --default-resources slurm_account=srp33 slurm_partition="(auto)" \
-    --jobs 300 \
-    --group-components batch_real_group=20 batch_simulation_group=3 \
+    --jobs 600 \
+    --group-components batch_real_group=2 batch_simulation_group=3 \
     --resources mem_mb=100000 runtime=4320 \
     --max-jobs-per-second 20 \
     --max-status-checks-per-second 10 \
-    --latency-wait 120 \
-    --rerun-incomplete \
-    --keep-going
+    --latency-wait 60 \
+    --rerun-incomplete
+    # --keep-going
     # --quiet
