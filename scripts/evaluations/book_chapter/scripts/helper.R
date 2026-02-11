@@ -229,7 +229,8 @@ trainPipe <- function(train_set, train_label, lfit=learner_fit){
 
 ####  Get functions corresponding to learner type
 getPredFunctions <- function(learner_type){
-  if(learner_type=="logistic"){return(predLogistic_pp)
+  if(learner_type=="rda"){return(predRDA_pp)
+  }else if(learner_type=="logistic"){return(predLogistic_pp)
   }else if(learner_type=="lasso"){return(predLasso_pp)  #return(predLasso)
   }else if(learner_type=="elnet"){return(predElnet_pp)  # Keep backward compatibility
   }else if(learner_type=="elasticnet"){return(predElnet_pp)  # New name
@@ -352,6 +353,46 @@ predElnet_pp <- function(trn_set, y_trn){
   mod <- glmnet::cv.glmnet(x=t(trn_set), y=as.numeric(as.character(y_trn)), family="binomial", alpha=0.5)
   pred_trn_prob <- as.vector(predict(mod, newx=t(trn_set), s="lambda.1se", type="response"))
   pred_trn_class <- as.vector(predict(mod, newx=t(trn_set), s="lambda.1se", type="class"))
+  return(list(mod=mod, pred_trn_prob=pred_trn_prob, pred_tst_prob=NULL,
+              pred_trn_class=pred_trn_class, pred_tst_class=NULL))
+}
+
+predRDA_pp <- function(trn_set, y_trn){
+  # Regularized Discriminant Analysis (RDA) using klaR package
+  # Transpose data: R (features x samples) -> klaR expects (samples x features)
+  X_train <- t(trn_set)
+  y_train <- as.factor(y_trn)
+  
+  # Ensure data is in matrix format
+  if (!is.matrix(X_train)) {
+    X_train <- as.matrix(X_train)
+  }
+  
+  # RDA hyperparameters as recommended in classifier_suggestion.md
+  # gamma = 0.3: mostly shared covariance (0 = LDA, 1 = QDA)
+  # lambda = 0.6: heavy diagonal shrinkage (0 = full covariance, 1 = diagonal)
+  mod <- klaR::rda(
+    x = X_train,
+    grouping = y_train,
+    gamma = 0.3,    # covariance shrinkage
+    lambda = 0.6    # diagonal shrinkage
+  )
+  
+  # Generate training predictions
+  pred_obj <- predict(mod, X_train)
+  
+  # For binary classification, extract probability of positive class
+  if (nlevels(y_train) == 2) {
+    # Probability of positive class (second column, class "1")
+    pred_trn_prob <- pred_obj$posterior[, "1"]
+  } else {
+    # Multiclass: pick max probability
+    pred_trn_prob <- apply(pred_obj$posterior, 1, max)
+  }
+  
+  # Class predictions
+  pred_trn_class <- as.character(pred_obj$class)
+  
   return(list(mod=mod, pred_trn_prob=pred_trn_prob, pred_tst_prob=NULL,
               pred_trn_class=pred_trn_class, pred_tst_class=NULL))
 }
@@ -498,7 +539,29 @@ predWrapper <- function(mod, tst_set, function_name){
   }else if(function_name=='xgboost'){
     test_matrix <- xgboost::xgb.DMatrix(data = t(tst_set))
     res <- predict(mod, test_matrix)
+  }else if(function_name=='rda'){
+    # Regularized Discriminant Analysis prediction
+    tst_transposed <- t(tst_set)
+    pred_obj <- predict(mod, tst_transposed)
+    # For binary classification, extract probability of positive class
+    if (ncol(pred_obj$posterior) == 2) {
+      res <- pred_obj$posterior[, "1"]
+    } else {
+      res <- apply(pred_obj$posterior, 1, max)
+    }
+    # Handle NA predictions by replacing with 0.5 (neutral probability)
+    if (any(is.na(res))) {
+      cat("[WARNING] RDA predictions contain", sum(is.na(res)), "NA values, replacing with 0.5\n")
+      res[is.na(res)] <- 0.5
+    }
   }
+  
+  # Final check for NA values in predictions
+  if (any(is.na(res))) {
+    cat("[WARNING] Predictions contain", sum(is.na(res)), "NA values after", function_name, "prediction, replacing with 0.5\n")
+    res[is.na(res)] <- 0.5
+  }
+  
   return(res)
 }
 

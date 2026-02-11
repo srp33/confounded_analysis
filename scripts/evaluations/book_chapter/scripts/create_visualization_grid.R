@@ -95,7 +95,7 @@ cat(sprintf("Adjusters: %s\n", paste(adjusters, collapse = ", ")))
 dir.create(dirname(args$output_file), recursive = TRUE, showWarnings = FALSE)
 
 # Create and save grid
-png(args$output_file, width = 800 * length(adjusters), height = 800, res = 150)
+png(args$output_file, width = 800 * length(adjusters), height = 800, res = 150, bg = "white")
 create_comparison_grid(args$input_dir, args$method, args$num_datasets, args$test_study, adjusters)
 dev.off()
 

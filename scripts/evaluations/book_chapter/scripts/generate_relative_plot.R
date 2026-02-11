@@ -5,7 +5,7 @@ generate_relative_plot <- function(mxe_data, top_adjuster, top_adjuster_label,
                                    output_file, width = 20, height = 16, dpi = 300) {
   
   cat("\nCreating relative performance plot using estimation statistics (dabestr)...\n")
-  cat("Using within-study CV as reference baseline\n")
+  cat("Using delta values (relative to within-study CV baseline) for proper comparison\n")
   
   # Load required packages
   if (!require("dabestr", quietly = TRUE)) {
@@ -40,11 +40,23 @@ generate_relative_plot <- function(mxe_data, top_adjuster, top_adjuster_label,
     reference_label <- "Within-Study CV"
     
     cat(sprintf("\nClassifier %s: using %s as reference baseline\n", classifier, reference_label))
+    cat("Computing delta values to ensure fair comparison across test studies with different baseline performance\n")
     
-    # Prepare data for dabestr
+    # Calculate delta values relative to within-study CV baseline for each test study
+    # First get baseline values for each test study
+    baseline_values <- classifier_data %>%
+      filter(adjuster == reference_adjuster) %>%
+      select(n_datasets, test_study, value) %>%
+      rename(baseline_value = value)
+    
+    # Calculate delta values for all adjusters (including baseline which will be 0)
     plot_data <- classifier_data %>%
       select(adjuster, classifier, classifier_label, n_datasets, test_study, value) %>%
-      mutate(condition_id = paste(classifier, n_datasets, test_study, sep = "_"))
+      left_join(baseline_values, by = c("n_datasets", "test_study")) %>%
+      mutate(
+        delta_value = value - baseline_value,  # Delta relative to baseline
+        condition_id = paste(classifier, n_datasets, test_study, sep = "_")
+      )
     
     # Apply adjuster labels
     plot_data$adjuster_label <- factor(plot_data$adjuster,
@@ -77,16 +89,16 @@ generate_relative_plot <- function(mxe_data, top_adjuster, top_adjuster_label,
       # Create dabest object
       tryCatch({
         # Debug: check data structure
-        cat(sprintf("    Attempting dabestr for %s with %d rows, %d adjusters\n", 
+        cat(sprintf("    Attempting dabestr for %s with %d rows, %d adjusters (using delta values)\n", 
                    dataset_label, nrow(subset_data), length(adjusters_to_compare)))
         
+        # Use unpaired comparison since we're already computing delta values
+        # Paired mode fails when baseline has zero variance (all deltas = 0)
         dabest_obj <- dabestr::load(
             data = subset_data,
             x = adjuster_label,
-            y = value,
-            idx = adjusters_to_compare,
-            paired = "baseline",
-            id_col = condition_id
+            y = delta_value,  # Use delta values instead of raw values
+            idx = adjusters_to_compare
           )
         
         if (is.null(dabest_obj)) {
@@ -128,7 +140,7 @@ generate_relative_plot <- function(mxe_data, top_adjuster, top_adjuster_label,
           mutate(
             classifier = classifier,
             dataset_label = dataset_label,
-            is_paired = dabest_diff$is_paired
+            is_paired = FALSE
           )
         
         # Collect for saving
@@ -142,22 +154,13 @@ generate_relative_plot <- function(mxe_data, top_adjuster, top_adjuster_label,
       })
     }
     
-    # Create Gardner-Altman style plot with raw data and effect sizes
-    # Prepare data for visualization
-    plot_data <- classifier_data %>%
-      select(adjuster, classifier, classifier_label, n_datasets, test_study, value) %>%
-      mutate(dataset_label = factor(paste(n_datasets, "studies"),
-                                    levels = c("3 studies", "4 studies", "5 studies", "6 studies")))
+    # Create Gardner-Altman style plot with delta data and effect sizes
+    # Use the plot_data that already has delta values calculated
     
-    # Apply ordering
-    plot_data$adjuster_label <- factor(plot_data$adjuster,
-                                       levels = classifier_adjuster_order$adjuster,
-                                       labels = classifier_specific_labels)
-    
-    # Calculate means for raw data
+    # Calculate means for delta data
     mean_data <- plot_data %>%
       group_by(adjuster_label, dataset_label) %>%
-      summarise(mean_value = mean(value, na.rm = TRUE), .groups = "drop")
+      summarise(mean_delta = mean(delta_value, na.rm = TRUE), .groups = "drop")
     
     # Get effect size data for this classifier
     effect_data <- all_effect_results %>%
@@ -165,16 +168,10 @@ generate_relative_plot <- function(mxe_data, top_adjuster, top_adjuster_label,
       mutate(dataset_label = factor(dataset_label,
                                     levels = c("3 studies", "4 studies", "5 studies", "6 studies")))
     
-    # Create two-panel plot: raw data on top, effect sizes on bottom
-    # Top panel: Raw MCC values
+    # Create two-panel plot: delta values on top, effect sizes on bottom
+    # Top panel: Delta MCC values (relative to within-study CV baseline)
     
-    # Extract within-study CV baseline values for reference lines
-    baseline_data <- plot_data %>%
-      filter(adjuster == reference_adjuster) %>%
-      select(test_study, dataset_label, value) %>%
-      rename(baseline_value = value)
-    
-    # Filter out within_study_cv from the raw data plot (keep only as reference lines)
+    # Filter out within_study_cv from the delta plot (it will always be 0)
     plot_data_no_baseline <- plot_data %>%
       filter(adjuster != reference_adjuster) %>%
       mutate(adjuster_label = droplevels(adjuster_label))  # Drop unused factor levels
@@ -186,11 +183,9 @@ generate_relative_plot <- function(mxe_data, top_adjuster, top_adjuster_label,
     # Calculate number of adjusters (excluding baseline) for vertical lines
     n_adjusters <- length(unique(plot_data_no_baseline$adjuster_label))
     
-    p_raw <- ggplot(plot_data_no_baseline, aes(x = adjuster_label, y = value)) +
-      # Add horizontal reference lines for within-study CV baseline (colored by test study)
-      geom_hline(data = baseline_data, 
-                aes(yintercept = baseline_value, color = test_study),
-                linetype = "dashed", linewidth = 0.5, alpha = 0.7) +
+    p_raw <- ggplot(plot_data_no_baseline, aes(x = adjuster_label, y = delta_value)) +
+      # Add horizontal reference line at 0 (baseline performance)
+      geom_hline(yintercept = 0, linetype = "dashed", color = "red", linewidth = 0.8, alpha = 0.7) +
       # Add vertical grid lines to help align columns (between each adjuster)
       geom_vline(xintercept = seq(1.5, n_adjusters - 0.5, by = 1), color = "grey90", linewidth = 0.3) +
       geom_point(aes(color = test_study, shape = test_study), size = 2.5, alpha = 0.6, 
@@ -198,7 +193,7 @@ generate_relative_plot <- function(mxe_data, top_adjuster, top_adjuster_label,
       geom_segment(data = mean_data_no_baseline, 
                   aes(x = as.numeric(adjuster_label) - 0.35, 
                       xend = as.numeric(adjuster_label) + 0.35,
-                      y = mean_value, yend = mean_value),
+                      y = mean_delta, yend = mean_delta),
                   color = "black", linewidth = 1) +
       facet_wrap(~ dataset_label, scales = "free_x", ncol = 4) +
       scale_color_brewer(palette = "Set2", name = "Test Study") +
@@ -216,7 +211,7 @@ generate_relative_plot <- function(mxe_data, top_adjuster, top_adjuster_label,
         strip.text = element_text(size = 9),
         plot.margin = margin(5, 5, 0, 5)
       ) +
-      labs(y = "MCC", title = classifier)
+      labs(y = "Δ MCC\n(vs. Within-Study CV)", title = classifier)
     
     # Bottom panel: Effect sizes (mean differences with CI)
     if (nrow(effect_data) > 0) {
@@ -263,7 +258,7 @@ generate_relative_plot <- function(mxe_data, top_adjuster, top_adjuster_label,
   
   cat("Saving relative performance plot to:", output_file, "\n")
   ggplot2::ggsave(filename = output_file, plot = relative_final_plot, 
-         width = width, height = height, dpi = dpi, units = "in")
+         width = width, height = height, dpi = dpi, units = "in", bg = "white")
   
   cat("Relative performance plot saved successfully!\n")
   

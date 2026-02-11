@@ -14,6 +14,11 @@ generate_main_plot <- function(mxe_data, output_file, width = 20, height = 16, d
   # Add adjuster type
   mxe_data$adjuster_type <- "Batch Correction"
   mxe_data$adjuster_type[mxe_data$adjuster == "unadjusted"] <- "Original Data"
+  mxe_data$adjuster_type[mxe_data$adjuster == "naive"] <- "Naive Correction"
+  mxe_data$adjuster_type[mxe_data$adjuster == "rank_samples"] <- "Rank Adjustment"
+  mxe_data$adjuster_type[mxe_data$adjuster == "rank_twice"] <- "Rank Adjustment"
+  mxe_data$adjuster_type[mxe_data$adjuster == "npn"] <- "Quantile Normalization"
+  mxe_data$adjuster_type[mxe_data$adjuster == "fast_mnn"] <- "FastMNN"
   
   # Calculate summary statistics
   sumstats <- mxe_data %>%
@@ -167,7 +172,7 @@ generate_main_plot <- function(mxe_data, output_file, width = 20, height = 16, d
   final_plot <- gridExtra::grid.arrange(grobs = unname(plot_list), ncol = 2)
   
   cat("Saving plot to:", output_file, "\n")
-  ggplot2::ggsave(filename = output_file, plot = final_plot, width = width, height = height, dpi = dpi, units = "in")
+  ggplot2::ggsave(filename = output_file, plot = final_plot, width = width, height = height, dpi = dpi, units = "in", bg = "white")
   
   cat("Plot saved successfully!\n")
 }

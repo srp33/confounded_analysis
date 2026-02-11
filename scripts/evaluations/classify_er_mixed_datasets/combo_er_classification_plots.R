@@ -26,7 +26,7 @@ FILENAME_BASE <- "er_model_comparison"
 
 # Define the adjustment methods to plot.
 # This list can be updated as more methods are added.
-ADJUSTMENT_METHODS <- c("Unadjusted", "NPN Global", "MNN", "Min-Mean", "Weird-Mean", "GMM", "GMM Scale Separate", "GMM NPN", "GMM NPN Unit Std Global")
+ADJUSTMENT_METHODS <- c("Unadjusted", "NPN Global", "MNN", "Min-Mean", "Weird-Mean", "GMM", "GMM Scale Separate", "GMM NPN", "Simple", "Combat")
 # --- End Configuration ---
 
 

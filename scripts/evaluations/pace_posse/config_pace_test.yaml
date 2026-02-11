@@ -1,0 +1,48 @@
+# config_posse_test.yaml - Minimal config for testing POSSE methods with xgboost only
+
+# Base folder for all final outputs, logs, and intermediate results
+output_folder: "outputs"
+
+# Folder containing input data
+data_folder: "data"
+
+scripts_folder: "scripts"
+
+# Minimal parameter sets for faster testing
+batch_effect_variances: [3]
+batch_effect_means: [3]
+num_datasets: [3, 4, 5, 6]  # Only test with 4 datasets for now
+
+# Only xgboost classifier for speed
+classifiers: 
+  - "xgboost"
+
+# Only POSSE adjusters for testing
+adjusters:
+  - "unadjusted"
+  - "gmm"
+  - "combat"
+  - "posse_default"
+  - "posse_aggressive"
+  - "posse_focused"
+  - "posse_conservative"
+  - "posse_housekeeping"
+  - "posse_two_phase"
+  - "posse_sniper"
+
+# Subset of adjusters to visualize
+viz_adjusters:
+  - "within_study_cv"
+  - "unadjusted"
+  - "combat"
+  - "gmm"
+  - "posse_default"
+  - "posse_aggressive"
+  - "posse_focused"
+  - "posse_conservative"
+  - "posse_housekeeping"
+  - "posse_two_phase"
+  - "posse_sniper"
+
+split_seed_start: 42
+split_seed_count: 10  # Much smaller for faster testing

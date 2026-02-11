@@ -1,0 +1,16 @@
+Comparative Validation Suite - Method Failure Report
+============================================================
+
+POSSE Failures (2 total):
+  1. Silence test failed
+  2. Topology test crashed: memoryview: invalid slice key
+
+POSSEv6 Failures (1 total):
+  1. Silence test failed
+
+ComBat Failures (1 total):
+  1. Silence test failed
+
+GMM Failures (0 total):
+  🎉 No failures detected!
+

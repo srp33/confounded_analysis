@@ -13,36 +13,56 @@ batch_effect_means: [0.1, 3, 5, 10]
 num_datasets: [3, 4, 5, 6]
 
 classifiers: 
-  - "logistic"
+  - "rda"
   - "elasticnet"
   - "svm"
   - "rf"
   - "nnet"
   - "knn"
   - "xgboost"
-  - "rvc"
+  - "shrinkageLDA"
 
 adjusters:
   - "unadjusted"
+  - "naive"
+  - "rank_samples"
+  - "rank_twice"
+  - "npn"
   - "combat"
   - "combat_mean"
   - "combat_sup"
   - "mnn"
-  - "mnn_centered"
-  - "ruvr"
-  - "gmm"
+  - "fast_mnn"
 
 # Subset of adjusters to visualize (within_study_cv is always included as baseline)
 viz_adjusters:
   - "within_study_cv"
   - "unadjusted"
+  - "naive"
+  - "rank_samples"
+  - "rank_twice"
+  - "npn"
   - "combat"
   - "combat_mean"
   - "combat_sup"
   - "mnn"
-  - "mnn_centered"
-  - "ruvr"
-  - "gmm"
+  - "fast_mnn"
 
 split_seed_start: 42
 split_seed_count: 200
+
+
+# Class imbalance analysis configuration
+class_imbalance_analysis:
+  enabled: true
+  # Adjusters to test across class imbalance levels
+  adjusters:
+    - "unadjusted"
+    - "combat"        # unsupervised
+    - "combat_sup"    # supervised
+  # Random seed for reproducible sampling
+  seed: 123
+  # Imbalance levels to test (as proportions of active TB in high-imbalance training set)
+  imbalance_levels: [0.20, 0.30, 0.40, 0.50]
+  # Number of replicate random samples per scenario
+  n_replicates: 1

@@ -22,27 +22,6 @@ suppressMessages(suppressWarnings({
 }))
 
 # ====================================================================
-# [RVC MODIFICATION] RETICULATE / RVC SETUP
-# ====================================================================
-# This section attempts to load the necessary Python modules for RVC.
-# We define them as NULL globally and use <<- to assign them if found.
-RVC_py <- NULL
-np_py <- NULL
-
-import_reticulate <- function() {
-  tryCatch({
-    cat("Attempting to import Python modules for RVC...\n")
-    rvm_module <- import("sklearn_rvm")
-    RVC_py <<- rvm_module$em_rvm$EMRVC
-    np_py <<- import("numpy")
-    cat("Successfully imported sklearn_rvm and numpy.\n")
-  }, error = function(e) {
-    cat("[WARNING] Could not import Python modules 'sklearn_rvm' or 'numpy'.\n")
-    cat("[WARNING] The 'rvc' classifier will be unavailable.\n")
-    cat(sprintf("[WARNING] Python Error: %s\n", e$message))
-  })
-}
-
 ####  Command Line Interface  ####
 
 #' Parse command line arguments with validation and help text
@@ -57,7 +36,7 @@ Usage:
   Or directly: Rscript classify_batch_effects.R --classifier <type> --mean <value> --var <value> --seed <value> -o <output>
 
 Arguments:
-  --classifier    Classifier type (logistic, elnet, elasticnet, svm, rf, nnet, knn, xgboost, rvc)
+  --classifier    Classifier type (logistic, elnet, elasticnet, svm, rf, nnet, knn, xgboost, shrinkageLDA)
   --mean         Batch effect mean parameter (typically 5)
   --var          Batch effect variance parameter (1, 3, or 5)  
   --seed         Random seed for reproducibility (integer)
@@ -105,7 +84,7 @@ This script extracts single job functionality from 1_simpipe.R for parallel exec
   output_path <- args[output_idx + 1]
   
   # Validate parameters
-  valid_classifiers <- c("logistic", "elnet", "elasticnet", "svm", "rf", "nnet", "knn", "xgboost", "rvc")
+  valid_classifiers <- c("rda", "logistic", "elnet", "elasticnet", "svm", "rf", "nnet", "knn", "xgboost", "shrinkageLDA")
   if(!classifier %in% valid_classifiers) {
     cat("Error: Invalid classifier. Must be one of:", paste(valid_classifiers, collapse=", "), "\n", file=stderr())
     quit(status = 1)
@@ -152,15 +131,7 @@ params <- parse_arguments()
 # Load dependencies
 source("scripts/helper.R")
 
-# Validate RVC dependencies if RVC classifier is requested
-if (params$classifier == "rvc"){
-  import_reticulate()
-  if (is.null(RVC_py) || is.null(np_py)) {
-    cat("Error: Classifier 'rvc' was requested, but Python dependencies 'sklearn_rvm' or 'numpy' could not be imported.\n", file=stderr())
-    cat("Please install them using: pip install sklearn_rvm numpy\n", file=stderr())
-    quit(status = 1)
-  }
-}
+# Data preparation and analysis starts here
 
 #### Data Preparation Logic (Extracted from 1_simpipe.R) ####
 
@@ -426,38 +397,10 @@ train_and_evaluate_classifier <- function(classifier_type, normalized_data, corr
   )
   
   # Train and predict for each configuration
-  if (classifier_type == "rvc") {
-    # RVC needs special handling due to Python interop
-    cat("Training rvc classifier (using reticulate)...\n")
-    
-    predictions <- map(training_configs, ~{
-      # Transpose data: R (features x samples) -> Python (samples x features)
-      X_train_t <- t(.x$train)
-      X_test_t <- t(.x$test)
-      
-      # Convert to Python
-      X_train_py <- r_to_py(X_train_t)
-      y_train_r <- as.numeric(as.factor(y_train)) - 1
-      y_train_py <- r_to_py(y_train_r)
-      X_test_py <- r_to_py(X_test_t)
-      
-      # Train RVC model with rbf kernel
-      model_py <- RVC_py(kernel = "rbf")
-      model_py$fit(X_train_py, y_train_py)
-      
-      # Get predictions (returns n_samples x n_classes)
-      preds_py <- model_py$predict_proba(X_test_py)
-      
-      # Convert back to R and extract positive class probability
-      preds_r <- py_to_r(preds_py)
-      preds_r[, 2]  # Column 2 is positive class "1"
-    })
-    
-  } else {
-    # Standard R classifiers
-    learner_fit <- getPredFunctions(classifier_type)
-    
-    predictions <- list()
+  # Standard R classifiers
+  learner_fit <- getPredFunctions(classifier_type)
+  
+  predictions <- list()
     for(config_name in names(training_configs)) {
       tryCatch({
         cat(sprintf("  Training on %s configuration...\n", config_name))

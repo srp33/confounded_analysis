@@ -19,7 +19,7 @@ suppressMessages(suppressWarnings({
 parser <- ArgumentParser(description = "Visualize batch adjustment effects using PCA, LDA, and UMAP")
 
 parser$add_argument("--adjuster", type = "character", required = TRUE,
-                   help = "Batch correction method: unadjusted, combat, combat_mean, combat_sup, mnn, or mnn_centered")
+                   help = "Batch correction method: unadjusted, naive, rank_samples, rank_twice, npn, combat, combat_mean, combat_sup, mnn, or fast_mnn")
 parser$add_argument("--num-datasets", type = "integer", required = TRUE,
                    help = "Number of datasets to include: 3, 4, 5, or 6")
 parser$add_argument("--test-study", type = "character", required = TRUE,
@@ -32,7 +32,7 @@ parser$add_argument("--reduce", type = "integer", default = 0,
 args <- parser$parse_args()
 
 # Validate arguments
-valid_adjusters <- c("unadjusted", "combat", "combat_mean", "combat_sup", "mnn", "mnn_centered", "ruvr", "gmm")
+valid_adjusters <- c("unadjusted", "naive", "rank_samples", "rank_twice", "npn", "combat", "combat_mean", "combat_sup", "mnn", "fast_mnn", "ruvr", "gmm", "pace_default", "pace_aggressive", "pace_focused", "pace_conservative", "pace_ultra_aggressive", "pace_extreme_aggressive", "pace_iterative_aggressive")
 valid_num_datasets <- c(3, 4, 5, 6)
 
 if (!args$adjuster %in% valid_adjusters) {
@@ -173,6 +173,226 @@ reduce_features <- function(dat, dat_test, n_genes = 1000) {
 # BATCH CORRECTION (Single Responsibility: Data Transformation)
 # ====================================================================
 
+# ====================================================================
+# RANK ADJUSTMENT HELPER FUNCTIONS
+# ====================================================================
+
+rank_normalized <- function(matrix_, dim) {
+  if (dim < 1 || dim > 2) {
+    stop("Invalid dimension. Must be 1 for rows or 2 for columns.")
+  }
+  ranked = apply(matrix_, dim, rank, ties.method = "average")
+  
+  # apply() transposes the result when dim=1, so we need to transpose it back
+  # When dim=1: apply ranks across columns (samples) for each row (feature)
+  # When dim=2: apply ranks across rows (features) for each column (sample)
+  if (dim == 1 && is.matrix(ranked)) {
+    ranked = t(ranked)
+  }
+  
+  return(ranked / max(ranked, na.rm = TRUE))
+}
+
+adjust_ranked_with_batch_info <- function(matrix_, batch, debug = FALSE) {
+  #' Normalize sample-wise by ranking the genes within the sample, and then by batch.
+  #' @param matrix_ The matrix to adjust (features x samples).
+  #' @param batch The batch variable vector.
+  #' @param debug Logical flag for debug output.
+  #' @return The adjusted matrix (features x samples).
+  
+  cat("Adjusting with ranked with batch info.\n")
+  ranked = rank_normalized(matrix_, 1)
+  
+  if (debug) {
+    cat("DEBUG: matrix_ dimensions: ", nrow(matrix_), " x ", ncol(matrix_), "\n")
+    cat("DEBUG: ranked dimensions: ", nrow(ranked), " x ", ncol(ranked), "\n")
+  }
+  
+  batch_levels <- unique(batch)
+  ranked2 <- matrix(NA, nrow = nrow(ranked), ncol = ncol(ranked))
+  
+  for (b in batch_levels) {
+    # For each batch, we rank by sample.
+    batch_indices <- which(batch == b)
+    batch_data <- ranked[, batch_indices, drop = FALSE]
+    
+    if (debug) {
+      cat("DEBUG: Processing batch '", b, "' with ", length(batch_indices), " samples\n")
+      cat("DEBUG: batch_data dimensions: ", nrow(batch_data), " x ", ncol(batch_data), "\n")
+    }
+    
+    # Only apply ranking if there's more than one sample in the batch
+    if (ncol(batch_data) > 1) {
+      batch_ranked <- rank_normalized(batch_data, 2)
+      if (debug) {
+        cat("DEBUG: batch_ranked dimensions: ", nrow(batch_ranked), " x ", ncol(batch_ranked), "\n")
+      }
+      ranked2[, batch_indices] <- batch_ranked
+    } else {
+      # For single-sample batches, just use the original ranked values
+      ranked2[, batch_indices] <- batch_data
+    }
+  }
+  
+  # Handle any remaining NA values
+  if (any(is.na(ranked2))) {
+    cat("WARNING: Found NA values in ranked2 matrix. Replacing with original ranked values.\n")
+    ranked2[is.na(ranked2)] <- ranked[is.na(ranked2)]
+  }
+  
+  max_val <- max(ranked2, na.rm = TRUE)
+  if (max_val == 0) {
+    cat("WARNING: Maximum value in ranked2 is 0. Using 1 as denominator.\n")
+    max_val <- 1
+  }
+  
+  return(ranked2 / max_val)
+}
+
+adjust_npn <- function(matrix_, batch, debug = FALSE) {
+  #' Adjust matrix using Nonparanormal (NPN) transformation.
+  #' If batch is NULL, the entire matrix is adjusted at once.
+  #' Assumes the batch vector contains no NA values.
+  #' @param matrix_ The matrix to adjust (features x samples).
+  #' @return The adjusted matrix.
+  
+  if (is.null(batch)) {
+    # If no batch is provided, adjust the whole matrix.
+    cat("Batch is NULL. Adjusting entire matrix with NPN transformation.\n")
+    
+    # Transpose to (samples x features) for huge.npn.
+    matrix_t <- t(matrix_)
+    
+    npn_transformed_t <- huge::huge.npn(matrix_t, verbose = FALSE)
+    
+    return(t(npn_transformed_t))
+    
+  } else {
+    cat("Adjusting using Nonparanormal (NPN) transformation by batch.\n")
+    
+    # Split the matrix by batch.
+    batch_levels <- unique(batch)
+    matrix_by_batch <- list()
+    
+    for (b in batch_levels) {
+      batch_indices <- which(batch == b)
+      if (length(batch_indices) > 0) {
+        matrix_by_batch[[as.character(b)]] <- matrix_[, batch_indices, drop = FALSE]
+      }
+    }
+    
+    # Apply NPN transformation to each batch.
+    for (b in names(matrix_by_batch)) {
+      matrix_t <- t(matrix_by_batch[[b]])
+      npn_transformed_t <- huge::huge.npn(matrix_t, verbose = FALSE)
+      matrix_by_batch[[b]] <- t(npn_transformed_t)
+    }
+    
+    # Reassemble the matrix from the adjusted batches.
+    result_matrix <- matrix_
+    for (b in names(matrix_by_batch)) {
+      batch_indices <- which(batch == as.character(b))
+      result_matrix[, batch_indices] <- matrix_by_batch[[b]]
+    }
+    
+    return(result_matrix)
+  }
+}
+
+adjust_ranked_samples_with_batch_info <- function(matrix_, batch, debug = FALSE) {
+  #' Rank samples within each gene (across samples), then merge batches with normalized ranks.
+  #' @param matrix_ The matrix to adjust (features x samples).
+  #' @param batch The batch variable vector.
+  #' @param debug Logical flag for debug output.
+  #' @return The adjusted matrix (features x samples).
+  
+  cat("Adjusting with rank_samples (rank samples within genes, batch-aware).\n")
+  
+  batch_levels <- unique(batch)
+  result_matrix <- matrix(NA, nrow = nrow(matrix_), ncol = ncol(matrix_))
+  
+  for (b in batch_levels) {
+    # For each batch, rank samples within each gene
+    batch_indices <- which(batch == b)
+    batch_data <- matrix_[, batch_indices, drop = FALSE]
+    
+    if (debug) {
+      cat("DEBUG: Processing batch '", b, "' with ", length(batch_indices), " samples\n")
+    }
+    
+    # Only apply ranking if there's more than one sample in the batch
+    if (ncol(batch_data) > 1) {
+      # Rank samples within each gene (dim=2 means rank across columns/samples for each row/gene)
+      batch_ranked <- rank_normalized(batch_data, 2)
+      result_matrix[, batch_indices] <- batch_ranked
+    } else {
+      # For single-sample batches, just normalize to [0,1]
+      result_matrix[, batch_indices] <- batch_data / max(batch_data, na.rm = TRUE)
+    }
+  }
+  
+  # Handle any remaining NA values
+  if (any(is.na(result_matrix))) {
+    cat("WARNING: Found NA values in result_matrix. Replacing with original values.\n")
+    result_matrix[is.na(result_matrix)] <- matrix_[is.na(result_matrix)]
+  }
+  
+  max_val <- max(result_matrix, na.rm = TRUE)
+  if (max_val == 0) {
+    max_val <- 1
+  }
+  
+  return(result_matrix / max_val)
+}
+
+adjust_ranked_twice_with_batch_info <- function(matrix_, batch, debug = FALSE) {
+  #' Double ranking: first rank genes within samples, then rank samples within genes, batch-aware.
+  #' @param matrix_ The matrix to adjust (features x samples).
+  #' @param batch The batch variable vector.
+  #' @param debug Logical flag for debug output.
+  #' @return The adjusted matrix (features x samples).
+  
+  cat("Adjusting with rank_twice (genes within samples, then samples within genes, batch-aware).\n")
+  
+  batch_levels <- unique(batch)
+  result_matrix <- matrix(NA, nrow = nrow(matrix_), ncol = ncol(matrix_))
+  
+  for (b in batch_levels) {
+    # For each batch, apply double ranking
+    batch_indices <- which(batch == b)
+    batch_data <- matrix_[, batch_indices, drop = FALSE]
+    
+    if (debug) {
+      cat("DEBUG: Processing batch '", b, "' with ", length(batch_indices), " samples\n")
+    }
+    
+    # Only apply ranking if there's more than one sample in the batch
+    if (ncol(batch_data) > 1) {
+      # First: rank genes within each sample (dim=1)
+      # Then: rank samples within each gene (dim=2)
+      batch_ranked <- rank_normalized(rank_normalized(batch_data, 1), 2)
+      result_matrix[, batch_indices] <- batch_ranked
+    } else {
+      # For single-sample batches, just apply single ranking (genes within sample)
+      batch_ranked <- rank_normalized(batch_data, 1)
+      result_matrix[, batch_indices] <- batch_ranked
+    }
+  }
+  
+  # Handle any remaining NA values
+  if (any(is.na(result_matrix))) {
+    cat("WARNING: Found NA values in result_matrix. Replacing with original values.\n")
+    result_matrix[is.na(result_matrix)] <- matrix_[is.na(result_matrix)]
+  }
+  
+  max_val <- max(result_matrix, na.rm = TRUE)
+  if (max_val == 0) {
+    max_val <- 1
+  }
+  
+  return(result_matrix / max_val)
+}
+
 #' Apply batch correction method
 #' @param dat Training data matrix
 #' @param batch Batch assignments (character vector with study names)
@@ -187,6 +407,122 @@ apply_batch_correction <- function(dat, batch, group, dat_test, method) {
     return(list(
       dat_corrected = dat,
       dat_test_corrected = dat_test
+    ))
+  }
+  
+  if (method == "naive") {
+    # Naive correction: match means and variances across batches
+    cat(sprintf("Applying naive batch correction (mean/variance matching)\n"))
+    
+    # Step 1: Correct training data by standardizing each batch
+    dat_corrected <- dat
+    unique_batches <- unique(batch)
+    
+    # Calculate overall statistics across all training data
+    overall_mean <- rowMeans(dat)
+    overall_var <- apply(dat, 1, var)
+    
+    # For each batch, standardize to match overall statistics
+    for (b in unique_batches) {
+      batch_idx <- which(batch == b)
+      batch_data <- dat[, batch_idx, drop = FALSE]
+      
+      # Calculate batch-specific statistics
+      batch_mean <- rowMeans(batch_data)
+      batch_var <- apply(batch_data, 1, var)
+      
+      # Avoid division by zero for genes with no variance
+      batch_sd <- sqrt(pmax(batch_var, 1e-10))
+      overall_sd <- sqrt(pmax(overall_var, 1e-10))
+      
+      # Standardize: (x - batch_mean) / batch_sd * overall_sd + overall_mean
+      for (i in 1:nrow(dat)) {
+        if (batch_sd[i] > 1e-10) {
+          dat_corrected[i, batch_idx] <- (batch_data[i, ] - batch_mean[i]) / batch_sd[i] * overall_sd[i] + overall_mean[i]
+        } else {
+          # If no variance in batch, just shift to overall mean
+          dat_corrected[i, batch_idx] <- overall_mean[i]
+        }
+      }
+    }
+    
+    # Step 2: Correct test data to match training data distribution
+    test_mean <- rowMeans(dat_test)
+    test_var <- apply(dat_test, 1, var)
+    test_sd <- sqrt(pmax(test_var, 1e-10))
+    
+    dat_test_corrected <- dat_test
+    for (i in 1:nrow(dat_test)) {
+      if (test_sd[i] > 1e-10) {
+        dat_test_corrected[i, ] <- (dat_test[i, ] - test_mean[i]) / test_sd[i] * overall_sd[i] + overall_mean[i]
+      } else {
+        # If no variance in test data, just shift to overall training mean
+        dat_test_corrected[i, ] <- overall_mean[i]
+      }
+    }
+    
+    return(list(
+      dat_corrected = dat_corrected,
+      dat_test_corrected = dat_test_corrected
+    ))
+  }
+  
+  if (method == "rank_samples") {
+    # Rank samples within genes, batch-aware
+    cat(sprintf("Applying rank_samples batch correction\n"))
+    
+    # Step 1: Apply rank_samples adjustment to training data
+    dat_corrected <- adjust_ranked_samples_with_batch_info(dat, batch, debug = FALSE)
+    
+    # Step 2: Apply rank_samples adjustment to test data
+    # Treat test data as a single batch for ranking
+    test_batch <- rep(1, ncol(dat_test))
+    dat_test_corrected <- adjust_ranked_samples_with_batch_info(dat_test, test_batch, debug = FALSE)
+    
+    return(list(
+      dat_corrected = dat_corrected,
+      dat_test_corrected = dat_test_corrected
+    ))
+  }
+  
+  if (method == "rank_twice") {
+    # Double ranking: genes within samples, then samples within genes, batch-aware
+    cat(sprintf("Applying rank_twice batch correction\n"))
+    
+    # Step 1: Apply rank_twice adjustment to training data
+    dat_corrected <- adjust_ranked_twice_with_batch_info(dat, batch, debug = FALSE)
+    
+    # Step 2: Apply rank_twice adjustment to test data
+    # Treat test data as a single batch for ranking
+    test_batch <- rep(1, ncol(dat_test))
+    dat_test_corrected <- adjust_ranked_twice_with_batch_info(dat_test, test_batch, debug = FALSE)
+    
+    return(list(
+      dat_corrected = dat_corrected,
+      dat_test_corrected = dat_test_corrected
+    ))
+  }
+  
+  if (method == "npn") {
+    # NPN (Nonparanormal) quantile normalization
+    cat(sprintf("Applying Nonparanormal quantile normalization\n"))
+    
+    # Load required library
+    if (!requireNamespace("huge", quietly = TRUE)) {
+      stop("Package 'huge' is required for NPN adjustment but is not installed.")
+    }
+    
+    # Step 1: Apply NPN adjustment to training data
+    dat_corrected <- adjust_npn(dat, batch, debug = FALSE)
+    
+    # Step 2: Apply NPN adjustment to test data
+    # Treat test data as a single batch for NPN transformation
+    test_batch <- rep(1, ncol(dat_test))
+    dat_test_corrected <- adjust_npn(dat_test, test_batch, debug = FALSE)
+    
+    return(list(
+      dat_corrected = dat_corrected,
+      dat_test_corrected = dat_test_corrected
     ))
   }
   
@@ -298,47 +634,38 @@ apply_batch_correction <- function(dat, batch, group, dat_test, method) {
     ))
   }
   
-  if (method == "mnn_centered") {
+  if (method == "fast_mnn") {
     library(batchelor, quietly = TRUE)
     library(SummarizedExperiment, quietly = TRUE)
     
-    # Pre-center each gene within each batch before MNN
-    cat("Pre-centering data for MNN...\n")
+    # FastMNN correction using batchelor::fastMNN
+    cat("Applying FastMNN correction...\n")
     
-    # Center training data within each batch
-    dat_centered <- dat
-    for (b in unique(batch)) {
-      batch_idx <- batch == b
-      gene_means <- rowMeans(dat[, batch_idx, drop = FALSE])
-      dat_centered[, batch_idx] <- dat[, batch_idx] - gene_means
+    # Prepare data for fastMNN - it expects matrices with same number of rows
+    # Split training data by batch
+    batch_names <- unique(batch)
+    batch_matrices <- list()
+    
+    for (b in batch_names) {
+      batch_idx <- which(batch == b)
+      batch_matrices[[paste0("batch_", b)]] <- dat[, batch_idx, drop = FALSE]
     }
     
-    # Center test data (as its own batch)
-    test_gene_means <- rowMeans(dat_test)
-    dat_test_centered <- dat_test - test_gene_means
+    # Add test data as a separate batch
+    batch_matrices[["test_batch"]] <- dat_test
     
-    # Combine centered data
-    combined_dat <- cbind(dat_centered, dat_test_centered)
-    test_id <- "TEST_SET"
-    combined_batch <- c(batch, rep(test_id, ncol(dat_test)))
+    cat(sprintf("FastMNN: Processing %d training batches + 1 test batch\n", length(batch_names)))
     
-    # Determine merge order: training batches by size, test last
-    u_batches <- unique(batch)
-    train_sizes <- table(batch)[u_batches]
-    train_ord <- order(train_sizes, decreasing = TRUE)
-    merge_ord <- c(u_batches[train_ord], test_id)
+    # Apply fastMNN - pass matrices directly, not as a list
+    fastmnn_result <- do.call(batchelor::fastMNN, c(batch_matrices, list(verbose = FALSE)))
+    corrected_matrix <- SummarizedExperiment::assay(fastmnn_result, "corrected")
     
-    # Apply MNN correction
-    mnn_object <- batchelor::mnnCorrect(
-      combined_dat, 
-      batch = combined_batch, 
-      merge.order = merge_ord
-    )
-    mnn_matrix <- SummarizedExperiment::assay(mnn_object)
+    # Split corrected data back into training and test
+    n_train_samples <- ncol(dat)
+    dat_corrected <- corrected_matrix[, 1:n_train_samples]
+    dat_test_corrected <- corrected_matrix[, (n_train_samples + 1):ncol(corrected_matrix)]
     
-    # Split back
-    dat_corrected <- mnn_matrix[, 1:ncol(dat)]
-    dat_test_corrected <- mnn_matrix[, (ncol(dat) + 1):ncol(mnn_matrix)]
+    cat("FastMNN correction completed successfully\n")
     
     return(list(
       dat_corrected = dat_corrected,
@@ -438,6 +765,86 @@ apply_batch_correction <- function(dat, batch, group, dat_test, method) {
     ))
   }
   
+  if (startsWith(method, "pace_")) {
+    # PACE: Pathway-Aware Consensus Estimator with different parameter settings
+    pace_variant <- sub("pace_", "", method)
+    cat(sprintf("Applying PACE adjustment (%s variant)...\n", pace_variant))
+    
+    # Load reticulate for Python integration
+    if (!requireNamespace("reticulate", quietly = TRUE)) {
+      stop("reticulate package is required for PACE method. Please install it.")
+    }
+    library(reticulate, quietly = TRUE)
+    
+    # Source the PACE wrapper
+    pace_wrapper_path <- "scripts/pace_wrapper.py"
+    if (!file.exists(pace_wrapper_path)) {
+      stop(sprintf("PACE wrapper not found at: %s", pace_wrapper_path))
+    }
+    
+    tryCatch({
+      # Import the PACE wrapper module
+      source_python(pace_wrapper_path)
+      
+      # Apply PACE correction
+      pace_result <- apply_pace_correction(
+        train_data = dat,
+        test_data = dat_test,
+        train_batch = batch,
+        pace_variant = pace_variant,
+        gene_names = rownames(dat)
+      )
+      
+      dat_corrected <- pace_result$train_corrected
+      dat_test_corrected <- pace_result$test_corrected
+      
+      # Log detailed PACE metrics if available
+      if (!is.null(pace_result$metrics)) {
+        metrics <- pace_result$metrics
+        cat(sprintf("PACE %s detailed metrics:\n", pace_variant))
+        cat(sprintf("  S_factor=%.4f\n", ifelse(is.null(metrics$S_factor), 0, metrics$S_factor)))
+        cat(sprintf("  Alpha: mean=%.4f, std=%.4f, min=%.4f, max=%.4f\n",
+                    ifelse(is.null(metrics$alpha_mean), 0, metrics$alpha_mean),
+                    ifelse(is.null(metrics$alpha_std), 0, metrics$alpha_std),
+                    ifelse(is.null(metrics$alpha_min), 0, metrics$alpha_min),
+                    ifelse(is.null(metrics$alpha_max), 0, metrics$alpha_max)))
+        cat(sprintf("  Beta: mean=%.4f, std=%.4f\n",
+                    ifelse(is.null(metrics$beta_mean), 0, metrics$beta_mean),
+                    ifelse(is.null(metrics$beta_std), 0, metrics$beta_std)))
+        cat(sprintf("  Genes: common=%d, unique=%d\n",
+                    ifelse(is.null(metrics$n_common_genes), 0, metrics$n_common_genes),
+                    ifelse(is.null(metrics$n_unique_genes), 0, metrics$n_unique_genes)))
+        cat(sprintf("  Pathways used=%d, prior_strength=%.1f\n",
+                    ifelse(is.null(metrics$n_pathways_used), 0, metrics$n_pathways_used),
+                    ifelse(is.null(metrics$prior_strength), 1, metrics$prior_strength)))
+        
+        # Diagnostic interpretation
+        alpha_mean <- ifelse(is.null(metrics$alpha_mean), 0, metrics$alpha_mean)
+        alpha_std <- ifelse(is.null(metrics$alpha_std), 0, metrics$alpha_std)
+        if (alpha_mean < 0.2 && alpha_std < 0.1) {
+          cat("  [DIAGNOSTIC] Algorithm appears TOO CONSERVATIVE - alphas near minimum clamp\n")
+        } else if (alpha_mean > 2.0) {
+          cat("  [DIAGNOSTIC] Algorithm appears AGGRESSIVE - high variance corrections\n")
+        } else {
+          cat("  [DIAGNOSTIC] Algorithm appears BALANCED\n")
+        }
+      }
+      
+      cat(sprintf("PACE %s adjustment complete\n", pace_variant))
+      
+    }, error = function(e) {
+      cat(sprintf("[WARNING] PACE %s correction failed: %s\n", pace_variant, e$message))
+      cat("[WARNING] Falling back to unadjusted data\n")
+      dat_corrected <- dat
+      dat_test_corrected <- dat_test
+    })
+    
+    return(list(
+      dat_corrected = dat_corrected,
+      dat_test_corrected = dat_test_corrected
+    ))
+  }
+  
   stop(sprintf("Unknown batch correction method: %s", method))
 }
 
@@ -448,12 +855,38 @@ apply_batch_correction <- function(dat, batch, group, dat_test, method) {
 #' @return List with scaled training and test data
 global_scale <- function(dat_train, dat_test) {
   # Compute global mean and SD from training data
-  train_mean <- mean(dat_train)
-  train_sd <- sd(as.vector(dat_train))
+  train_mean <- mean(dat_train, na.rm = TRUE)
+  train_sd <- sd(as.vector(dat_train), na.rm = TRUE)
+  
+  # Check for invalid scaling parameters
+  if (is.na(train_mean) || is.na(train_sd) || train_sd == 0 || !is.finite(train_sd) || train_sd < 1e-10) {
+    cat(sprintf("Global scaling: mean=%s, sd=%s\n", 
+                ifelse(is.na(train_mean), "NA", sprintf("%.4f", train_mean)),
+                ifelse(is.na(train_sd), "NA", sprintf("%.4f", train_sd))))
+    
+    # If standard deviation is too small, use unit scaling (subtract mean only)
+    if (!is.na(train_mean) && is.finite(train_mean)) {
+      cat("[WARNING] Using unit scaling (mean centering only) due to low variance\n")
+      dat_train_scaled <- dat_train - train_mean
+      dat_test_scaled <- dat_test - train_mean
+      
+      return(list(
+        dat_train = dat_train_scaled,
+        dat_test = dat_test_scaled
+      ))
+    } else {
+      stop("Scaling produced invalid values (NA, 0, or infinite standard deviation)")
+    }
+  }
   
   # Apply same transformation to both train and test
   dat_train_scaled <- (dat_train - train_mean) / train_sd
   dat_test_scaled <- (dat_test - train_mean) / train_sd
+  
+  # Check for NaN/Inf in results
+  if (any(!is.finite(dat_train_scaled)) || any(!is.finite(dat_test_scaled))) {
+    stop("Scaling produced non-finite values in output data")
+  }
   
   cat(sprintf("Global scaling: mean=%.4f, sd=%.4f\n", train_mean, train_sd))
   
@@ -666,7 +1099,8 @@ save_plot <- function(plot, filepath, width = 8, height = 6) {
     plot = plot,
     width = width,
     height = height,
-    dpi = 300
+    dpi = 300,
+    bg = "white"
   )
   cat(sprintf("Saved plot: %s\n", filepath))
 }
@@ -801,6 +1235,14 @@ main <- function() {
     )
     
     cat("\nStep 6: Applying global scaling...\n")
+    
+    # Check if batch correction produced valid data
+    if(all(corrected$dat_corrected == corrected$dat_corrected[1,1]) || all(corrected$dat_test_corrected == corrected$dat_test_corrected[1,1])) {
+      cat("[WARNING] Batch correction produced constant data - using original data instead\n")
+      corrected$dat_corrected <- reduced$dat
+      corrected$dat_test_corrected <- reduced$dat_test
+    }
+    
     scaled <- global_scale(corrected$dat_corrected, corrected$dat_test_corrected)
     
     cat("\nStep 7: Creating visualizations...\n")
