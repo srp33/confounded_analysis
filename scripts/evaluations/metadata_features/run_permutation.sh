@@ -2,8 +2,8 @@
 #SBATCH --job-name=permute_data
 #SBATCH --array=0-4
 #SBATCH --cpus-per-task=4
-#SBATCH --mem=32G
-#SBATCH --time=10:00:00
+#SBATCH --mem=64G
+#SBATCH --time=24:00:00
 #SBATCH --output=logs/permutation_importance/importance_%A_%a.out
 
 set -euo pipefail

@@ -45,7 +45,11 @@ def main():
 
         # infer adjuster name from directory
         adjuster = os.path.basename(os.path.dirname(f))
-        dfs[adjuster] = df
+        # DEBUG: taking out log_transformed
+        if adjuster == "log_transformed":
+            pass
+        else:
+            dfs[adjuster] = df
 
     # -------------------------
     # Sanity check: same targets everywhere

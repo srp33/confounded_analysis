@@ -84,6 +84,16 @@ def main():
 
     X_test_all = test_df[feature_cols]
 
+    #DEBUG
+    print("======================================")
+    print(f"Adjuster: {adjuster}")
+    print(f"CSV: {args.csv}")
+    print(f"Total samples: {df.shape[0]}")
+    print(f"Test samples (before NA filtering): {test_df.shape[0]}")
+    print(f"Number of features: {len(feature_cols)}")
+    print("======================================")
+
+
     # -------------------------
     # Check models directory
     # -------------------------
@@ -111,6 +121,10 @@ def main():
         X_test = X_test_all.loc[test_mask]
         y_test = y_test.loc[test_mask]
 
+        #DEBUG
+        print(f"  Test samples (after NA filter): {X_test.shape[0]}")
+        print(f"  Num features: {X_test.shape[1]}")
+
         # Skip degenerate targets
         if y_test.nunique() < 2:
             print(f"  Skipping {target}: <2 classes in test set")
@@ -132,6 +146,19 @@ def main():
         # Permutation importance
         # -------------------------
         scoring = "roc_auc" if len(clf.classes_) == 2 else "roc_auc_ovr"
+
+        print(f"  Model type: {type(clf)}")
+
+        #DEBUG
+        # If it's tree-based, this is very informative:
+        if hasattr(clf, "n_estimators"):
+            print(f"  n_estimators: {clf.n_estimators}")
+
+        if hasattr(clf, "max_depth"):
+            print(f"  max_depth: {clf.max_depth}")
+
+        print(f"  Scoring: {scoring}")
+        print("  Starting permutation importance...")
 
         r = permutation_importance(
             clf,

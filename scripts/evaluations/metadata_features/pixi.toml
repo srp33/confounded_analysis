@@ -40,7 +40,8 @@ r-argparse = "*"
 python = ">=3.12"
 numpy = "*"
 pandas = "*"
-scikit-learn = "*"
+scikit-learn = "==1.7.2"
+seaborn="*"
 
 # === Workflow ===
 snakemake = "==9.13.7"

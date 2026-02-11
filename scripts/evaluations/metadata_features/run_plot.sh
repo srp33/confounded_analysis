@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 #SBATCH --job-name=perm-heatmaps
-#SBATCH --output=logs/heatmaps_%j.out
-#SBATCH --error=logs/heatmaps_%j.err
+#SBATCH --output=logs/plot/heatmaps_%j.log
+#SBATCH --error=logs/plot/heatmaps_%j.log
 #SBATCH --time=01:00:00
 #SBATCH --cpus-per-task=1
 #SBATCH --mem=8G
@@ -10,17 +10,19 @@ set -euo pipefail
 # -------------------------
 # User-configurable paths
 # -------------------------
-PLOT_SCRIPT="plot_heatmaps.py"
+PLOT_SCRIPT="plot_heatmap.py"
 PERM_DIR="/grphome/grp_batch_effects/outputs/metadata_features/permutation_importance"
 OUTDIR="/grphome/grp_batch_effects/outputs/metadata_features/plots"
 
 # Optional parameters
-THRESHOLD=0.005
+THRESHOLD=0.003
 
 export OMP_NUM_THREADS=1
 export OPENBLAS_NUM_THREADS=1
 export MKL_NUM_THREADS=1
 export NUMEXPR_NUM_THREADS=1
+
+module load python
 
 # -------------------------
 # Collect CSVs (one per adjuster)
@@ -44,7 +46,7 @@ mkdir -p "${OUTDIR}"
 # -------------------------
 # Run heatmap plotting
 # -------------------------
-python "${PLOT_SCRIPT}" \
+pixi run python "${PLOT_SCRIPT}" \
   --csvs ${CSV_FILES} \
   --outdir "${OUTDIR}" \
   --threshold "${THRESHOLD}"
