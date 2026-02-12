@@ -13,7 +13,6 @@ batch_effect_means: [0.1, 3, 5, 10]
 num_datasets: [3, 4, 5, 6]
 
 classifiers: 
-  - "rda"
   - "elasticnet"
   - "svm"
   - "rf"
@@ -62,7 +61,10 @@ class_imbalance_analysis:
     - "combat_sup"    # supervised
   # Random seed for reproducible sampling
   seed: 123
-  # Imbalance levels to test (as proportions of active TB in high-imbalance training set)
-  imbalance_levels: [0.20, 0.30, 0.40, 0.50]
+  # Imbalance levels to test (as proportions of active TB in high-imbalance training set).
+  # These must be feasible for ALL C(6,2)=15 training pairs. The R script will fail hard
+  # if any pair cannot achieve a level. Symmetric levels (e.g. 0.10 and 0.90) are implicit
+  # since the script applies the inverse to the other training dataset.
+  imbalance_levels: [0.10, 0.20, 0.30, 0.40, 0.50]
   # Number of replicate random samples per scenario
   n_replicates: 1

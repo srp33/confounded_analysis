@@ -28,6 +28,18 @@ cat("Adjusters:", paste(unique(data$adjuster), collapse = ", "), "\n")
 cat("Classifiers:", paste(unique(data$classifier), collapse = ", "), "\n")
 cat("Imbalance levels:", paste(sort(unique(data$imbalance_pct)), collapse = ", "), "\n")
 
+cat("Columns in data:", paste(names(data), collapse = ", "), "\n")
+
+# Check training pairs
+cat("\nTraining pairs in data:\n")
+training_pairs_summary <- data %>%
+  select(training_pair, train_dataset_1, train_dataset_2, test_dataset) %>%
+  distinct() %>%
+  arrange(training_pair, test_dataset)
+print(head(training_pairs_summary, 20))
+cat("Number of unique training pairs:", n_distinct(data$training_pair), "\n")
+cat("Number of unique test datasets:", n_distinct(data$test_dataset), "\n")
+
 # Filter to target adjusters
 target_adjusters <- c("unadjusted", "combat", "combat_sup")
 data_filtered <- data %>%
@@ -35,53 +47,87 @@ data_filtered <- data %>%
 
 cat("Filtered to", nrow(data_filtered), "rows with target adjusters\n")
 
-# Step 1: Average MCC over training pairs and replicates
-# Result: one value per (classifier, adjuster, test_set, imbalance)
-cat("\nStep 1: Averaging MCC over training pairs and replicates...\n")
+# Fix training_pair column - create proper identifier from training datasets
+cat("\nFixing training_pair column...\n")
+data_filtered <- data_filtered %>%
+  mutate(
+    # Sort the two training datasets alphabetically and combine
+    training_pair_fixed = paste(
+      pmin(train_dataset_1, train_dataset_2),
+      pmax(train_dataset_1, train_dataset_2),
+      sep = "-"
+    )
+  )
+
+cat("Original training_pair values:", n_distinct(data_filtered$training_pair), "unique\n")
+cat("Fixed training_pair values:", n_distinct(data_filtered$training_pair_fixed), "unique\n")
+cat("Sample of fixed training pairs:\n")
+print(head(unique(data_filtered$training_pair_fixed), 10))
+
+# Replace the old column
+data_filtered$training_pair <- data_filtered$training_pair_fixed
+data_filtered$training_pair_fixed <- NULL
+
+# Step 1: Average MCC over replicates
+# Result: one value per (classifier, adjuster, test_set, training_pair, imbalance)
+cat("\nStep 1: Averaging MCC over replicates...\n")
 mcc_averaged <- data_filtered %>%
-  group_by(classifier, adjuster, test_dataset, imbalance_pct) %>%
+  group_by(classifier, adjuster, test_dataset, training_pair, imbalance_pct) %>%
   summarise(
     mean_mcc = mean(mcc, na.rm = TRUE),
     n_obs = n(),
     .groups = "drop"
   )
 
-cat("  Result:", nrow(mcc_averaged), "unique (classifier, adjuster, test_set, imbalance) combinations\n")
+cat("  Result:", nrow(mcc_averaged), "unique combinations\n")
+cat("    Classifiers:", n_distinct(mcc_averaged$classifier), "\n")
+cat("    Adjusters:", n_distinct(mcc_averaged$adjuster), "\n")
+cat("    Test sets:", n_distinct(mcc_averaged$test_dataset), "\n")
+cat("    Training pairs:", n_distinct(mcc_averaged$training_pair), "\n")
+cat("    Imbalance levels:", n_distinct(mcc_averaged$imbalance_pct), "\n")
 
-# Step 2: Rank adjusters within each (classifier, test_set, imbalance) group
-cat("\nStep 2: Ranking adjusters within (classifier, test_set, imbalance)...\n")
+
+
+# Step 2: Rank adjusters within each (classifier, test_set, training_pair) group
+cat("\nStep 2: Ranking adjusters within (classifier, test_set, training_pair)...\n")
 ranked_by_classifier <- mcc_averaged %>%
-  group_by(classifier, test_dataset, imbalance_pct) %>%
+  group_by(classifier, test_dataset, training_pair) %>%
   arrange(desc(mean_mcc)) %>%
   mutate(rank = rank(-mean_mcc, ties.method = "average")) %>%
   ungroup()
 
-cat("  Ranks assigned\n")
+cat("  Ranked", nrow(ranked_by_classifier), "combinations\n")
 
-# Step 3: Average ranks over classifiers
+# Step 3: Average ranks over classifiers and training pairs
 # Result: one value per (adjuster, test_set, imbalance)
-cat("\nStep 3: Averaging ranks over classifiers...\n")
+cat("\nStep 3: Averaging ranks over classifiers and training pairs...\n")
 ranks_averaged_over_classifiers <- ranked_by_classifier %>%
   group_by(adjuster, test_dataset, imbalance_pct) %>%
   summarise(
     mean_rank = mean(rank, na.rm = TRUE),
-    n_classifiers = n(),
+    n_obs = n(),
     .groups = "drop"
   )
 
 cat("  Result:", nrow(ranks_averaged_over_classifiers), "unique (adjuster, test_set, imbalance) combinations\n")
+cat("  Adjusters:", paste(unique(ranks_averaged_over_classifiers$adjuster), collapse = ", "), "\n")
+cat("  Test sets:", n_distinct(ranks_averaged_over_classifiers$test_dataset), "\n")
+cat("  Imbalance levels:", paste(sort(unique(ranks_averaged_over_classifiers$imbalance_pct)), collapse = ", "), "\n")
+
 
 # Step 4: Calculate mean, min, max over test sets for plotting
 cat("\nStep 4: Computing statistics over test sets...\n")
+
 plot_data <- ranks_averaged_over_classifiers %>%
   group_by(adjuster, imbalance_pct) %>%
   summarise(
-    mean_rank = mean(mean_rank, na.rm = TRUE),
+    avg_rank = mean(mean_rank, na.rm = TRUE),
     min_rank = min(mean_rank, na.rm = TRUE),
     max_rank = max(mean_rank, na.rm = TRUE),
     n_test_sets = n(),
     .groups = "drop"
-  )
+  ) %>%
+  rename(mean_rank = avg_rank)  # Rename back for compatibility
 
 cat("  Final plot data:", nrow(plot_data), "points\n")
 
@@ -105,20 +151,18 @@ print(plot_data %>% select(adjuster_label, imbalance_pct_num, mean_rank, min_ran
 
 # Create the plot
 p <- ggplot(plot_data, aes(x = imbalance_pct_num, y = mean_rank, color = adjuster_label, fill = adjuster_label)) +
-  # Uncertainty ribbon (min/max over test sets)
   geom_ribbon(aes(ymin = min_rank, ymax = max_rank), alpha = 0.2, color = NA) +
   # Mean line
   geom_line(linewidth = 1.2) +
   geom_point(size = 3) +
   # Reverse y-axis so rank 1 is at top
   scale_y_reverse(
-    breaks = c(1, 1.5, 2, 2.5, 3),
-    labels = c("1st", "1.5", "2nd", "2.5", "3rd"),
-    limits = c(3, 1)
+    breaks = seq(1, 12, by = 1),
+    limits = c(12, 1)
   ) +
-  scale_x_continuous(
-    breaks = c(20, 30, 40, 50),
-    labels = c("20%", "30%", "40%", "50%")
+  scale_x_reverse(
+    breaks = c(80, 70, 60, 50, 40, 30, 20),
+    labels = c("80%", "70%", "60%", "50%", "40%", "30%", "20%")
   ) +
   scale_color_manual(
     values = c(
@@ -138,10 +182,9 @@ p <- ggplot(plot_data, aes(x = imbalance_pct_num, y = mean_rank, color = adjuste
   ) +
   labs(
     title = "Batch Correction Performance Across Class Imbalance Levels",
-    subtitle = "Ranks averaged over classifiers | Shaded region shows min-max range across test sets",
+    subtitle = "Ranks averaged over classifiers | Shaded region shows min-max range across test sets and training pairs",
     x = "Class Imbalance Level (% Active TB in High-Imbalance Training Set)",
-    y = "Average Performance Rank",
-    caption = "Lower rank = better performance | Each point represents mean over test sets"
+    y = "Average Performance Rank"
   ) +
   theme_bw() +
   theme(
@@ -178,22 +221,3 @@ trend_stats <- plot_data %>%
   ungroup()
 
 print(trend_stats)
-
-cat("\nInterpretation:\n")
-cat("- Positive slope: Performance degrades (higher rank) with increasing imbalance\n")
-cat("- Negative slope: Performance improves (lower rank) with increasing imbalance\n")
-cat("- p < 0.05: Statistically significant trend\n")
-
-# Calculate rank stability (how much variation across test sets)
-cat("\nRank stability across test sets (mean range):\n")
-stability <- plot_data %>%
-  mutate(range = max_rank - min_rank) %>%
-  group_by(adjuster_label) %>%
-  summarise(
-    mean_range = mean(range),
-    max_range = max(range),
-    .groups = "drop"
-  )
-
-print(stability)
-cat("Lower range = more consistent performance across different test sets\n")
