@@ -6,7 +6,6 @@ import pandas as pd
 import seaborn as sns
 import matplotlib.pyplot as plt
 
-
 def main():
     parser = argparse.ArgumentParser(
         description="Plot per-target permutation importance heatmaps across batch adjusters"
@@ -27,6 +26,21 @@ def main():
         type=float,
         default=0.005,
         help="Filter genes with importance > threshold in at least one adjuster"
+    )
+    parser.add_argument(
+        "--test",
+        required=True,
+        help="Name of the test set"
+    )
+    parser.add_argument(
+        "--train",
+        required=True,
+        help="Name of the train set"
+    )
+    parser.add_argument(
+        "--aligned_csv",
+        required=True,
+        help="CSV file of already aligned metadata for the training and testing sets"
     )
 
     args = parser.parse_args()
@@ -55,14 +69,59 @@ def main():
     # Sanity check: same targets everywhere
     # -------------------------
     targets = dfs[next(iter(dfs))].columns.tolist()
+    print(f"Targets: {targets}")
+    
+    # -------------------------
+    # Sanity check: compare target columns
+    # -------------------------
+    print("\n=== Column diagnostics ===")
 
-    for adj, df in dfs.items():
-        if list(df.columns) != targets:
-            raise ValueError(f"Target mismatch in adjuster: {adj}")
+    # Collect column sets
+    column_sets = {adj: set(df.columns) for adj, df in dfs.items()}
+
+    # Print columns per adjuster
+    for adj, cols in column_sets.items():
+        print(f"\nAdjuster: {adj}")
+        print(f"  Number of targets: {len(cols)}")
+        print(f"  Targets: {sorted(cols)}")
+
+    # Use first adjuster as reference
+    reference_adj = next(iter(column_sets))
+    reference_cols = column_sets[reference_adj]
+
+    print(f"\nReference adjuster: {reference_adj}")
+
+    # Compare each adjuster to reference
+    for adj, cols in column_sets.items():
+        if adj == reference_adj:
+            continue
+
+        missing_in_adj = reference_cols - cols
+        extra_in_adj = cols - reference_cols
+
+        if missing_in_adj or extra_in_adj:
+            print(f"\nColumn mismatch in adjuster: {adj}")
+
+            if missing_in_adj:
+                print(f"  Missing columns ({len(missing_in_adj)}):")
+                print(f"    {sorted(missing_in_adj)}")
+
+            if extra_in_adj:
+                print(f"  Extra columns ({len(extra_in_adj)}):")
+                print(f"    {sorted(extra_in_adj)}")
+
+    # If you still want strict enforcement:
+    all_columns_equal = all(cols == reference_cols for cols in column_sets.values())
+    if not all_columns_equal:
+        raise ValueError("Column mismatch detected across adjusters.")
 
     # -------------------------
     # Plot one heatmap per target
     # -------------------------
+
+    # Collect genes that pass threshold with their maximum importance
+    gene_max_importance = {}
+        
     for target in targets:
 
         # genes × adjusters
@@ -77,6 +136,14 @@ def main():
         if target_df.empty:
             print(f"Skipping {target}: no genes pass threshold")
             continue
+        
+        # Update max importance for each gene
+        for gene, row in target_df.iterrows():
+            max_val = row.max()
+            if gene in gene_max_importance:
+                gene_max_importance[gene] = max(gene_max_importance[gene], max_val)
+            else:
+                gene_max_importance[gene] = max_val
 
         plt.figure(figsize=(10, max(6, 0.25 * target_df.shape[0])))
 
@@ -95,13 +162,57 @@ def main():
 
         out_path = os.path.join(
             args.outdir,
-            f"permutation_importance_{target}.png"
+            f"fast_permutation_importance_{target}.png"
         )
         plt.savefig(out_path, dpi=300)
         plt.close()
 
         print(f"Saved heatmap: {out_path}")
 
+    # -------------------------
+    # Save union of passing genes with max importance
+    # -------------------------
+    if gene_max_importance and args.aligned_csv:
+
+        selected_genes = list(gene_max_importance.keys())
+
+        print(f"\nSubsetting original datasets to {len(selected_genes)} genes...")
+
+        df = pd.read_csv(args.aligned_csv, low_memory=False)
+
+        if "meta_source" not in df.columns:
+            raise ValueError("meta_source column not found in dataset.")
+
+        # Identify metadata columns
+        meta_cols = [col for col in df.columns if col.startswith("meta_")]
+
+        print(f"Keeping {len(meta_cols)} metadata columns:")
+        print(meta_cols)
+
+        # Keep only genes that exist in dataset
+        available_genes = [g for g in selected_genes if g in df.columns]
+
+        missing_genes = set(selected_genes) - set(available_genes)
+        if missing_genes:
+            print(f"Warning: {len(missing_genes)} selected genes not found in dataset.")
+
+        cols_to_keep = meta_cols + available_genes
+        df_subset = df[cols_to_keep]
+
+        train_df = df_subset[df_subset["meta_source"] == "gse62944_tumor"]
+        test_df = df_subset[df_subset["meta_source"] == "metabric"]
+        
+        print(f"Train samples: {train_df.shape[0]}")
+        print(f"Test samples: {test_df.shape[0]}")
+
+        train_out = os.path.join(args.outdir, f"fast_train_{args.train}selected_genes.csv")
+        test_out = os.path.join(args.outdir, f"fast_test_{args.test}_selected_genes.csv")
+
+        train_df.to_csv(train_out, index=False)
+        test_df.to_csv(test_out, index=False)
+
+        print(f"Saved train subset: {train_out}")
+        print(f"Saved test subset: {test_out}")
 
 if __name__ == "__main__":
     main()

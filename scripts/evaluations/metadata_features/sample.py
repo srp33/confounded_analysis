@@ -32,4 +32,5 @@ df_filtered = df_imp[(df_imp > 0.005).any(axis=1)]
 plt.figure(figsize=(10, 18))
 sns.heatmap(df_filtered, annot=True, cmap="viridis", fmt=".3f")
 plt.title("Feature Importance per Label (ROC AUC)")
-plt.show()
+plt.savefig("./sample_fig.png", dpi=300)
+plt.close()

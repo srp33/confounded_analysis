@@ -51,6 +51,7 @@ pixi run python "${IMPORTANCE_SCRIPT}" \
     --outdir "${OUTPUT_DIR}" \
     --n_repeats "${N_REPEATS}" \
     --n_jobs "${N_JOBS}" \
-    --random_state "${RANDOM_STATE}"
+    --random_state "${RANDOM_STATE}" \
+    --max_samples 500
 
 echo "Finished permutation importance ${FILE_IDX}."

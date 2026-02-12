@@ -26,7 +26,6 @@ def create_subset(df, data_list):
         )
     subset_df = df[df["meta_source"].isin(selected_studies)].copy()
 
-
     return subset_df
 
 # Log transform per dataset
