@@ -63,8 +63,10 @@ class_imbalance_analysis:
   seed: 123
   # Imbalance levels to test (as proportions of active TB in high-imbalance training set).
   # These must be feasible for ALL C(6,2)=15 training pairs. The R script will fail hard
-  # if any pair cannot achieve a level. Symmetric levels (e.g. 0.10 and 0.90) are implicit
+  # if any pair cannot achieve a level. Symmetric levels (e.g. 0.20 and 0.80) are implicit
   # since the script applies the inverse to the other training dataset.
+  # Minimum 3 samples per class per dataset is enforced, so very low levels may not work
+  # for pairs with small sample sizes.
   imbalance_levels: [0.10, 0.20, 0.30, 0.40, 0.50]
   # Number of replicate random samples per scenario
   n_replicates: 1

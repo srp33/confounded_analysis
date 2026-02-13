@@ -157,12 +157,11 @@ p <- ggplot(plot_data, aes(x = imbalance_pct_num, y = mean_rank, color = adjuste
   geom_point(size = 3) +
   # Reverse y-axis so rank 1 is at top
   scale_y_reverse(
-    breaks = seq(1, 12, by = 1),
-    limits = c(12, 1)
+    breaks = seq(1, 15, by = 1)
   ) +
   scale_x_reverse(
-    breaks = c(80, 70, 60, 50, 40, 30, 20),
-    labels = c("80%", "70%", "60%", "50%", "40%", "30%", "20%")
+    breaks = sort(unique(plot_data$imbalance_pct_num), decreasing = TRUE),
+    labels = paste0(sort(unique(plot_data$imbalance_pct_num), decreasing = TRUE), "%")
   ) +
   scale_color_manual(
     values = c(
