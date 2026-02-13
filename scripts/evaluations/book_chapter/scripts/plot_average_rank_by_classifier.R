@@ -1,8 +1,8 @@
 #!/usr/bin/env Rscript
 
 # plot_average_rank_by_classifier.R
-# Generate a radar chart showing average rank of adjusters per classifier for the 4-study case
-# Axes: classifiers (radial), Rank 1 on outside, error bands as semi-transparent areas
+# Generate violin plots showing MCC distribution per classifier with adjuster means
+# X-axis: classifier, Y-axis: MCC, Violin: full distribution, Points: adjuster means
 
 options(warn = -1)
 suppressPackageStartupMessages({
@@ -14,13 +14,13 @@ suppressPackageStartupMessages({
 
 source("scripts/adjuster_plot_utils.R")
 
-parser <- ArgumentParser(description = "Create average rank radar chart for 4-study case")
+parser <- ArgumentParser(description = "Create MCC violin plot by classifier with adjuster means")
 parser$add_argument("-i", "--input", type = "character", required = TRUE,
                     help = "Input CSV file with adjuster results")
 parser$add_argument("-o", "--output", type = "character", required = TRUE,
                     help = "Output PNG file")
-parser$add_argument("--width", type = "double", default = 10)
-parser$add_argument("--height", type = "double", default = 10)
+parser$add_argument("--width", type = "double", default = 12)
+parser$add_argument("--height", type = "double", default = 8)
 parser$add_argument("--dpi", type = "integer", default = 300)
 parser$add_argument("--adjusters", type = "character", default = NULL,
                     help = "Comma-separated list of adjusters to include")
@@ -32,9 +32,9 @@ args <- parser$parse_args()
 # Load data
 data <- read.csv(args$input, stringsAsFactors = FALSE)
 
-# Filter to MCC metric
+# Filter to MCC metric and remove NA classifiers
 data <- data %>%
-  filter(metric == "mcc", !is.na(value), !is.na(n_datasets))
+  filter(metric == "mcc", !is.na(value), !is.na(n_datasets), !is.na(classifier))
 
 # Filter to specified n_datasets unless "all"
 n_datasets_label <- args$n_datasets
@@ -52,22 +52,6 @@ if (!is.null(args$adjusters)) {
   data <- data %>% filter(adjuster %in% adjusters_filter)
 }
 
-# For each classifier, n_datasets, and test_study, rank the adjusters by MCC (higher is better, so rank 1 = best)
-ranked_data <- data %>%
-  group_by(classifier, n_datasets, test_study) %>%
-  mutate(rank = rank(-value, ties.method = "average")) %>%
-  ungroup()
-
-# Calculate average rank per adjuster per classifier (averaged over all test studies and n_datasets)
-avg_rank <- ranked_data %>%
-  group_by(classifier, adjuster) %>%
-  summarise(
-    avg_rank = mean(rank, na.rm = TRUE),
-    se_rank = sd(rank, na.rm = TRUE) / sqrt(n()),
-    n_obs = n(),
-    .groups = "drop"
-  )
-
 # Create nice labels
 classifier_labels <- c(
   "logistic" = "Logistic",
@@ -80,88 +64,60 @@ classifier_labels <- c(
   "shrinkageLDA" = "Shrinkage LDA"
 )
 
-avg_rank$classifier_label <- classifier_labels[avg_rank$classifier]
+data$classifier_label <- classifier_labels[data$classifier]
 
 # Format adjuster labels
-avg_rank$adjuster_label <- sapply(avg_rank$adjuster, format_adjuster_label)
+data$adjuster_label <- sapply(data$adjuster, format_adjuster_label)
 
-# Order adjusters by overall average rank (best performers first)
-adjuster_order <- avg_rank %>%
-  group_by(adjuster, adjuster_label) %>%
-  summarise(overall_avg = mean(avg_rank), .groups = "drop") %>%
-  arrange(overall_avg)
+# Order classifiers by median MCC (best performers first)
+classifier_order <- data %>%
+  group_by(classifier, classifier_label) %>%
+  summarise(median_mcc = median(value, na.rm = TRUE), .groups = "drop") %>%
+  arrange(desc(median_mcc))
 
-avg_rank$adjuster_label <- factor(
-  avg_rank$adjuster_label,
-  levels = adjuster_order$adjuster_label
+data$classifier_label <- factor(
+  data$classifier_label,
+  levels = classifier_order$classifier_label
 )
 
-# Get max rank for inversion (rank 1 = outside)
-max_rank <- max(avg_rank$avg_rank + avg_rank$se_rank, na.rm = TRUE)
-
-# Invert ranks so rank 1 is on outside
-avg_rank <- avg_rank %>%
-  mutate(
-    inverted_rank = max_rank + 1 - avg_rank,
-    inverted_lower = max_rank + 1 - (avg_rank + se_rank),
-    inverted_upper = max_rank + 1 - (avg_rank - se_rank)
+# Calculate adjuster means per classifier for the points
+adjuster_means <- data %>%
+  group_by(classifier_label, adjuster_label) %>%
+  summarise(
+    mean_mcc = mean(value, na.rm = TRUE),
+    .groups = "drop"
   )
 
-# Prepare data for radar chart using coord_polar
-# Need to close the polygon by repeating the first classifier
-classifiers_ordered <- names(classifier_labels)
-n_classifiers <- length(classifiers_ordered)
-
-# Assign numeric positions for classifiers
-classifier_pos <- setNames(1:n_classifiers, classifiers_ordered)
-avg_rank$classifier_num <- classifier_pos[avg_rank$classifier]
-
-# Close the loop: duplicate first point at the end for each adjuster
-close_loop <- avg_rank %>%
-  filter(classifier == classifiers_ordered[1]) %>%
-  mutate(classifier_num = n_classifiers + 1)
-
-radar_data <- bind_rows(avg_rank, close_loop)
-
-# Create color palette
-n_adjusters <- length(unique(radar_data$adjuster_label))
-colors <- scales::hue_pal()(n_adjusters)
-
-# Build the radar chart
-p <- ggplot(radar_data, aes(x = classifier_num, group = adjuster_label, color = adjuster_label, fill = adjuster_label)) +
-  # Error bands as ribbons
-  geom_ribbon(aes(ymin = inverted_lower, ymax = inverted_upper), alpha = 0.15, color = NA) +
-  # Lines connecting points
-  geom_line(aes(y = inverted_rank), linewidth = 0.8) +
-  # Points
-  geom_point(aes(y = inverted_rank), size = 2) +
-  # Convert to polar coordinates
-  coord_polar(start = -pi / n_classifiers) +
-  # Set axis breaks and labels - extend limits to include the closing segment
-  scale_x_continuous(
-    breaks = 1:n_classifiers,
-    labels = classifier_labels[classifiers_ordered],
-    limits = c(1, n_classifiers + 1)
+# Build the violin plot
+p <- ggplot(data, aes(x = classifier_label, y = value)) +
+  # Violin plot showing full distribution
+  geom_violin(fill = "gray85", color = "gray50", alpha = 0.7, scale = "width") +
+  # Add boxplot for quartiles
+  geom_boxplot(width = 0.1, fill = "white", alpha = 0.5, outlier.shape = NA) +
+  # Add colored points for adjuster means
+  geom_point(
+    data = adjuster_means,
+    aes(x = classifier_label, y = mean_mcc, color = adjuster_label),
+    size = 4,
+    position = position_dodge(width = 0.3)
   ) +
-  scale_y_continuous(
-    limits = c(0, max_rank + 1),
-    breaks = seq(0, max_rank + 1, by = 2),
-    labels = function(x) round(max_rank + 1 - x)  # Show original rank values
-  ) +
+  # Styling
+  scale_color_brewer(palette = "Set1", name = "Adjuster Mean") +
   labs(
-    title = sprintf("Average Adjuster Rank by Classifier (%s)", n_datasets_label),
-    subtitle = "Rank 1 (best) on outside; shaded areas show ± SE",
-    color = "Adjuster",
-    fill = "Adjuster"
+    title = sprintf("MCC Distribution by Classifier (%s)", n_datasets_label),
+    subtitle = "Violin shows full distribution | Box shows quartiles | Points show adjuster means",
+    x = "Classifier",
+    y = "MCC"
   ) +
   theme_minimal(base_size = 12) +
   theme(
-    axis.title = element_blank(),
-    axis.text.y = element_text(size = 8),
-    panel.grid.major = element_line(color = "gray80"),
+    axis.text.x = element_text(angle = 45, hjust = 1),
+    panel.grid.major.y = element_line(color = "gray90"),
+    panel.grid.major.x = element_blank(),
+    panel.grid.minor = element_blank(),
     legend.position = "right",
     plot.title = element_text(face = "bold", hjust = 0.5),
-    plot.subtitle = element_text(hjust = 0.5)
+    plot.subtitle = element_text(hjust = 0.5, size = 10)
   )
 
 # Save the plot

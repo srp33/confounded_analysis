@@ -33,9 +33,15 @@ args <- parser$parse_args()
 # Load data
 data <- read.csv(args$input, stringsAsFactors = FALSE)
 
-# Filter to MCC metric
+# Filter to MCC metric, exclude Within-study CV and logistic classifier
 data <- data %>%
-  filter(metric == "mcc", !is.na(value), !is.na(n_datasets))
+  filter(
+    metric == "mcc", 
+    !is.na(value), 
+    !is.na(n_datasets),
+    adjuster != "within_study_cv",
+    classifier != "logistic"
+  )
 
 # Filter to specified n_datasets unless "all"
 n_datasets_label <- args$n_datasets
