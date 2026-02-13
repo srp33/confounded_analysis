@@ -42,6 +42,12 @@ def main():
         required=True,
         help="CSV file of already aligned metadata for the training and testing sets"
     )
+    parser.add_argument(
+        "--adjusted_csvs",
+        nargs="+",
+        required=True,
+        help="List of CSVs of the adjusted data"
+    )
 
     args = parser.parse_args()
     os.makedirs(args.outdir, exist_ok=True)
@@ -59,11 +65,7 @@ def main():
 
         # infer adjuster name from directory
         adjuster = os.path.basename(os.path.dirname(f))
-        # DEBUG: taking out log_transformed
-        if adjuster == "log_transformed":
-            pass
-        else:
-            dfs[adjuster] = df
+        dfs[adjuster] = df
 
     # -------------------------
     # Sanity check: same targets everywhere
@@ -162,7 +164,7 @@ def main():
 
         out_path = os.path.join(
             args.outdir,
-            f"fast_permutation_importance_{target}.png"
+            f"permutation_importance_{target}.png"
         )
         plt.savefig(out_path, dpi=300)
         plt.close()
@@ -172,47 +174,112 @@ def main():
     # -------------------------
     # Save union of passing genes with max importance
     # -------------------------
-    if gene_max_importance and args.aligned_csv:
-
+    if gene_max_importance:
         selected_genes = list(gene_max_importance.keys())
+        print(f"\nSubsetting Datasets to {len(selected_genes)} genes...")
+        subset_dataset(
+            input_csv=args.aligned_csv,
+            selected_genes=selected_genes,
+            outdir=args.outdir,
+            train_name=args.train,
+            test_name=args.test,
+            prefix="unadjusted"
+        )
 
-        print(f"\nSubsetting original datasets to {len(selected_genes)} genes...")
+    for adjusted_csv in args.adjusted_csvs:
+        subset_dataset(
+            input_csv=adjusted_csv,
+            selected_genes=selected_genes,
+            outdir=args.outdir,
+            train_name=args.train,
+            test_name=args.test,
+            prefix="adjusted"
+        )
 
-        df = pd.read_csv(args.aligned_csv, low_memory=False)
+    # Save selected gene list
+    gene_list_df = (
+        pd.DataFrame({
+        "gene": selected_genes,
+        "max_importance": [gene_max_importance[g] for g in selected_genes]
+    })
+    .sort_values("max_importance", ascending=False)
+    )
 
-        if "meta_source" not in df.columns:
-            raise ValueError("meta_source column not found in dataset.")
+    gene_list_path = os.path.join(args.outdir, "selected_genes.csv")
+    gene_list_df.to_csv(gene_list_path, index=False)
 
-        # Identify metadata columns
-        meta_cols = [col for col in df.columns if col.startswith("meta_")]
+    print(f"Saved selected gene list: {gene_list_path}")
 
-        print(f"Keeping {len(meta_cols)} metadata columns:")
-        print(meta_cols)
+    # Save all gene scores for pre-ranked GSEA
 
-        # Keep only genes that exist in dataset
-        available_genes = [g for g in selected_genes if g in df.columns]
+    all_gene_scores = {}
 
-        missing_genes = set(selected_genes) - set(available_genes)
-        if missing_genes:
-            print(f"Warning: {len(missing_genes)} selected genes not found in dataset.")
+    for adjuster_df in dfs.values():
+        for gene in adjuster_df.index:
+            if gene not in all_gene_scores:
+                all_gene_scores[gene] = []
+            all_gene_scores[gene].append(adjuster_df.loc[gene].max())
 
-        cols_to_keep = meta_cols + available_genes
-        df_subset = df[cols_to_keep]
+    # Compure max across adjusters
+    gene_rank_df = (
+        pd.DataFrame({
+            "gene": list(all_gene_scores.keys()),
+            "score": [max(v) for v in all_gene_scores.values()]
+        })
+        .sort_values("score", ascending=False)
+    )
 
-        train_df = df_subset[df_subset["meta_source"] == "gse62944_tumor"]
-        test_df = df_subset[df_subset["meta_source"] == "metabric"]
+    rank_path = os.path.join(args.outdir, "gsea_prerank_max_importance.rnk")
+
+    gene_rank_df.to_csv(
+        rank_path,
+        sep="\t",
+        index=False,
+        header=False
+    )
+
+    print(f"Saved pre-ranked GSEA file: {rank_path}")
         
-        print(f"Train samples: {train_df.shape[0]}")
-        print(f"Test samples: {test_df.shape[0]}")
+def subset_dataset(input_csv, selected_genes, outdir, train_name, test_name, prefix):
+    print(f"\nProcessing dataset: {input_csv}")
 
-        train_out = os.path.join(args.outdir, f"fast_train_{args.train}selected_genes.csv")
-        test_out = os.path.join(args.outdir, f"fast_test_{args.test}_selected_genes.csv")
+    df = pd.read_csv(input_csv, low_memory=False)
 
-        train_df.to_csv(train_out, index=False)
-        test_df.to_csv(test_out, index=False)
+    if "meta_source" not in df.columns:
+        raise ValueError("meta_source column not found in dataset.")
 
-        print(f"Saved train subset: {train_out}")
-        print(f"Saved test subset: {test_out}")
+    # Identify metadata columns
+    meta_cols = [col for col in df.columns if col.startswith("meta_")]
+
+    print(f"Keeping {len(meta_cols)} metadata columns:")
+    print(meta_cols)
+
+    # Keep only genes that exist in dataset
+    available_genes = [g for g in selected_genes if g in df.columns]
+
+    missing_genes = set(selected_genes) - set(available_genes)
+    if missing_genes:
+        print(f"Warning: {len(missing_genes)} selected genes not found in dataset.")
+
+    cols_to_keep = meta_cols + available_genes
+    df_subset = df[cols_to_keep]
+
+    train_df = df_subset[df_subset["meta_source"] == train_name]
+    test_df = df_subset[df_subset["meta_source"] == test_name]
+    
+    print(f"Train samples: {train_df.shape[0]}")
+    print(f"Test samples: {test_df.shape[0]}")
+
+    base = os.path.splitext(os.path.basename(input_csv))[0]
+
+    train_out = os.path.join(outdir, f"{prefix}_{base}_train_selected_genes.csv")
+    test_out = os.path.join(outdir, f"{prefix}_{base}_test_selected_genes.csv")
+
+    train_df.to_csv(train_out, index=False)
+    test_df.to_csv(test_out, index=False)
+
+    print(f"Saved train subset: {train_out}")
+    print(f"Saved test subset: {test_out}")
 
 if __name__ == "__main__":
     main()

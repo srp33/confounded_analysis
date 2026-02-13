@@ -2,7 +2,7 @@
 #SBATCH --job-name=permute_data
 #SBATCH --array=0-4
 #SBATCH --cpus-per-task=4
-#SBATCH --mem=64G
+#SBATCH --mem=32G
 #SBATCH --time=24:00:00
 #SBATCH --output=logs/permutation_importance/importance_%A_%a.out
 
@@ -51,7 +51,6 @@ pixi run python "${IMPORTANCE_SCRIPT}" \
     --outdir "${OUTPUT_DIR}" \
     --n_repeats "${N_REPEATS}" \
     --n_jobs "${N_JOBS}" \
-    --random_state "${RANDOM_STATE}" \
-    --max_samples 500
+    --random_state "${RANDOM_STATE}"
 
 echo "Finished permutation importance ${FILE_IDX}."

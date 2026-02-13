@@ -4,7 +4,7 @@
 #SBATCH --error=logs/plot/heatmaps_%j.log
 #SBATCH --time=01:00:00
 #SBATCH --cpus-per-task=1
-#SBATCH --mem=32G
+#SBATCH --mem=8G
 set -euo pipefail
 
 # -------------------------
@@ -16,9 +16,10 @@ OUTDIR="/grphome/grp_batch_effects/outputs/metadata_features/plots"
 TRAIN="gse62944_tumor"
 TEST="metabric"
 ALIGNED_CSV="/grphome/grp_batch_effects/outputs/metadata_features/subset/aligned_subset.csv"
+ADJUSTED_DIR="/grphome/grp_batch_effects/outputs/metadata_features/labeled_adjusted"
 
 # Optional parameters
-THRESHOLD=0.004
+THRESHOLD=0.005
 
 export OMP_NUM_THREADS=1
 export OPENBLAS_NUM_THREADS=1
@@ -41,6 +42,20 @@ echo "Found permutation importance CSVs:"
 echo "${CSV_FILES}"
 echo
 
+# ------------------------
+# Collect adjusted CSV files
+# ------------------------
+ADJUSTED_FILES=$(find "${ADJUSTED_DIR}" -type f -name "*_2studies_test_*.csv" | sort)
+
+if [[ -z "${ADJUSTED_FILES}" ]]; then 
+  echo "ERROR: No adjusted CSVs foundin ${ADJUSTED_DIR}"
+  exit 1
+fi 
+
+echo "Found adjusted CSVs:"
+echo "${ADJUSTED_FILES}"
+echo 
+
 # -------------------------
 # Create output directory
 # -------------------------
@@ -55,7 +70,8 @@ pixi run python "${PLOT_SCRIPT}" \
   --threshold "${THRESHOLD}" \
   --train "${TRAIN}" \
   --test "${TEST}" \
-  --aligned_csv "${ALIGNED_CSV}"
+  --aligned_csv "${ALIGNED_CSV}" \
+  --adjusted_csvs ${ADJUSTED_FILES}
 
 echo
 echo "All files written to: ${OUTDIR}"

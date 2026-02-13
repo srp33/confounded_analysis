@@ -31,8 +31,6 @@ def main():
     parser.add_argument("--n_repeats", type=int, default=3)
     parser.add_argument("--n_jobs", type=int, default=1)
     parser.add_argument("--random_state", type=int, default=42)
-    parser.add_argument("--max_samples", type=int, default=500,
-                        help="Max number of test samples to use per permutation importance (speeds up calculation)")
     args = parser.parse_args()
 
     # -------------------------
@@ -43,6 +41,7 @@ def main():
 
     train_df = df[df["meta_source"].str.lower() != test_source.lower()]
     test_df = df[df["meta_source"].str.lower() == test_source.lower()]
+
     if test_df.empty:
         raise ValueError("Test set is empty")
 
@@ -86,11 +85,14 @@ def main():
             continue
 
         clf = joblib.load(model_path)
+
         y_test = test_df[target]
         test_mask = y_test.notna()
+
         X_test = X_test_all.loc[test_mask]
         y_test = y_test.loc[test_mask]
 
+        # Skip degenerate targets
         if y_test.nunique() < 2:
             print(f"  Skipping {target}: <2 classes in test set")
             continue
@@ -98,23 +100,21 @@ def main():
         model_classes = clf.classes_
         test_classes = np.unique(y_test)
         if set(test_classes) != set(model_classes):
-            print(f"  Skipping {target}: class mismatch")
+            print(f"  Skipping {target}: model has classes {model_classes}, test has {test_classes}")
             continue
 
         scoring = "roc_auc" if len(clf.classes_) == 2 else "roc_auc_ovr"
         print(f"  Model type: {type(clf)}, scoring={scoring}")
-        print(f"  Test samples: {X_test.shape[0]} (max_samples={args.max_samples})")
         print(f"  Computing permutation importance...")
 
         r = permutation_importance(
             clf,
             X_test,
             y_test,
-            scoring=scoring,
+            scoring=scoring, 
             n_repeats=args.n_repeats,
             n_jobs=args.n_jobs,
             random_state=args.random_state,
-            max_samples=min(args.max_samples, X_test.shape[0])
         )
 
         importance_dict[target] = r.importances_mean
@@ -127,7 +127,7 @@ def main():
     os.makedirs(out_dir, exist_ok=True)
 
     importance_df = pd.DataFrame(importance_dict, index=feature_cols)
-    out_path = os.path.join(out_dir, f"fast_{n_studies}_{test_source}_permutation_importance.csv")
+    out_path = os.path.join(out_dir, f"{n_studies}_{test_source}_permutation_importance.csv")
     importance_df.to_csv(out_path)
     print(f"\nSaved permutation importance to: {out_path}")
 
