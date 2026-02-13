@@ -47,6 +47,7 @@ seaborn="*"
 snakemake = "==9.13.7"
 snakemake-executor-plugin-slurm = ">=1.9.2,<2"
 r-tidytext = ">=0.4.3,<0.5"
+gseapy = ">=0.12.0,<0.13"
 
 [tasks]
 # Test essential packages
