@@ -143,25 +143,26 @@ pos_hex <- position_beeswarm(
 
 p <- ggplot(plot_data, aes(x = adjuster_label, y = avg_rank)) +
 
-  # A. Background Mass (Boxplot)
-  geom_boxplot(
-    width = 0.6,
-    outlier.shape = NA,
+  # A. Background Mass (Violin)
+  geom_violin(
+    width = 0.7,
     alpha = 0.1,
     color = "grey80",
-    fill = "grey90"
+    fill = "grey90",
+    scale = "width",
+    trim = FALSE
   ) +
 
   # B. Error Bars (IQR)
   geom_errorbar(
     aes(ymin = q25,
         ymax = q75,
+        color = classifier_label, # Matched to points
         alpha = dist_for_alpha,
         group = adjuster_label),
     position = pos_hex,
     width = 0,
-    linewidth = 0.4,
-    color = "grey60"
+    linewidth = 0.4
   ) +
 
   # C. Points
@@ -187,7 +188,7 @@ p <- ggplot(plot_data, aes(x = adjuster_label, y = avg_rank)) +
     show.legend = FALSE
   ) +
 
-  scale_alpha_continuous(range = c(0.4, 1.0), guide = "none") +
+  scale_alpha_continuous(range = c(0.3, 1.0), guide = "none") +
 
   scale_y_reverse(
     breaks = seq(1, max_rank, by = 1),
