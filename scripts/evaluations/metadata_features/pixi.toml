@@ -37,17 +37,20 @@ r-doparallel = "*"       # Parallel backend (gmm_adjust.R)
 r-argparse = "*"
 
 # === Python (Classifier) ===
-python = ">=3.12"
-numpy = "*"
-pandas = "*"
+python = "3.11.*"
+numpy = ">=1.24"
+pandas = ">=2.0"
 scikit-learn = "==1.7.2"
 seaborn="*"
+
+# === Python Utilities ===
+pip = "*"
+setuptools = "<81"
 
 # === Workflow ===
 snakemake = "==9.13.7"
 snakemake-executor-plugin-slurm = ">=1.9.2,<2"
 r-tidytext = ">=0.4.3,<0.5"
-gseapy = ">=0.12.0,<0.13"
 
 [tasks]
 # Test essential packages
@@ -60,3 +63,6 @@ test-all = { depends-on = ["test-r-core", "test-r-bioc", "test-r-batch", "test-d
 
 [activation]
 env={RETICULATE_PYTHON = ".pixi/envs/default/bin/python"}
+
+[pypi-dependencies]
+gseapy= "*"
