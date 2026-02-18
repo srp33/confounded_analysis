@@ -77,32 +77,7 @@ classifier_order <- data %>%
 
 data$classifier_label <- factor(
   data$classifier_label,
-  levels = classifier_order$classifier_label
-)
-
-# Calculate adjuster means per classifier for the points
-adjuster_means <- data %>%
-  group_by(classifier_label, adjuster_label) %>%
-  summarise(
-    mean_mcc = mean(value, na.rm = TRUE),
-    .groups = "drop"
-  )
-
-# Build the violin plot
-p <- ggplot(data, aes(x = classifier_label, y = value)) +
-  # Violin plot showing full distribution
-  geom_violin(fill = "gray85", color = "gray50", alpha = 0.7, scale = "width") +
-  # Add boxplot for quartiles
-  geom_boxplot(width = 0.1, fill = "white", alpha = 0.5, outlier.shape = NA) +
-  # Add colored points for adjuster means
-  geom_point(
-    data = adjuster_means,
-    aes(x = classifier_label, y = mean_mcc, color = adjuster_label),
-    size = 4,
-    position = position_dodge(width = 0.3)
-  ) +
-  # Styling
-  scale_color_brewer(palette = "Set1", name = "Adjuster Mean") +
+  geom_boxplot(data = data,
   labs(
     title = sprintf("MCC Distribution by Classifier (%s)", n_datasets_label),
     subtitle = "Violin shows full distribution | Box shows quartiles | Points show adjuster means",
