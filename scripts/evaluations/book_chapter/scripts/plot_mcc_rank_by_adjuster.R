@@ -1,7 +1,7 @@
 #!/usr/bin/env Rscript
 
 # plot_mcc_rank_spotlight.R
-# Plot MCC ranks with adjuster on x-axis, rank on y-axis.
+# Plot classifier rank distributions by adjuster, spotlighting significant outliers.
 
 options(warn = -1)
 suppressPackageStartupMessages({
@@ -30,16 +30,16 @@ parser$add_argument("--adjusters", type = "character", default = NULL,
                     help = "Comma-separated list of adjusters to include")
 parser$add_argument("--n-datasets", type = "character", default = "all",
                     help = "Number of datasets to filter on, or 'all'")
-parser$add_argument("--debug", action = "store_true", default = FALSE,
-                    help = "Enable debug prints")
+parser$add_argument("--n-labeled-outliers", type = "integer", default = 6,
+                    help = "Number of top outliers to label")
 
 args <- parser$parse_args()
 
 # ==============================================================================
-# Setup Helpers & Constants
+# Constants & Helpers
 # ==============================================================================
 
-# Define label mapping
+# Map internal classifier names to display labels
 classifier_labels_map <- c(
   "rda" = "RDA", "logistic" = "Logistic", "elasticnet" = "ElasticNet",
   "svm" = "SVM", "rf" = "Random Forest", "knn" = "KNN",
@@ -53,156 +53,189 @@ target_adjusters <- if (!is.null(args$adjusters)) trimws(strsplit(args$adjusters
 # Set plot title suffix
 n_datasets_label <- if (is.null(target_n)) "All Studies" else sprintf("%d-Study", target_n)
 
-if (args$debug) {
-  cat("DEBUG: Starting pipeline with n_datasets:", n_datasets_label, "\n")
-  cat("DEBUG: target_n:", target_n, "(NULL check:", is.null(target_n), ")\n")
+# Helper to calculate Hodges-Lehmann estimator
+calc_hodges_lehmann <- function(x) {
+  x <- x[!is.na(x)]
+  if(length(x) == 0) return(NA)
+  # Calculate median of all pairwise averages (Walsh averages)
+  # This is robust like median, but smooth like mean
+  return(median(outer(x, x, "+") / 2))
 }
 
 # ==============================================================================
-# Main Pipeline: Load -> Clean -> Rank -> Aggregate -> Format
+# Data Processing
 # ==============================================================================
 
-plot_data <- read.csv(args$input, stringsAsFactors = FALSE) %>%
-  # Clean whitespace
+# 1. Load and Clean Raw Data
+# --------------------------
+raw_data <- read.csv(args$input, stringsAsFactors = FALSE) %>%
   mutate(across(c(adjuster, classifier), trimws)) %>%
-
-  # Filter: Metrics, Exclusions, and Dynamic Args
+  # Filter for MCC metric and valid entries
   filter(
     metric == "mcc",
     !is.na(value),
     !is.na(n_datasets),
     adjuster != "within_study_cv",
-    !classifier %in% c("logistic", "rda"),
+    !classifier %in% c("logistic", "rda"), # Exclude specific classifiers per requirement
     if (is.null(target_n)) TRUE else n_datasets == target_n,
     is.null(target_adjusters) | adjuster %in% target_adjusters
-  ) %>%
+  )
 
-  # Calculate Rank (Rank 1 = Highest MCC)
+# 2. Calculate Ranks per Study
+# ----------------------------
+ranked_data <- raw_data %>%
+  # Rank descending (1 = Highest MCC)
   mutate(
     rank = rank(-value, ties.method = "average"),
     .by = c(classifier, n_datasets, test_study)
   ) %>%
-
-  # Aggregate Stats (IQR and Mean)
-  summarise(
-    avg_rank = mean(rank, na.rm = TRUE),
-    q25 = quantile(rank, 0.25, na.rm = TRUE),
-    q75 = quantile(rank, 0.75, na.rm = TRUE),
-    n_obs = n(),
-    .by = c(classifier, adjuster)
-  ) %>%
-
-  # Apply Logic: Labels
+  # Add display labels
   mutate(
-    # Map classifier labels
     classifier_label = recode(classifier, !!!classifier_labels_map),
-
-    # Apply external formatter if exists
     adjuster_label = if (exists("format_adjuster_label")) {
       sapply(adjuster, format_adjuster_label)
     } else {
       adjuster
     }
-  ) %>%
-
-  # Apply Logic: Outlier Stats and Ordering
-  mutate(
-    median_rank_group = median(avg_rank, na.rm = TRUE),
-    .by = adjuster_label
-  ) %>%
-  mutate(
-    dist_from_median = abs(avg_rank - median_rank_group),
-    global_dist_iqr = IQR(dist_from_median, na.rm = TRUE),
-    standardized_dev = dist_from_median / global_dist_iqr,
-    dist_for_alpha = pmin(standardized_dev, 2.5)
-  ) %>%
-  # Sort to find top outliers
-  arrange(desc(dist_from_median)) %>%
-  mutate(
-    rank_outlier = row_number(),
-    label_text = ifelse(rank_outlier <= 6, as.character(classifier_label), ""),
-    # Reorder Adjuster factor by performance (mean avg_rank)
-    adjuster_label = reorder(adjuster_label, avg_rank, FUN = mean),
-    # Ensure Classifier legend is consistent (alphabetical or specific order)
-    classifier_label = factor(classifier_label, levels = sort(unique(classifier_label)))
   )
 
-# Calculate axis limits
-max_rank <- ceiling(max(plot_data$q75, na.rm = TRUE))
-if (args$debug) cat("DEBUG: Calculated max_rank for y-axis:", max_rank, "\n")
+# Calculate max rank for plot limits
+max_rank <- max(ranked_data$rank, na.rm = TRUE)
+
+# 3. Aggregate Stats & Identify Outliers
+# --------------------------------------
+outlier_stats <- ranked_data %>%
+  # UPDATE 1: Calculate group center using HL instead of simple median
+  # This ensures we measure deviation from the "HL center"
+  mutate(
+    group_center = calc_hodges_lehmann(rank),
+    .by = adjuster_label
+  ) %>%
+  summarise(
+    avg_rank = calc_hodges_lehmann(rank),
+    group_center = first(group_center),
+    .by = c(classifier_label, adjuster_label)
+  ) %>%
+  # Compute deviation metrics for spotlight effect
+  mutate(
+    abs_dev = abs(avg_rank - group_center),
+    global_iqr = IQR(abs_dev, na.rm = TRUE),
+    z_score_dev = abs_dev / global_iqr,
+    highlight_intensity = z_score_dev
+  ) %>%
+  arrange(desc(abs_dev)) %>%
+  mutate(
+    outlier_rank = row_number(),
+    label_text = ifelse(outlier_rank <= args$n_labeled_outliers, as.character(classifier_label), "")
+  )
 
 # ==============================================================================
-# Plotting
+# 4. Synchronize Factor Levels
 # ==============================================================================
 
-pos_hex <- position_beeswarm(
+# Calculate order: Primary = Median, Secondary = HL (was Mean)
+# UPDATE 2: Use HL for secondary sort key
+adjuster_order <- ranked_data %>%
+  group_by(adjuster_label) %>%
+  summarise(
+    med = median(rank, na.rm = TRUE),
+    hl_avg = calc_hodges_lehmann(rank)
+  ) %>%
+  arrange(med, hl_avg) %>%  # Sort by Median first, then HL
+  pull(adjuster_label)
+
+# Apply the factor levels
+ranked_data$adjuster_label <- factor(ranked_data$adjuster_label, levels = adjuster_order)
+outlier_stats$adjuster_label <- factor(outlier_stats$adjuster_label, levels = adjuster_order)
+
+# Sort classifier legend alphabetically
+outlier_stats$classifier_label <- factor(outlier_stats$classifier_label, 
+                                         levels = sort(unique(outlier_stats$classifier_label)))
+
+# ==============================================================================
+# Visualization
+# ==============================================================================
+
+# Define beeswarm position strategy
+pos_swarm <- position_beeswarm(
   method = "hex",
   cex = 1.5,
   groupOnX = TRUE
 )
 
-p <- ggplot(plot_data, aes(x = adjuster_label, y = avg_rank)) +
+p <- ggplot(mapping = aes(x = adjuster_label)) +
 
-  # A. Background Mass (Violin)
+  # Background Distribution (Violins)
+  # Show full distribution of raw ranks
   geom_violin(
+    data = ranked_data, 
+    aes(y = rank),
     width = 0.7,
     alpha = 0.1,
     color = "grey80",
     fill = "grey90",
-    scale = "width",
-    trim = FALSE
+    trim = TRUE
   ) +
 
-  # B. Error Bars (IQR)
-  geom_errorbar(
-    aes(ymin = q25,
-        ymax = q75,
-        color = classifier_label, # Matched to points
-        alpha = dist_for_alpha,
-        group = adjuster_label),
-    position = pos_hex,
-    width = 0,
-    linewidth = 0.4
+  # Median/HL Lines (Crossbars)
+  # UPDATE 3: Use HL for the visual crossbar so it matches the data point logic
+  stat_summary(
+    data = ranked_data,
+    aes(y = rank),
+    fun = calc_hodges_lehmann,
+    fun.min = calc_hodges_lehmann,
+    fun.max = calc_hodges_lehmann,
+    geom = "crossbar",
+    width = 0.5,
+    size = 0.4, 
+    color = "grey40"
   ) +
 
-  # C. Points
+  # HL Ranks (Points)
+  # Highlight points based on deviation from group center
   geom_point(
-    aes(color = classifier_label,
-        alpha = dist_for_alpha,
+    data = outlier_stats,
+    aes(y = avg_rank,
+        color = classifier_label,
+        alpha = highlight_intensity,
         group = adjuster_label),
-    position = pos_hex,
+    position = pos_swarm,
     size = 5.0,
   ) +
 
-  # D. Outlier Labels
+  # Outlier Labels
+  # Text for top N deviations
   geom_text(
-    aes(label = label_text,
-        alpha = dist_for_alpha,
+    data = outlier_stats,
+    aes(y = avg_rank,
+        # 1. Add 2 spaces for a fixed horizontal buffer
+        label = paste0("  ", label_text), 
         group = adjuster_label),
-    position = pos_hex,
-    vjust = -0.8,
-    hjust = -0.3,
+    position = pos_swarm,
+    # 2. Use hjust = 0 so the "start" of the string (the spaces) anchors to the point
+    hjust = 0,        
+    vjust = 0.5,      # Center vertically
     size = 3.5,
     fontface = "bold",
     color = "black",
     show.legend = FALSE
   ) +
 
-  scale_alpha_continuous(range = c(0.3, 1.0), guide = "none") +
+  # Scales & Theme
+  scale_alpha_continuous(range = c(0.4, 1.0), guide = "none") +
 
   scale_y_reverse(
-    breaks = seq(1, max_rank, by = 1),
-    limits = c(max_rank + 0.5, 0.5)
+    breaks = seq(1, max_rank, by = 1)
   ) +
 
   scale_x_discrete(expand = expansion(add = 1.0)) +
   coord_cartesian(clip = "off") +
 
   labs(
-    title = sprintf("MCC Rank by Adjuster (%s)", n_datasets_label),
-    subtitle = "Hex-packed by Rank. Bars show 25th-75th Percentiles. Labels show top 6 outliers.",
+    title = sprintf("Robustness of Adjustment Methods to Classifier Selection"),
+    subtitle = "Violins: Distribution of Rank across Classification Scenarios\nPoints: Pseudomedian of Adjuster Rank by Classifier",
     x = NULL,
-    y = "Average Rank (Lower is Better)",
+    y = "Adjuster Rank Among Other Adjusters",
     color = "Classifier"
   ) +
 
@@ -218,5 +251,6 @@ p <- ggplot(plot_data, aes(x = adjuster_label, y = avg_rank)) +
     plot.subtitle = element_text(hjust = 0.5, color = "grey40")
   )
 
+# Save Output
 ggsave(args$output, p, width = args$width, height = args$height, dpi = args$dpi, bg = "white")
-if (args$debug) cat("DEBUG: Saved plot to:", args$output, "\n")
+cat("Saved plot to:", args$output, "\n")
