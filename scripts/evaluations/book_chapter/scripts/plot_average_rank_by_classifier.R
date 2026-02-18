@@ -1,8 +1,7 @@
 #!/usr/bin/env Rscript
 
 # plot_average_rank_by_classifier.R
-# Generate violin plots showing MCC distribution per classifier with adjuster means
-# X-axis: classifier, Y-axis: MCC, Violin: full distribution, Points: adjuster means
+# Merged version: Uses Snippet 1 color logic + Snippet 2 manual boxplot layout.
 
 options(warn = -1)
 suppressPackageStartupMessages({
@@ -10,33 +9,35 @@ suppressPackageStartupMessages({
   library(ggplot2)
   library(dplyr)
   library(tidyr)
+  library(grid)
 })
 
-source("scripts/adjuster_plot_utils.R")
+# Load utils if present (Crucial for correct label formatting)
+if (file.exists("scripts/adjuster_plot_utils.R")) {
+  source("scripts/adjuster_plot_utils.R")
+}
 
 parser <- ArgumentParser(description = "Create MCC violin plot by classifier with adjuster means")
-parser$add_argument("-i", "--input", type = "character", required = TRUE,
-                    help = "Input CSV file with adjuster results")
-parser$add_argument("-o", "--output", type = "character", required = TRUE,
-                    help = "Output PNG file")
-parser$add_argument("--width", type = "double", default = 12)
-parser$add_argument("--height", type = "double", default = 8)
+parser$add_argument("-i", "--input", type = "character", required = TRUE, help = "Input CSV")
+parser$add_argument("-o", "--output", type = "character", required = TRUE, help = "Output PNG")
+parser$add_argument("--width", type = "double", default = 10)
+parser$add_argument("--height", type = "double", default = 10)
 parser$add_argument("--dpi", type = "integer", default = 300)
-parser$add_argument("--adjusters", type = "character", default = NULL,
-                    help = "Comma-separated list of adjusters to include")
-parser$add_argument("--n-datasets", type = "character", default = "4",
-                    help = "Number of datasets to filter on, or 'all' to average across all (default: 4)")
+parser$add_argument("--adjusters", type = "character", default = NULL, help = "Filter adjusters")
+parser$add_argument("--n-datasets", type = "character", default = "4", help = "Filter n_datasets")
 
 args <- parser$parse_args()
 
-# Load data
+# Load Data
 data <- read.csv(args$input, stringsAsFactors = FALSE)
-
-# Filter to MCC metric and remove NA classifiers
 data <- data %>%
   filter(metric == "mcc", !is.na(value), !is.na(n_datasets), !is.na(classifier))
 
-# Filter to specified n_datasets unless "all"
+# Clean whitespace to prevent matching errors
+data$adjuster <- trimws(data$adjuster)
+data$classifier <- trimws(data$classifier)
+
+# Filter N-Datasets
 n_datasets_label <- args$n_datasets
 if (tolower(args$n_datasets) != "all") {
   n_val <- as.integer(args$n_datasets)
@@ -46,30 +47,40 @@ if (tolower(args$n_datasets) != "all") {
   n_datasets_label <- "All Studies"
 }
 
-# Filter adjusters if specified
+# Filter Adjusters
 if (!is.null(args$adjusters)) {
   adjusters_filter <- trimws(strsplit(args$adjusters, ",")[[1]])
   data <- data %>% filter(adjuster %in% adjusters_filter)
 }
 
-# Create nice labels
+# Label Classifiers
 classifier_labels <- c(
-  "logistic" = "Logistic",
-  "elasticnet" = "ElasticNet", 
-  "svm" = "SVM",
-  "rf" = "Random Forest",
-  "knn" = "KNN",
-  "xgboost" = "XGBoost",
-  "nnet" = "Neural Net",
-  "shrinkageLDA" = "Shrinkage LDA"
+  "logistic" = "Logistic", "elasticnet" = "ElasticNet", "svm" = "SVM",
+  "rf" = "Random Forest", "knn" = "KNN", "xgboost" = "XGBoost",
+  "nnet" = "Neural Net", "shrinkageLDA" = "Shrinkage LDA"
 )
-
 data$classifier_label <- classifier_labels[data$classifier]
 
-# Format adjuster labels
-data$adjuster_label <- sapply(data$adjuster, format_adjuster_label)
+# Format Adjuster Labels (Uses utils logic if available)
+if (exists("format_adjuster_label")) {
+    data$adjuster_label <- sapply(data$adjuster, format_adjuster_label)
+} else {
+    data$adjuster_label <- data$adjuster
+}
 
-# Order classifiers by median MCC (best performers first)
+# Order Adjusters (Best Median on Top)
+adjuster_order <- data %>%
+  group_by(adjuster_label) %>%
+  summarise(median_mcc = median(value, na.rm = TRUE), .groups = "drop") %>%
+  arrange(desc(median_mcc))
+
+data$adjuster_label <- factor(
+  data$adjuster_label,
+  levels = adjuster_order$adjuster_label,
+  ordered = TRUE
+)
+
+# Order Classifiers
 classifier_order <- data %>%
   group_by(classifier, classifier_label) %>%
   summarise(median_mcc = median(value, na.rm = TRUE), .groups = "drop") %>%
@@ -77,49 +88,169 @@ classifier_order <- data %>%
 
 data$classifier_label <- factor(
   data$classifier_label,
-  levels = classifier_order$classifier_label
+  levels = classifier_order$classifier_label,
+  ordered = TRUE
 )
+data <- data %>% filter(!is.na(classifier_label))
 
-# Calculate adjuster means per classifier for the points
-adjuster_means <- data %>%
-  group_by(classifier_label, adjuster_label) %>%
+# ==============================================================================
+# Define Color Palette (Logic from Snippet 1)
+# ==============================================================================
+
+group_highlight_1 <- c("Within-Study CV")
+group_highlight_2 <- c("ComBat-Sup")
+group_aggregate_1 <- c("ComBat", "Combat_mean", "NPN", "Rank Twice", "Naive")
+group_aggregate_2 <- c("MNN", "FastMNN", "Rank Samples", "Unadjusted")
+
+all_adjusters <- levels(data$adjuster_label)
+palette_map <- character(length(all_adjusters))
+names(palette_map) <- all_adjusters
+
+# ==============================================================================
+# Define Color Palette (Modern Scientific Aesthetic)
+# ==============================================================================
+
+# Custom professional palette
+color_vermilion <- "#D55E00" # Strong Highlight
+color_blue      <- "#7c3bb4ff" # Secondary Highlight
+color_slate     <- "#7296bcff" # Muted Blue-Gray 
+color_sky       <- "#A0CBE8" # Soft Cyan-Gray
+color_fallback   <- "#F0E442" # Warning
+
+all_adjusters <- levels(data$adjuster_label)
+palette_map <- character(length(all_adjusters))
+names(palette_map) <- all_adjusters
+
+for (lbl in all_adjusters) {
+  if (lbl %in% group_highlight_1) {
+    palette_map[lbl] <- color_vermilion
+  } else if (lbl %in% group_highlight_2) {
+    palette_map[lbl] <- color_blue
+  } else if (lbl %in% group_aggregate_1) {
+    palette_map[lbl] <- color_slate
+  } else if (lbl %in% group_aggregate_2) {
+    palette_map[lbl] <- color_sky
+  } else {
+    palette_map[lbl] <- color_fallback
+  }
+}
+
+# ==============================================================================
+# Manual Boxplot Calculation (Logic from Snippet 2)
+# ==============================================================================
+
+box_stats <- data %>%
+  group_by(classifier_label) %>%
   summarise(
-    mean_mcc = mean(value, na.rm = TRUE),
-    .groups = "drop"
+    q1 = quantile(value, 0.25, na.rm = TRUE),
+    median = median(value, na.rm = TRUE),
+    q3 = quantile(value, 0.75, na.rm = TRUE),
+    iqr = IQR(value, na.rm = TRUE),
+    lower_whisker = max(min(value), q1 - 1.5 * iqr),
+    upper_whisker = min(max(value), q3 + 1.5 * iqr),
+    
+    # Calculate scale factor for positioning below stack
+    n_adjusters = n_distinct(adjuster_label),
+    base_density = max(density(value, na.rm = TRUE)$y),
+    scale_factor = base_density * n_adjusters
+  ) %>%
+  mutate(
+    box_top    = -0.05 * scale_factor,
+    box_bottom = -0.20 * scale_factor,
+    mid_y      = (box_top + box_bottom) / 2
   )
 
-# Build the violin plot
-p <- ggplot(data, aes(x = classifier_label, y = value)) +
-  # Violin plot showing full distribution
-  geom_violin(fill = "gray85", color = "gray50", alpha = 0.7, scale = "width") +
-  # Add boxplot for quartiles
-  geom_boxplot(width = 0.1, fill = "white", alpha = 0.5, outlier.shape = NA) +
-  # Add colored points for adjuster means
-  geom_point(
-    data = adjuster_means,
-    aes(x = classifier_label, y = mean_mcc, color = adjuster_label),
-    size = 4,
-    position = position_dodge(width = 0.3)
-  ) +
-  # Styling
-  scale_color_brewer(palette = "Set1", name = "Adjuster Mean") +
+# Align factors for join
+box_stats$classifier_label <- factor(box_stats$classifier_label, levels = levels(data$classifier_label))
+
+# Identify Outliers
+outliers <- data %>%
+  left_join(box_stats, by = "classifier_label") %>%
+  filter(value < lower_whisker | value > upper_whisker) %>%
+  mutate(y_pos = mid_y)
+
+# ==============================================================================
+# Plot
+# ==============================================================================
+
+p <- ggplot(data, aes(x = value)) +
+  
+  # 1. Stacked Density
+  geom_density(aes(fill = adjuster_label),
+               alpha = 1.0,
+               position = "stack", 
+               color = "darkgrey",
+               size = 0.1) +  
+
+  # 2. Manual Boxplot (Rect)
+  geom_rect(data = box_stats,
+            aes(xmin = q1, xmax = q3, ymin = box_bottom, ymax = box_top),
+            fill = NA,            
+            color = "black",        
+            size = 0.4,
+            inherit.aes = FALSE) + 
+  
+  # 3. Median Line
+  geom_segment(data = box_stats,
+               aes(x = median, xend = median, y = box_bottom, yend = box_top),
+               color = "black",
+               size = 1.2,
+               inherit.aes = FALSE) +
+  
+  # 4. Whiskers
+  geom_segment(data = box_stats,
+               aes(x = lower_whisker, xend = q1, y = mid_y, yend = mid_y),
+               color = "black", inherit.aes = FALSE) +
+  geom_segment(data = box_stats,
+               aes(x = q3, xend = upper_whisker, y = mid_y, yend = mid_y),
+               color = "black", inherit.aes = FALSE) +
+  
+  # 5. Whisker Caps
+  geom_segment(data = box_stats,
+               aes(x = lower_whisker, xend = lower_whisker, 
+                   y = box_bottom + (box_top-box_bottom)*0.25, 
+                   yend = box_top - (box_top-box_bottom)*0.25),
+               color = "black", inherit.aes = FALSE) +
+  geom_segment(data = box_stats,
+               aes(x = upper_whisker, xend = upper_whisker, 
+                   y = box_bottom + (box_top-box_bottom)*0.25, 
+                   yend = box_top - (box_top-box_bottom)*0.25),
+               color = "black", inherit.aes = FALSE) +
+
+  # 6. Outliers
+  geom_point(data = outliers,
+             aes(x = value, y = y_pos),
+             shape = 16, 
+             size = 0.8, 
+             alpha = 0.5,
+             inherit.aes = FALSE) +
+
+  facet_wrap(~ classifier_label, scales = "free_y", ncol = 1, strip.position = "left") +
+  scale_fill_manual(values = palette_map, name = "Adjuster") +
+  
+  # Expand bottom to fit boxplot
+  scale_y_continuous(expand = expansion(mult = c(0.25, 0.05))) + 
+  
   labs(
-    title = sprintf("MCC Distribution by Classifier (%s)", n_datasets_label),
-    subtitle = "Violin shows full distribution | Box shows quartiles | Points show adjuster means",
-    x = "Classifier",
-    y = "MCC"
+    title = sprintf("MCC Distribution Decomposition (%s)", n_datasets_label),
+    subtitle = "Stacked densities showing adjuster contribution; Box plot (bottom) shows aggregate classifier performance",
+    x = "MCC Score",
+    y = NULL
   ) +
+  
   theme_minimal(base_size = 12) +
   theme(
-    axis.text.x = element_text(angle = 45, hjust = 1),
-    panel.grid.major.y = element_line(color = "gray90"),
-    panel.grid.major.x = element_blank(),
-    panel.grid.minor = element_blank(),
     legend.position = "right",
+    panel.grid.major.x = element_line(color = "gray90"),
+    panel.grid.minor = element_blank(),
+    axis.text.y = element_blank(),
+    axis.ticks.y = element_blank(),
+    strip.text.y.left = element_text(angle = 0, hjust = 1, face = "bold", size = 10),
+    strip.placement = "outside",
+    strip.background = element_blank(),
     plot.title = element_text(face = "bold", hjust = 0.5),
     plot.subtitle = element_text(hjust = 0.5, size = 10)
   )
 
-# Save the plot
 ggsave(args$output, p, width = args$width, height = args$height, dpi = args$dpi, bg = "white")
 cat("Saved plot to:", args$output, "\n")

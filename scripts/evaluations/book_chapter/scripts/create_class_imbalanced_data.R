@@ -214,8 +214,8 @@ create_class_imbalanced_datasets <- function() {
         paste(imbalance_levels * 100, collapse = ", ")
       ))
     }
-    cat(sprintf("  %s — %s: OK (total=%.0f, per_ds=%.0f)\n",
-                pair[1], pair[2], arrangement$total_samples, arrangement$total_samples / 2))
+    cat(sprintf("  %s — %s: OK (per_ds=%.0f)\n",
+                pair[1], pair[2], arrangement$total_samples))
   }
   cat("All pairs feasible.\n")
 
@@ -235,7 +235,7 @@ create_class_imbalanced_datasets <- function() {
     high_dataset <- arrangement$high_active_dataset
     low_dataset <- arrangement$low_active_dataset
     consistent_total <- arrangement$total_samples
-    total_samples_per_dataset <- consistent_total / 2
+    total_samples_per_dataset <- consistent_total  # total_samples is already per-dataset
 
     cat(sprintf("  Arrangement: %s=high active, %s=low active\n", high_dataset, low_dataset))
     cat(sprintf("  Consistent sample size: %.0f per dataset\n", total_samples_per_dataset))
