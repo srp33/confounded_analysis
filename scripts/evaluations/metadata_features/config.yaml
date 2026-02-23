@@ -3,6 +3,7 @@
 output_folder: "/grphome/grp_batch_effects/outputs/metadata_features"
 data_folder: "/grphome/grp_batch_effects/data"
 scripts_dir: "."
+combine_script: "../classify_er_all_datasets/combine_all.py"
 adjust_script: "../../adjust/adjust.R"
 scaling_script: "../classify_er_all_datasets/run_scaling_experiment.R"
 

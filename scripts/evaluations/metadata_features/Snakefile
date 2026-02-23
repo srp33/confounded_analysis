@@ -8,6 +8,7 @@ import os
 OUTPUT_DIR = config["output_folder"]
 DATA_DIR = config["data_folder"]
 SCRIPTS_DIR = config.get("scripts_dir", ".")
+COMBINE_SCRIPT = config["combine_script"]
 ADJUST_SCRIPT = config.get("adjust_script", "../../adjust/adjust.R")
 SCALING_SCRIPT = config.get("scaling_script", "../classify_er_all_datasets/run_scaling_experiment.R")
 
@@ -60,12 +61,15 @@ rule combine:
     input: 
         gold_dir=os.path.join(DATA_DIR, "gold")
     output:
-        combined_file=os.path.join(DATA_DIR, "all_combined/all_combined.csv")
+        combined_file=os.path.join(DATA_DIR, "all_combined/combined_labeled.csv")
     log: 
         "logs/combine/combine.log"
+    resources:
+        mem_mb=16000,
+        runtime=60
     shell:
         """
-        python {SCRIPTS_DIR}/combine_all.py \
+        python {COMBINE_SCRIPT} \
             --input-dir {input.gold_dir} \
             --output-file {output.combined_file} \
             &> {log}
@@ -76,11 +80,14 @@ rule combine:
 # -------------------------
 rule subset:
     input: 
-        combined_file=os.path.join(DATA_DIR, "all_combined/all_combined.csv")
+        combined_file=os.path.join(DATA_DIR, "all_combined/combined_labeled.csv")
     output: 
         subset_file=os.path.join(SUBSET_DIR, "{k}studies_test_{test_source}_subset.csv")
     log: 
         "logs/subset/{k}_{test_source}_subset.log"
+    resources:
+        mem_mb=16000,
+        runtime=30
     params:
         data_list=" ".join(config['dataset_list'])
     shell:
@@ -103,6 +110,9 @@ rule align_metadata:
         aligned=os.path.join(SUBSET_DIR, "{k}studies_test_{test_source}_aligned.csv")
     log:
         "logs/align/{k}_{test_source}_alignment.log"
+    resources:
+        mem_mb=4000,
+        runtime=30
     shell:
         """
         python {SCRIPTS_DIR}/align_metadata.py \
@@ -125,6 +135,9 @@ rule adjust:
         )
     log: 
         "logs/adjust/{adjuster}_{k}_{test_source}_adjust.log"
+    resources:
+        mem_mb=2400,
+        runtime=90
     params:
         output_dir=ADJUST_DIR,
         adjust_script=ADJUST_SCRIPT,
@@ -150,10 +163,12 @@ rule train_metrics:
     input: 
         csv=os.path.join(ADJUST_DIR, "{adjuster}", "{adjuster}_{k}studies_test_{test_source}.csv")
     output:
-        metrics=os.path.join(CLASSIFY_DIR, "{adjuster}", "{adjuster}_{k}studies_test_{test_source}_metrics.csv"),
-        models_dir=directory(os.path.join(CLASSIFY_DIR, "{adjuster}", "models"))
+        metrics=os.path.join(CLASSIFY_DIR, "{adjuster}", "{adjuster}_{k}studies_test_{test_source}_metrics.csv")
     log:
         "logs/train/{adjuster}_{k}_{test_source}_train.log"
+    resources:
+        mem_mb=32000,
+        runtime=30
     params: 
         random_state=RANDOM_STATE 
     shell:
@@ -171,11 +186,14 @@ rule train_metrics:
 rule permutation_importance:
     input:
         csv=os.path.join(ADJUST_DIR, "{adjuster}", "{adjuster}_{k}studies_test_{test_source}.csv"),
-        models_dir=directory(os.path.join(CLASSIFY_DIR, "{adjuster}", "models"))
+        models_dir=os.path.join(CLASSIFY_DIR, "{adjuster}", "models")
     output:
         importance=os.path.join(PERM_DIR, "{adjuster}", "{k}_{test_source}_permutation_importance.csv")
     log:
         "logs/perm/{adjuster}_{k}_{test_source}_perm.log"
+    resources: 
+        mem_mb=32000,
+        runtime=960
     params:
         n_repeats=N_REPEATS,
         n_jobs=N_JOBS,
@@ -199,7 +217,8 @@ rule aggregate_and_plot_heatmap:
     input:
         importance=lambda wc: expand(
             os.path.join(PERM_DIR, "{adjuster}", f"{wc.k}_{wc.test_source}_permutation_importance.csv"),
-            adjuster=ADJUSTERS
+            adjuster=ADJUSTERS,
+            test_source=TEST_SOURCES
         )
     output:
         heatmap=os.path.join(
@@ -212,6 +231,9 @@ rule aggregate_and_plot_heatmap:
         )
     log:
         "logs/plot/{k}_{test_source}_{target}_heatmap.log"
+    resources:
+        mem_mb=8000,
+        runtime=60
     params:
         aggregation="mean"
     shell:
@@ -233,13 +255,17 @@ rule rank_and_select_top_genes:
             os.path.join(PLOT_DIR, "{adjuster}_{k}_{test_source}_{target}_aggregated_permutation_importance.csv"),
             adjuster=ADJUSTERS,
             k=K_VALUES,
-            test_source=TEST_SOURCES
+            test_source=TEST_SOURCES,
+            target=TARGETS
         )
     output:
         filtered_csv=os.path.join(PLOT_DIR, "filtered_{k}_{test_source}_{target}_permutation_importance.csv"),
         top_genes_dir=directory(os.path.join(PLOT_DIR, "top_genes_{k}_{test_source}_{target}"))
     log:
         "logs/top_genes/{k}_{test_source}_{target}.log"
+    resources: 
+        mem_mb=8000,
+        runtime=60
     params:
         top_k=TOP_K,
         threshold=THRESHOLD,

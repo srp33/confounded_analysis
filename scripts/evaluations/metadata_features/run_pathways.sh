@@ -27,7 +27,7 @@ mkdir -p "${OUTDIR}"
 # Collect GMT Files
 # -------------------------------------------------
 
-mapfile -t GMT_FILES < <(find "${META_DIR}" -type f -name "*.gmt" | sort)
+mapfile -t GMT_FILES < <(find "${META_DIR}" -type f -name "*.gmt" ! -path "*pathway_analysis*" | sort)
 
 if [[ ${#GMT_FILES[@]} -eq 0 ]]; then
     echo "ERROR: No GMT files found in ${META_DIR}"

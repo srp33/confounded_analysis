@@ -14,6 +14,11 @@ def run_preranked_gsea(ranked_file, output_dir, gmt_files):
     """
     # Load gene rankings
     df = pd.read_csv(ranked_file)
+    df["gene"] = (
+        df["gene"]
+        .str.split(".").str[0]
+        .str.upper()
+    )
     df = df.set_index("gene")
     ranking_metric = df["max_importance"]
 
@@ -25,7 +30,9 @@ def run_preranked_gsea(ranked_file, output_dir, gmt_files):
             outdir=os.path.join(output_dir, os.path.basename(gmt_path).replace(".gmt","")),
             permutation_num=100,  # adjust for speed/accuracy
             seed=42,
-            verbose=True
+            verbose=True,
+            min_size=5,
+            max_size=1000
         )
         print(f"Completed {gmt_path}")
 
@@ -43,6 +50,11 @@ def run_ora(selected_genes, gmt_files, outdir):
         outdir=os.path.join(outdir, "ORA"),
         cutoff=0.05
     )
+
+    if res.results is None or res.results.empty:
+        print("No significant ORA terms found at cutoff=0.05")
+        return pd.DataFrame()
+    
     return res.results
 
 
@@ -58,8 +70,16 @@ def main():
 
     # Load selected genes
     df = pd.read_csv(args.selected_genes_csv)
+
+    df["gene"] = (
+        df["gene"]
+        .str.split(".").str[0]
+        .str.upper()
+    )
+
     if args.top_n is not None:
         df = df.nlargest(args.top_n, "max_importance")
+
     top_genes = df["gene"].tolist()
 
     print(f"Using {len(top_genes)} genes for pathway analysis")
@@ -79,8 +99,12 @@ def main():
     )
 
     # Save ORA results
-    ora_results.to_csv(os.path.join(args.outdir, "ORA_results.csv"), index=False)
-    print("ORA results saved.")
+
+    if not ora_results.empty:
+        ora_results.to_csv(os.path.join(args.outdir, "ORA_results.csv"), index=False)
+        print("ORA results saved.")
+    else:
+        print("No ORA results to save.")
 
 
 if __name__ == "__main__":
