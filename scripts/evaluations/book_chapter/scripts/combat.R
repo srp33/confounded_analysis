@@ -114,6 +114,7 @@ ComBat <- function(dat, batch, mod = NULL, par.prior = TRUE, prior.plots = FALSE
     design <- cbind(batchmod,mod)
   
     ## check for intercept in covariates, and drop if present
+    ## This way, the only intercept columns are the batch indicator columns
     check <- apply(design, 2, function(x) all(x == 1))
     if(!is.null(ref)){
         check[ref] <- FALSE
@@ -147,15 +148,19 @@ ComBat <- function(dat, batch, mod = NULL, par.prior = TRUE, prior.plots = FALSE
     ##Standardize Data across genes
     message('Standardizing Data across genes')
     if (!NAs){
+        # Calculate OLS coefficients between design and data for all genes.
         B.hat <- solve(crossprod(design), tcrossprod(t(design), as.matrix(dat)))
     } else { 
+        # Fit model gene-by-gene to handle missing values.
         B.hat <- apply(dat, 1, Beta.NA, design) # FIXME
     }
-    
-    ## change grand.mean for ref batch
+
+    ## Calculate grand mean as the overall mean for each gene
     if(!is.null(ref.batch)){
+        # If using reference batch, extract mean specific to the reference batch.
         grand.mean <- t(B.hat[ref, ])
     } else {
+        # Compute weighted average for the overall grand mean.
         grand.mean <- crossprod(n.batches/n.array, B.hat[1:n.batch,])
     }
   
@@ -163,8 +168,12 @@ ComBat <- function(dat, batch, mod = NULL, par.prior = TRUE, prior.plots = FALSE
     if (!NAs){
         if(!is.null(ref.batch)) {
             ref.dat <- dat[, batches[[ref]]]
+            # Compute pooled variance for the reference batch.
+            # Calculate sum of squared residuals (relative to the reference batch fitted values) divided by the reference sample count.
             var.pooled <- ((ref.dat-t(design[batches[[ref]], ] %*% B.hat))^2) %*% rep(1/n.batches[ref],n.batches[ref]) # FIXME
         } else {
+            # Compute pooled variance across all arrays.
+            # Calculate sum of squared residuals (relative to the full OLS fitted values) divided by the total array count.
             var.pooled <- ((dat-t(design %*% B.hat))^2) %*% rep(1/n.array,n.array) # FIXME
         }
     } else {
@@ -176,23 +185,36 @@ ComBat <- function(dat, batch, mod = NULL, par.prior = TRUE, prior.plots = FALSE
         }
     }
   
+    # Expand grand mean to shape (genes x total arrays)
     stand.mean <- t(grand.mean) %*% t(rep(1,n.array)) # FIXME
+    
     if(!is.null(design)){
         tmp <- design
+        # Zero out batch indicator columns. This removes the intercept columns. 
         tmp[,c(1:n.batch)] <- 0
+        # Add biological covariates back to the baseline mean. Tmp %*% B.hat is the predicted deviation from the gene mean for each sample and gene. 
         stand.mean <- stand.mean+t(tmp %*% B.hat) #FIXME
     }  
+    
+    # Define s.data as the original data minus (mean + biological effects) to isolate batch deviations from mean + biology
+    # Scale by pooled standard deviation to standardize
     s.data <- (dat-stand.mean)/(sqrt(var.pooled) %*% t(rep(1,n.array))) # FIXME
   
     ##Get regression batch effect parameters
     message("Fitting L/S model and finding priors")
+    # Subset design matrix to batch indicators only.
     batch.design <- design[, 1:n.batch]
+
     if (!NAs){
+        # Calculate additive batch effects (gamma) using OLS
       gamma.hat <- solve(crossprod(batch.design), tcrossprod(t(batch.design),
                                                              as.matrix(s.data)))
     } else{
+        # Calculate additive batch effects gene-by-gene to handle NAs.
         gamma.hat <- apply(s.data, 1, Beta.NA, batch.design) # FIXME
     }
+
+    # Calculate multiplicative batch effects (delta).
     delta.hat <- NULL
     for (i in batches){
         if(mean.only==TRUE) {
@@ -311,27 +333,3 @@ ComBat <- function(dat, batch, mod = NULL, par.prior = TRUE, prior.plots = FALSE
     
     return(bayesdata)
 }
-Try the sva package in your browser
-library(sva)
-
-help(ComBat)
-Any scripts or data that you put into this service are public.
-
-sva documentation built on Nov. 8, 2020, 8:16 p.m.
-R Package Documentation
-rdrr.io home
-R language documentation
-Run R code online
-Browse R Packages
-CRAN packages
-Bioconductor packages
-R-Forge packages
-GitHub packages
-We want your feedback!
-Note that we can't provide technical support on individual packages. You should contact the package authors for that.
- Tweet to @rdrrHQ
- GitHub issue tracker
- ian@mutexlabs.com
- Personal blog
-
-
