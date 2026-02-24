@@ -70,7 +70,7 @@ def log_transform_per_dataset(df, test_source):
 
 def write_subset(df, output_path, n_studies, test):
     os.makedirs(os.path.dirname(output_path), exist_ok=True)
-    output_filename = os.path.join(output_path, f"{n_studies}studies_test_{test}_subset.csv")
+    output_filename = os.path.join(output_path, f"test_{test}_subset.csv")
     df.to_csv(output_filename, index=False)
     print(f">>> Subset written to: {output_path}")
 
@@ -82,7 +82,7 @@ def main():
                         help="All combined file")
     parser.add_argument("--test", required=True,
                         help="Test dataset meta_source")
-    parser.add_argument("--dataset_list", required=True,
+    parser.add_argument("--dataset_list", nargs="+", required=True,
                         help="List of GSE ids for datasets to include")
     parser.add_argument("--out_dir", required=True)
 
@@ -90,11 +90,11 @@ def main():
 
     df = load_combined_data(args.input)
 
-    data_list = args.dataset_list.split()
+    data_list = args.dataset_list
 
     subset = create_subset(df, data_list)
     processed = log_transform_per_dataset(subset, args.test)
-    write_subset(processed, args.output, len(data_list), args.test)
+    write_subset(processed, args.out_dir, len(data_list), args.test)
 
 if __name__ == "__main__":
     main()

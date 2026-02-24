@@ -109,7 +109,7 @@ rule adjust:
     output: 
         DATA_FOLDER + "/adjusted_data/{adjuster}/{adjuster}_{k}studies_test_{test_source}.csv"
     resources: 
-        mem_mb=24000,
+        mem_mb=64000,
         runtime=90
     threads: 1
     log: 

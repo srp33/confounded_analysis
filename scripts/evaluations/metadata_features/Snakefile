@@ -30,6 +30,12 @@ CLASSIFY_DIR = os.path.join(OUTPUT_DIR, "classify")
 PERM_DIR = os.path.join(OUTPUT_DIR, "permutation_importance")
 PLOT_DIR = os.path.join(OUTPUT_DIR, "plots")
 
+wildcard_constraints:
+    test_source="|".join(TEST_SOURCES),
+    adjuster="|".join(ADJUSTERS),
+    target="|".join(TARGETS),
+    k="|".join(map(str, K_VALUES))
+
 # -------------------------
 # All targets
 # -------------------------
@@ -82,9 +88,9 @@ rule subset:
     input: 
         combined_file=os.path.join(DATA_DIR, "all_combined/combined_labeled.csv")
     output: 
-        subset_file=os.path.join(SUBSET_DIR, "{k}studies_test_{test_source}_subset.csv")
+        subset_file=os.path.join(SUBSET_DIR, "test_{test_source}_subset.csv")
     log: 
-        "logs/subset/{k}_{test_source}_subset.log"
+        "logs/subset/{test_source}_subset.log"
     resources:
         mem_mb=16000,
         runtime=30
@@ -105,11 +111,11 @@ rule subset:
 # -------------------------
 rule align_metadata:
     input: 
-        subset=os.path.join(SUBSET_DIR, "{k}studies_test_{test_source}_subset.csv")
+        subset=os.path.join(SUBSET_DIR, "test_{test_source}_subset.csv")
     output:
-        aligned=os.path.join(SUBSET_DIR, "{k}studies_test_{test_source}_aligned.csv")
+        aligned=os.path.join(SUBSET_DIR, "metadata_aligned_{test_source}.csv")
     log:
-        "logs/align/{k}_{test_source}_alignment.log"
+        "logs/align/{test_source}_alignment.log"
     resources:
         mem_mb=4000,
         runtime=30
@@ -126,7 +132,7 @@ rule align_metadata:
 # -------------------------
 rule adjust: 
     input: 
-        aligned=os.path.join(SUBSET_DIR, "{k}studies_test_{test_source}_aligned.csv")
+        aligned=os.path.join(SUBSET_DIR, "metadata_aligned_{test_source}.csv")
     output: 
         adjusted=os.path.join(
             ADJUST_DIR,
@@ -145,7 +151,7 @@ rule adjust:
     shell:
         """
         set -euo pipefail
-        Rscript {SCALING_SCRIPT} \
+        pixi run Rscript {SCALING_SCRIPT} \
             --adjuster {wildcards.adjuster} \
             --subset-path {input.aligned} \
             --k {wildcards.k} \
@@ -216,9 +222,10 @@ rule permutation_importance:
 rule aggregate_and_plot_heatmap:
     input:
         importance=lambda wc: expand(
-            os.path.join(PERM_DIR, "{adjuster}", f"{wc.k}_{wc.test_source}_permutation_importance.csv"),
+            os.path.join(PERM_DIR, "{adjuster}", "{k}_{test_source}_permutation_importance.csv"),
             adjuster=ADJUSTERS,
-            test_source=TEST_SOURCES
+            k=[wc.k],
+            test_source=[wc.test_source]
         )
     output:
         heatmap=os.path.join(
@@ -252,11 +259,10 @@ rule aggregate_and_plot_heatmap:
 rule rank_and_select_top_genes:
     input:
         importance=lambda wc: expand(
-            os.path.join(PLOT_DIR, "{adjuster}_{k}_{test_source}_{target}_aggregated_permutation_importance.csv"),
-            adjuster=ADJUSTERS,
-            k=K_VALUES,
-            test_source=TEST_SOURCES,
-            target=TARGETS
+            os.path.join(PLOT_DIR, "{k}_{test_source}_{target}_aggregated_permutation_importance.csv"),
+            k=[wc.k],
+            test_source=[wc.test_source],
+            target=[wc.target]
         )
     output:
         filtered_csv=os.path.join(PLOT_DIR, "filtered_{k}_{test_source}_{target}_permutation_importance.csv"),
