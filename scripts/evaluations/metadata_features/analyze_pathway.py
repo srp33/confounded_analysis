@@ -5,22 +5,23 @@ import argparse
 import pandas as pd
 import gseapy as gp
 
+def get_permutation_importance():
+
+    pass
+
 def run_preranked_gsea(ranked_file, output_dir, gmt_files):
     """
-    Run preranked GSEA using a CSV with 'gene' and 'max_importance'.
-    ranked_file : path to selected_genes.csv
+    Run preranked GSEA using a full .rnk file (tab-separated, no header).
+    
+    ranked_file : path to .rnk file (gene<TAB>score)
     output_dir  : folder to save GSEA results
     gmt_files   : list of local GMT file paths
     """
-    # Load gene rankings
-    df = pd.read_csv(ranked_file)
-    df["gene"] = (
-        df["gene"]
-        .str.split(".").str[0]
-        .str.upper()
-    )
+    # Load ranked file
+    df = pd.read_csv(ranked_file, sep="\t", header=None, names=["gene", "score"])
+    df["gene"] = df["gene"].str.upper()
     df = df.set_index("gene")
-    ranking_metric = df["max_importance"]
+    ranking_metric = df["score"]
 
     for gmt_path in gmt_files:
         print(f"Running GSEA on {gmt_path}")
@@ -60,7 +61,8 @@ def run_ora(selected_genes, gmt_files, outdir):
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--selected_genes_csv", required=True, help="CSV with 'gene' and 'max_importance'")
+    parser.add_argument("--full_ranked", required=True, help="Full ranked gene file for preranked GSEA (all genes)")
+    parser.add_argument("--selected_genes_csv", required=True, help="Thresholded gene list for ORA (top genes)")
     parser.add_argument("--gmt_files", nargs="+", required=True, help="Paths to local GMT files")
     parser.add_argument("--outdir", required=True, help="Directory to save results")
     parser.add_argument("--top_n", type=int, default=None, help="Top N genes to use (optional)")
@@ -86,7 +88,7 @@ def main():
 
     # Run GSEA
     run_preranked_gsea(
-        ranked_file=args.selected_genes_csv,
+        ranked_file=args.full_ranked,
         output_dir=args.outdir,
         gmt_files=args.gmt_files
     )

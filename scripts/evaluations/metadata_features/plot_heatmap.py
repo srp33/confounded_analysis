@@ -10,42 +10,25 @@ def main():
     parser = argparse.ArgumentParser(
         description="Plot per-target permutation importance heatmaps across batch adjusters"
     )
-    parser.add_argument(
-        "--csvs",
-        nargs="+",
-        required=True,
+    parser.add_argument("--csvs", nargs="+", required=True,
         help="List of permutation importance CSVs (one per adjuster)"
     )
-    parser.add_argument(
-        "--outdir",
-        required=True,
+    parser.add_argument("--outdir",required=True,
         help="Output directory for heatmaps"
     )
-    parser.add_argument(
-        "--threshold",
-        type=float,
-        default=0.005,
+    parser.add_argument( "--threshold",type=float,default=0.005,
         help="Filter genes with importance > threshold in at least one adjuster"
     )
-    parser.add_argument(
-        "--test",
-        required=True,
+    parser.add_argument("--test",required=True,
         help="Name of the test set"
     )
-    parser.add_argument(
-        "--train",
-        required=True,
+    parser.add_argument("--train",required=True,
         help="Name of the train set"
     )
-    parser.add_argument(
-        "--aligned_csv",
-        required=True,
+    parser.add_argument("--aligned_csv",required=True,
         help="CSV file of already aligned metadata for the training and testing sets"
     )
-    parser.add_argument(
-        "--adjusted_csvs",
-        nargs="+",
-        required=True,
+    parser.add_argument("--adjusted_csvs",nargs="+",required=True,
         help="List of CSVs of the adjusted data"
     )
 
@@ -172,11 +155,16 @@ def main():
         print(f"Saved heatmap: {out_path}")
 
     # -------------------------
-    # Save union of passing genes with max importance
+    # Save selected genes (thresholded) and full ranked file (all genes)
     # -------------------------
-    if gene_max_importance:
-        selected_genes = list(gene_max_importance.keys())
+
+    # Thresholded genes for ORA
+    selected_genes = list(gene_max_importance.keys())
+
+    if selected_genes:
         print(f"\nSubsetting Datasets to {len(selected_genes)} genes...")
+
+        # Save thresholded dataset subsets
         subset_dataset(
             input_csv=args.aligned_csv,
             selected_genes=selected_genes,
@@ -186,59 +174,51 @@ def main():
             prefix="unadjusted"
         )
 
-    for adjusted_csv in args.adjusted_csvs:
-        subset_dataset(
-            input_csv=adjusted_csv,
-            selected_genes=selected_genes,
-            outdir=args.outdir,
-            train_name=args.train,
-            test_name=args.test,
-            prefix="adjusted"
-        )
+        for adjusted_csv in args.adjusted_csvs:
+            subset_dataset(
+                input_csv=adjusted_csv,
+                selected_genes=selected_genes,
+                outdir=args.outdir,
+                train_name=args.train,
+                test_name=args.test,
+                prefix="adjusted"
+            )
 
-    # Save selected gene list
-    gene_list_df = (
-        pd.DataFrame({
-        "gene": selected_genes,
-        "max_importance": [gene_max_importance[g] for g in selected_genes]
+        # Save thresholded gene list
+        gene_list_df = pd.DataFrame({
+            "gene": selected_genes,
+            "max_importance": [gene_max_importance[g] for g in selected_genes]
+        }).sort_values("max_importance", ascending=False)
+
+        gene_list_path = os.path.join(args.outdir, "selected_genes.csv")
+        gene_list_df.to_csv(gene_list_path, index=False)
+        print(f"Saved thresholded gene list for ORA: {gene_list_path}")
+
+    # -------------------------
+    # Save full ranked gene list for preranked GSEA
+    # -------------------------
+
+    def compute_max_gene_importance(dfs):
+        """
+        Compute maximum gene importance across all adjusters and all targets.
+        Returns a pd.Series sorted descending.
+        """
+        combined = pd.concat(dfs.values(), axis=1)  # genes × all targets from all adjusters
+        gene_max = combined.max(axis=1).sort_values(ascending=False)
+        return gene_max
+
+    gene_rank_series = compute_max_gene_importance(dfs)
+
+    gene_rank_df = pd.DataFrame({
+        "gene": gene_rank_series.index,
+        "score": gene_rank_series.values
     })
-    .sort_values("max_importance", ascending=False)
-    )
-
-    gene_list_path = os.path.join(args.outdir, "selected_genes.csv")
-    gene_list_df.to_csv(gene_list_path, index=False)
-
-    print(f"Saved selected gene list: {gene_list_path}")
-
-    # Save all gene scores for pre-ranked GSEA
-
-    all_gene_scores = {}
-
-    for adjuster_df in dfs.values():
-        for gene in adjuster_df.index:
-            if gene not in all_gene_scores:
-                all_gene_scores[gene] = []
-            all_gene_scores[gene].append(adjuster_df.loc[gene].max())
-
-    # Compure max across adjusters
-    gene_rank_df = (
-        pd.DataFrame({
-            "gene": list(all_gene_scores.keys()),
-            "score": [max(v) for v in all_gene_scores.values()]
-        })
-        .sort_values("score", ascending=False)
-    )
 
     rank_path = os.path.join(args.outdir, "gsea_prerank_max_importance.rnk")
 
-    gene_rank_df.to_csv(
-        rank_path,
-        sep="\t",
-        index=False,
-        header=False
-    )
-
-    print(f"Saved pre-ranked GSEA file: {rank_path}")
+    # Tab-separated, no header, suitable for gseapy prerank
+    gene_rank_df.to_csv(rank_path, sep="\t", index=False, header=False)
+    print(f"Saved full ranked GSEA file (all genes): {rank_path}")
         
 def subset_dataset(input_csv, selected_genes, outdir, train_name, test_name, prefix):
     print(f"\nProcessing dataset: {input_csv}")

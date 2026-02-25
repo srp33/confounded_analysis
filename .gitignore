@@ -30,3 +30,4 @@ scripts/evaluations/classify_er_all_datasets/.snakemake
 scripts/evaluations/book_chapter/Rplots.pdf
 scripts/evaluations/metadata_features/.snakemake
 scripts/evaluations/metadata_features/logs
+scripts/evaluations/metadata_features/.pixi

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 #SBATCH --job-name=pathways
-#SBATCH --output=logs/pathway_analysis/pathways_%A_%a.log
-#SBATCH --error=logs/pathway_analysis/pathways_%A_%a.log
+#SBATCH --output=logs/pathway_analysis/pathways_%A.log
+#SBATCH --error=logs/pathway_analysis/pathways_%A.log
 #SBATCH --time=16:00:00
 #SBATCH --cpus-per-task=1
 #SBATCH --mem=32G
@@ -10,9 +10,10 @@ set -euo pipefail
 
 PATHWAY_SCRIPT="analyze_pathway.py"
 PERM_DIR="/grphome/grp_batch_effects/outputs/metadata_features/permutation_importance"
-OUTDIR="/grphome/grp_batch_effects/outputs/metadata_features/pathway_analysis"
+OUTDIR="/grphome/grp_batch_effects/outputs/metadata_features/full_pathway_analysis"
 META_DIR="/grphome/grp_batch_effects/outputs/metadata_features"
 SELECTED_GENES_CSV="/grphome/grp_batch_effects/outputs/metadata_features/plots/selected_genes.csv"
+FULL_RANKED="/grphome/grp_batch_effects/outputs/metadata_features/plots/gsea_prerank_max_importance.rnk"
 
 export OMP_NUM_THREADS=1
 export OPENBLAS_NUM_THREADS=1
@@ -35,6 +36,7 @@ if [[ ${#GMT_FILES[@]} -eq 0 ]]; then
 fi
 
 pixi run python "${PATHWAY_SCRIPT}" \
+  --full_ranked "${FULL_RANKED}" \
   --selected_genes_csv "${SELECTED_GENES_CSV}" \
   --gmt_files "${GMT_FILES[@]}" \
   --outdir "${OUTDIR}"
