@@ -1,19 +1,20 @@
 #!/usr/bin/env bash
 #SBATCH --job-name=pathways
-#SBATCH --output=logs/pathway_analysis/pathways_%A.log
-#SBATCH --error=logs/pathway_analysis/pathways_%A.log
-#SBATCH --time=16:00:00
+#SBATCH --output=logs/pathway_analysis/target_pathways_%A.log
+#SBATCH --error=logs/pathway_analysis/target_pathways_%A.log
+#SBATCH --time=00:30:00
 #SBATCH --cpus-per-task=1
-#SBATCH --mem=32G
+#SBATCH --mem=8G
 
 set -euo pipefail
 
 PATHWAY_SCRIPT="analyze_pathway.py"
-PERM_DIR="/grphome/grp_batch_effects/outputs/metadata_features/permutation_importance"
-OUTDIR="/grphome/grp_batch_effects/outputs/metadata_features/full_pathway_analysis"
+
+# Directory where your gene list script wrote top genes CSV and .rnk files
+GENE_LIST_DIR="/grphome/grp_batch_effects/outputs/metadata_features/target_pathways/gene_lists"
+
+OUTDIR="/grphome/grp_batch_effects/outputs/metadata_features/target_pathways/pathway_analysis"
 META_DIR="/grphome/grp_batch_effects/outputs/metadata_features"
-SELECTED_GENES_CSV="/grphome/grp_batch_effects/outputs/metadata_features/plots/selected_genes.csv"
-FULL_RANKED="/grphome/grp_batch_effects/outputs/metadata_features/plots/gsea_prerank_max_importance.rnk"
 
 export OMP_NUM_THREADS=1
 export OPENBLAS_NUM_THREADS=1
@@ -24,10 +25,7 @@ module load python
 
 mkdir -p "${OUTDIR}"
 
-# -------------------------------------------------
-# Collect GMT Files
-# -------------------------------------------------
-
+# Collect GMT files
 mapfile -t GMT_FILES < <(find "${META_DIR}" -type f -name "*.gmt" ! -path "*pathway_analysis*" | sort)
 
 if [[ ${#GMT_FILES[@]} -eq 0 ]]; then
@@ -35,10 +33,11 @@ if [[ ${#GMT_FILES[@]} -eq 0 ]]; then
     exit 1
 fi
 
+# Run pathway analysis — the Python script loops over each target's files
 pixi run python "${PATHWAY_SCRIPT}" \
-  --full_ranked "${FULL_RANKED}" \
-  --selected_genes_csv "${SELECTED_GENES_CSV}" \
-  --gmt_files "${GMT_FILES[@]}" \
-  --outdir "${OUTDIR}"
+    --gene_lists_dir "${GENE_LIST_DIR}" \
+    --gmt_files "${GMT_FILES[@]}" \
+    --outdir "${OUTDIR}" \
+    --top_n 100
 
 echo "Done."
