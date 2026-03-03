@@ -12,7 +12,8 @@ set -euo pipefail
 # -------------------------
 GENE_LIST_SCRIPT="generate_gene_lists.py"
 PLOT_SCRIPT="plot.py"
-PERM_DIR="/grphome/grp_batch_effects/outputs/metadata_features/permutation_importance"
+#PERM_DIR="/grphome/grp_batch_effects/outputs/metadata_features/permutation_importance"
+TTEST_DIR="/grphome/grp_batch_effects/outputs/metadata_features/ttest"
 OUTDIR="/grphome/grp_batch_effects/outputs/metadata_features/target_pathways"
 GENE_LIST_DIR="${OUTDIR}/gene_lists"
 
@@ -34,14 +35,14 @@ module load python
 # -------------------------
 # Collect CSVs (one per adjuster)
 # -------------------------
-CSV_FILES=$(find "${PERM_DIR}" -type f -name "2_*_permutation_importance.csv" | sort)
+CSV_FILES=$(find "${TTEST_DIR}" -type f -name "*.csv" | sort)
 
 if [[ -z "${CSV_FILES}" ]]; then
-  echo "ERROR: No permutation importance CSVs found in ${PERM_DIR}"
+  echo "ERROR: No ttest CSVs found in ${TTEST_DIR}"
   exit 1
 fi
 
-echo "Found permutation importance CSVs:"
+echo "Found ttest CSVs:"
 echo "${CSV_FILES}"
 echo
 

@@ -41,7 +41,7 @@ def save_top_genes(df, outdir, threshold=None):
         ranked = df[target].abs().sort_values(ascending=False)
         if threshold is not None:
             ranked = ranked[ranked > threshold]
-        out_path = os.path.join(outdir, f"{target}_top_genes.csv")
+        out_path = os.path.join(outdir, f"{target}_top_genes_ttest.csv")
         ranked.to_csv(out_path, header=[target])
         print(f"Top genes saved for {target}: {out_path}")
 
@@ -53,7 +53,7 @@ def save_rnk_files(df, outdir):
 
     for target in df.columns:
         ranked = df[target].sort_values(ascending=False)
-        out_path = os.path.join(outdir, f"{target}.rnk")
+        out_path = os.path.join(outdir, f"{target}_ttest.rnk")
         ranked.to_csv(out_path, sep="\t", header=False)
         print(f"Ranked file for GSEA saved: {out_path}")
 
