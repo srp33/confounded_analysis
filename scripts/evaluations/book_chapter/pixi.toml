@@ -13,6 +13,7 @@ r-base = ">=4.3"
 r-tidyverse = "*"     # Core tidyverse packages (dplyr, purrr, ggplot2, etc.)
 r-reshape2 = "*"      # classify_adjusters.R
 r-readxl = "*"        # 2_TB_getdata.R (data loading)
+r-huge = ">=1.3.5,<2"
 
 # === Machine Learning Classifiers ===
 r-glmnet = "*"        # Lasso, elastic net (classify_*.R)
@@ -21,15 +22,17 @@ r-ranger = "*"        # Random forest (classify_*.R)
 r-nnet = "*"          # Neural networks (classify_*.R)
 r-class = "*"         # KNN (classify_*.R)
 r-xgboost = "*"       # XGBoost (classify_*.R)
+r-klar = { version = ">=1.7_3,<2", channel = "conda-forge" }
+                      # RDA (classify_*.R)
 
 # === Statistical Packages ===
 r-rocr = "*"          # Performance metrics (classify_*.R)
-r-mcmcpack = "*"      # Inverse gamma for batch simulation (classify_batch_effects.R)
 r-dabestr = "*"       # Estimation statistics (generate_*_plot.R)
 
 # === Visualization ===
 r-gridextra = "*"     # Multi-panel plots (generate_*_plot.R)
 r-scales = "*"        # Formatting (generate_main_plot.R)
+r-ggbeeswarm = ">=0.7.2,<0.8"
 
 # === Dimensionality Reduction ===
 r-umap = "*"          # UMAP (visualize_batch_adjustment.R)
@@ -55,35 +58,7 @@ r-argparse = "*"      # CLI parsing (all main scripts)
 r-foreach = "*"       # Parallel loops (classify_batch_effects.R)
 r-doparallel = "*"    # Parallel backend (classify_batch_effects.R)
 
-# === Python (RVC Classifier) ===
-python = ">=3.12"
-numpy = "*"
-r-reticulate = "*"
 
 # === Workflow ===
 snakemake = ">=9.13.7,<10"
 snakemake-executor-plugin-slurm = ">=1.9.2,<2"
-scipy = ">=1.16.3,<2"
-gseapy = ">=1.0.0"
-r-ggpubr = ">=0.6.1,<0.7"
-rpy2 = ">=3.5.11,<4"
-seaborn = ">=0.13.2,<0.14"
-r-ggridges = ">=0.5.7,<0.6"
-r-huge = ">=1.3.5,<2"
-r-klar = { version = ">=1.7_3,<2", channel = "conda-forge" }
-r-ggbeeswarm = ">=0.7.2,<0.8"
-
-[pypi-dependencies]
-sklearn-rvm = ">=0.1.1, <0.2"  # RVC classifier via reticulate
-
-[tasks]
-# Test essential packages
-test-r-core = "R --vanilla -q -e 'library(dplyr); library(ggplot2); library(glmnet); library(reshape2); library(dabestr); cat(\"✓ R core packages loaded\\n\")'"
-test-r-bioc = "R --vanilla -q -e 'library(SummarizedExperiment); library(sva); library(batchelor); library(limma); library(DESeq2); cat(\"✓ Bioconductor packages loaded\\n\")'"
-test-r-ml = "R --vanilla -q -e 'library(e1071); library(ranger); library(nnet); library(class); library(xgboost); library(ROCR); cat(\"✓ ML packages loaded\\n\")'"
-test-dbdata = "R --vanilla -q -e 'library(GenomeInfoDbData); cat(\"✓ GenomeInfoDbData loaded\\n\")'"
-test-python = "python -c 'import numpy; import sklearn_rvm; print(\"✓ Python packages loaded\")'"
-test-all = { depends-on = ["test-r-core", "test-r-bioc", "test-r-ml", "test-python", "test-dbdata"] }
-
-[activation]
-env={RETICULATE_PYTHON = ".pixi/envs/default/bin/python"}

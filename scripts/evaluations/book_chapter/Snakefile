@@ -40,98 +40,24 @@ for n in config["num_datasets"]:
     for test_study in get_test_studies_for_n(n):
         for method in ["pca", "lda", "umap"]:
             VIZ_TARGETS.append(
-                f"{OUTPUT_FOLDER}/visualizations/unreduced/grids/{method}_n{n}_test{test_study}.png"
+                f"{OUTPUT_FOLDER}/visualizations/grids/{method}_n{n}_test{test_study}.png"
             )
 
 rule all:
     input:
-        # batch_fig=OUTPUT_FOLDER + "/batch_on_classifiers.png",
         adjuster_main=OUTPUT_FOLDER + "/adjusters_on_classifiers.png",
-        adjuster_relative=OUTPUT_FOLDER + "/adjusters_on_classifiers_relative.png",
         adjuster_relative_agg=OUTPUT_FOLDER + "/adjusters_on_classifiers_relative_aggregated.png",
         avg_rank_study=OUTPUT_FOLDER + "/average_rank_by_classifier.png",
         mcc_rank_by_adjuster=OUTPUT_FOLDER + "/mcc_rank_by_adjuster.png",
         within_study_baseline=OUTPUT_FOLDER + "/within_study_baseline.csv",
-        # Class imbalance analysis outputs
         class_imbalance_results=OUTPUT_FOLDER + "/class_imbalanced_results.csv" if config.get("class_imbalance_analysis", {}).get("enabled", False) else [],
         class_imbalance_trend_plot=OUTPUT_FOLDER + "/class_imbalance_trend.png" if config.get("class_imbalance_analysis", {}).get("enabled", False) else []
-        # viz_figs=VIZ_TARGETS
 
 
-## Figure 1 Pipeline: How does each classifier respond to batch effects?
 
-# Step 1.3: Create the batch effect plot
-rule make_fig1:
-    input:
-        data=OUTPUT_FOLDER + "/batch_on_classifiers.csv",
-        script=SCRIPTS_FOLDER + "/plot_batch_on_classifiers.R"
-    output:
-        [OUTPUT_FOLDER + "/batch_on_classifiers.png"]
-    log:
-        OUTPUT_FOLDER + "/logs/plot_batch_on_classifiers.log"
-    threads: 1
-    resources:
-        mem_mb=4000,
-        runtime=15
-    shell:
-        """
-        Rscript {input.script} -i {input.data} -o {output} &> {log}
-        """
+## How does each adjuster help mitigate batch effects, for each classifier?
 
-
-# Step 1.2: Aggregate all individual batch effect results
-rule aggregate_batch_effects:
-    input:
-        data=expand(
-            OUTPUT_FOLDER + "/results/batch_effects/individual/{classifier}_{mean}_{variance}_{seed}.csv",
-            classifier=config["classifiers"],
-            variance=config["batch_effect_variances"],
-            mean=config["batch_effect_means"],
-            seed=split_seeds
-        ),
-        script=SCRIPTS_FOLDER + "/aggregate_results.R"
-    output:
-        OUTPUT_FOLDER + "/batch_on_classifiers.csv"
-    log:
-        OUTPUT_FOLDER + "/logs/aggregate_batch_effects.log"
-    threads: 1
-    resources:
-        mem_mb=8000,
-        runtime=20
-    params:
-        input_dir=OUTPUT_FOLDER + "/results/batch_effects/individual"
-    shell:
-        """
-        Rscript {input.script} --input-dir {params.input_dir} -o {output} &> {log}
-        """
-
-
-# Step 1.1: Run classification on simulated data
-rule classify_batch_effects:
-    input:
-        data=DATA_FOLDER + "/combined_sub.RData",
-        script=SCRIPTS_FOLDER + "/classify_batch_effects.R",
-        helper=SCRIPTS_FOLDER + "/helper.R"
-    output:
-        OUTPUT_FOLDER + "/results/batch_effects/individual/{classifier}_{mean}_{variance}_{seed}.csv"
-    log:
-        OUTPUT_FOLDER + "/logs/classify_batch_effects/{classifier}_{mean}_{variance}_{seed}.log"
-    group: "batch_simulation_group"
-    threads: 1
-    resources:
-        mem_mb=2000,
-        runtime=60
-    shell:
-        """
-        Rscript {input.script} -o {output} \
-            --mean {wildcards.mean} --var {wildcards.variance} --classifier {wildcards.classifier} --seed {wildcards.seed} \
-            &> {log}
-        """
-
-
-## Figure 2 Pipeline: How does each adjuster help mitigate batch effects, for each classifier?
-
-# Step 2.3a: Create main adjuster plot
+# Step 1.3a: Create main adjuster plot
 rule make_fig2_main:
     input:
         data=OUTPUT_FOLDER + "/adjusters_on_classifiers.csv",
@@ -153,30 +79,7 @@ rule make_fig2_main:
         Rscript {input.script} -i {input.data} -o {output} --adjusters {params.adjusters} &> {log}
         """
 
-# Step 2.3b: Create relative performance plot (using dabestr estimation statistics)
-rule make_fig2_relative:
-    input:
-        data=OUTPUT_FOLDER + "/adjusters_on_classifiers.csv",
-        script=SCRIPTS_FOLDER + "/plot_adjusters_relative_only.R",
-        utils=SCRIPTS_FOLDER + "/adjuster_plot_utils.R",
-        generator=SCRIPTS_FOLDER + "/generate_relative_plot.R"
-    output:
-        plot=OUTPUT_FOLDER + "/adjusters_on_classifiers_relative.png",
-        effects=OUTPUT_FOLDER + "/adjusters_on_classifiers_relative_effect_sizes.csv"
-    log:
-        OUTPUT_FOLDER + "/logs/plot_adjusters_relative.log"
-    threads: 1
-    resources:
-        mem_mb=6000,
-        runtime=15
-    params:
-        adjusters=",".join(config.get("viz_adjusters", config["adjusters"]))
-    shell:
-        """
-        Rscript {input.script} -i {input.data} -o {output.plot} --adjusters {params.adjusters} &> {log}
-        """
-
-# Step 2.3c: Create aggregated relative performance plot
+# Step 1.3b: Create aggregated relative performance plot
 rule make_fig2_relative_aggregated:
     input:
         data=OUTPUT_FOLDER + "/adjusters_on_classifiers.csv",
@@ -199,7 +102,7 @@ rule make_fig2_relative_aggregated:
         Rscript {input.script} -i {input.data} -o {output.plot} --adjusters {params.adjusters} &> {log}
         """
 
-# Step 2.3d: Create average rank by classifier plot for 4-study case
+# Step 1.3c: Create average rank by classifier plot for 4-study case
 rule make_avg_rank_study:
     input:
         data=OUTPUT_FOLDER + "/adjusters_on_classifiers.csv",
@@ -221,7 +124,7 @@ rule make_avg_rank_study:
         Rscript {input.script} -i {input.data} -o {output} --adjusters {params.adjusters} --n-datasets {params.n_datasets} &> {log}
         """
 
-# Step 2.3e: Create MCC rank by adjuster plot (adjuster on x, rank on y, colored by classifier)
+# Step 1.3d: Create MCC rank by adjuster plot (adjuster on x, rank on y, colored by classifier)
 rule make_mcc_rank_by_adjuster:
     input:
         data=OUTPUT_FOLDER + "/adjusters_on_classifiers.csv",
@@ -303,7 +206,7 @@ CLASS_IMBALANCE_SCENARIOS = get_class_imbalance_scenario_names()
 def get_class_imbalance_data_files():
     return [f"{DATA_FOLDER}/class_imbalanced/{s}.RData" for s in CLASS_IMBALANCE_SCENARIOS]
 
-# Step 2.2: Aggregate all individual adjuster results (including within-study CV baseline)
+# Step 1.2: Aggregate all individual adjuster results (including within-study CV baseline)
 rule aggregate_adjusters:
     input:
         adjuster_data=get_adjuster_combinations(),
@@ -330,7 +233,7 @@ rule aggregate_adjusters:
         """
 
 
-# Step 2.1a: Run classification on real data with batch correction
+# Step 1.1a: Run classification on real data with batch correction
 rule classify_adjusters:
     input:
         data=DATA_FOLDER + "/TB_real_data.RData",
@@ -356,7 +259,7 @@ rule classify_adjusters:
         """
 
 
-# Step 2.1b: Within-study cross-validation baseline (no batch effects)
+# Step 1.1b: Within-study cross-validation baseline (no batch effects)
 rule classify_within_study_cv:
     input:
         data=DATA_FOLDER + "/TB_real_data.RData",
@@ -386,7 +289,7 @@ rule classify_within_study_cv:
         """
 
 
-# Step 2.1c: Aggregate within-study CV results for summary
+# Step 1.1c: Aggregate within-study CV results for summary
 rule aggregate_within_study_baseline:
     input:
         data=get_within_study_cv_combinations(),
@@ -411,16 +314,16 @@ rule aggregate_within_study_baseline:
 
 ## Visualization Pipeline: Visualize batch adjustment effects
 
-# Step 3.1: Generate individual visualizations for each adjuster
+# Step 2.1: Generate individual visualizations for each adjuster
 rule visualize_batch_adjustment:
     input:
         data=DATA_FOLDER + "/TB_real_data.RData",
         script=SCRIPTS_FOLDER + "/visualize_batch_adjustment.R",
         helper=SCRIPTS_FOLDER + "/helper.R"
     output:
-        pca=OUTPUT_FOLDER + "/visualizations/unreduced/individual/pca/{adjuster}_n{n_datasets}_test{test_study}.png",
-        lda=OUTPUT_FOLDER + "/visualizations/unreduced/individual/lda/{adjuster}_n{n_datasets}_test{test_study}.png",
-        umap=OUTPUT_FOLDER + "/visualizations/unreduced/individual/umap/{adjuster}_n{n_datasets}_test{test_study}.png"
+        pca=OUTPUT_FOLDER + "/visualizations/individual/pca/{adjuster}_n{n_datasets}_test{test_study}.png",
+        lda=OUTPUT_FOLDER + "/visualizations/individual/lda/{adjuster}_n{n_datasets}_test{test_study}.png",
+        umap=OUTPUT_FOLDER + "/visualizations/individual/umap/{adjuster}_n{n_datasets}_test{test_study}.png"
     log:
         OUTPUT_FOLDER + "/logs/visualize_batch_adjustment/{adjuster}_n{n_datasets}_test{test_study}.log"
     threads: 1
@@ -428,7 +331,7 @@ rule visualize_batch_adjustment:
         mem_mb=4000,
         runtime=17
     params:
-        output_dir=OUTPUT_FOLDER + "/visualizations/unreduced/individual"
+        output_dir=OUTPUT_FOLDER + "/visualizations/individual"
     shell:
         """
         Rscript {input.script} \
@@ -441,16 +344,16 @@ rule visualize_batch_adjustment:
         """
 
 
-# Step 3.2: Create comparison grids
+# Step 2.2: Create comparison grids
 rule create_visualization_grid:
     input:
         plots=expand(
-            OUTPUT_FOLDER + "/visualizations/unreduced/individual/{{method}}/{adjuster}_n{{n_datasets}}_test{{test_study}}.png",
+            OUTPUT_FOLDER + "/visualizations/individual/{{method}}/{adjuster}_n{{n_datasets}}_test{{test_study}}.png",
             adjuster=config.get("viz_adjusters", config["adjusters"])
         ),
         script=SCRIPTS_FOLDER + "/create_visualization_grid.R"
     output:
-        OUTPUT_FOLDER + "/visualizations/unreduced/grids/{method}_n{n_datasets}_test{test_study}.png"
+        OUTPUT_FOLDER + "/visualizations/grids/{method}_n{n_datasets}_test{test_study}.png"
     log:
         OUTPUT_FOLDER + "/logs/visualization_grids/{method}_n{n_datasets}_test{test_study}.log"
     threads: 1
@@ -458,7 +361,7 @@ rule create_visualization_grid:
         mem_mb=2000,
         runtime=8
     params:
-        input_dir=OUTPUT_FOLDER + "/visualizations/unreduced/individual",
+        input_dir=OUTPUT_FOLDER + "/visualizations/individual",
         adjusters=",".join(config.get("viz_adjusters", config["adjusters"]))
     shell:
         """
@@ -493,7 +396,7 @@ def get_class_imbalance_combinations():
     
     return combinations_list
 
-# Step CI1: Create ALL class imbalanced datasets. Fails if any scenario can't be created.
+# Step 3.1: Create ALL class imbalanced datasets. Fails if any scenario can't be created.
 if config.get("class_imbalance_analysis", {}).get("enabled", False):
     rule create_class_imbalanced_data:
         input:
@@ -525,7 +428,7 @@ if config.get("class_imbalance_analysis", {}).get("enabled", False):
                 &> {log}
             """
 
-    # Step CI2: Run classification on class imbalanced data
+    # Step 3.2: Run classification on class imbalanced data
     rule classify_class_imbalanced:
         input:
             data=DATA_FOLDER + "/class_imbalanced/{scenario_name}.RData",
@@ -553,7 +456,7 @@ if config.get("class_imbalance_analysis", {}).get("enabled", False):
                 &> {log}
             """
 
-    # Step CI3: Aggregate class imbalanced results
+    # Step 3.3: Aggregate class imbalanced results
     rule aggregate_class_imbalanced_results:
         input:
             data=get_class_imbalance_combinations(),
@@ -576,7 +479,7 @@ if config.get("class_imbalance_analysis", {}).get("enabled", False):
                 &> {log}
             """
 
-    # Step CI4: Create class imbalance trend plot
+    # Step 3.4: Create class imbalance trend plot
     rule plot_class_imbalance_trend:
         input:
             data=OUTPUT_FOLDER + "/class_imbalanced_results.csv",

@@ -3,9 +3,9 @@
 
 format_adjuster_label <- function(adjuster_name) {
   if (adjuster_name == "within_study_cv") return("Within-Study CV")
-  if (adjuster_name == "unadjusted") return("Unadjusted")
+  if (adjuster_name == "unadjusted") return("Log Only")
   if (adjuster_name == "naive") return("Naive")
-  if (adjuster_name == "rank_samples") return("Rank Samples")
+  if (adjuster_name == "rank_samples") return("Rank Features")
   if (adjuster_name == "rank_twice") return("Rank Twice")
   if (adjuster_name == "npn") return("NPN")
   if (adjuster_name == "combat") return("ComBat")

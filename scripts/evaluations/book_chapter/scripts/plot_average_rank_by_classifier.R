@@ -55,9 +55,9 @@ if (!is.null(args$adjusters)) {
 
 # Label Classifiers
 classifier_labels <- c(
-  "logistic" = "Logistic", "elasticnet" = "ElasticNet", "svm" = "SVM",
-  "rf" = "Random Forest", "knn" = "KNN", "xgboost" = "XGBoost",
-  "nnet" = "Neural Net", "shrinkageLDA" = "Shrinkage LDA"
+  "logistic" = "Logistic\nRegression", "elasticnet" = "ElasticNet", "svm" = "SVM",
+  "rf" = "Random\nForest", "knn" = "KNN", "xgboost" = "XGBoost",
+  "nnet" = "Neural\nNet", "shrinkageLDA" = "Shrinkage\nLDA"
 )
 data$classifier_label <- classifier_labels[data$classifier]
 
@@ -98,9 +98,9 @@ data <- data %>% filter(!is.na(classifier_label))
 # ==============================================================================
 
 group_highlight_1 <- c("Within-Study CV")
-group_highlight_2 <- c("ComBat-Sup")
-group_aggregate_1 <- c("ComBat", "Combat_mean", "NPN", "Rank Twice", "Naive")
-group_aggregate_2 <- c("MNN", "FastMNN", "Rank Samples", "Unadjusted")
+group_highlight_2 <- c("ComBat Sup.")
+group_aggregate_1 <- c("ComBat", "ComBat Mean", "NPN", "Rank Twice", "Naive")
+group_aggregate_2 <- c("MNN", "FastMNN", "Rank Features", "Log Only")
 
 all_adjusters <- levels(data$adjuster_label)
 palette_map <- character(length(all_adjusters))
@@ -232,20 +232,18 @@ p <- ggplot(data, aes(x = value)) +
   scale_y_continuous(expand = expansion(mult = c(0.25, 0.05))) + 
   
   labs(
-    title = sprintf("MCC Distribution Decomposition (%s)", n_datasets_label),
-    subtitle = "Stacked densities showing adjuster contribution; Box plot (bottom) shows aggregate classifier performance",
-    x = "MCC Score",
+    x = "MCC Distribution",
     y = NULL
   ) +
   
-  theme_minimal(base_size = 12) +
+  theme_minimal(base_size = 18) +
   theme(
     legend.position = "right",
     panel.grid.major.x = element_line(color = "gray90"),
     panel.grid.minor = element_blank(),
     axis.text.y = element_blank(),
     axis.ticks.y = element_blank(),
-    strip.text.y.left = element_text(angle = 0, hjust = 1, face = "bold", size = 10),
+    strip.text.y.left = element_text(angle = 0, hjust = 1, face = "bold", size = 12),
     strip.placement = "outside",
     strip.background = element_blank(),
     plot.title = element_text(face = "bold", hjust = 0.5),

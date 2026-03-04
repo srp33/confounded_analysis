@@ -40,9 +40,15 @@ args <- parser$parse_args()
 # ==============================================================================
 
 classifier_labels_map <- c(
-  "rda" = "RDA", "logistic" = "Logistic", "elasticnet" = "ElasticNet",
+  "rda" = "RDA", "logistic" = "Logistic Regression", "elasticnet" = "ElasticNet",
   "svm" = "SVM", "rf" = "Random Forest", "knn" = "KNN",
-  "xgboost" = "XGBoost", "nnet" = "Neural Net", "shrinkageLDA" = "LDA"
+  "xgboost" = "XGBoost", "nnet" = "Neural Net", "shrinkageLDA" = "Shrinkage LDA"
+)
+
+shortened_labels_map <- c(
+  "rda" = "RDA", "logistic" = "LR", "elasticnet" = "ENet",
+  "svm" = "SVM", "rf" = "RF", "knn" = "KNN",
+  "xgboost" = "XGB", "nnet" = "NN", "shrinkageLDA" = "LDA"
 )
 
 target_n <- if (tolower(args$n_datasets) != "all") as.integer(args$n_datasets) else NULL
@@ -98,6 +104,7 @@ outlier_stats <- ranked_data %>%
   summarise(
     avg_rank = calc_hodges_lehmann(rank),
     group_center = first(group_center),
+    classifier = first(classifier),
     .by = c(classifier_label, adjuster_label)
   ) %>%
   mutate(
@@ -109,7 +116,8 @@ outlier_stats <- ranked_data %>%
   arrange(desc(abs_dev)) %>%
   mutate(
     outlier_rank = row_number(),
-    label_text = ifelse(outlier_rank <= args$n_labeled_outliers, as.character(classifier_label), "")
+    label_text = ifelse(outlier_rank <= args$n_labeled_outliers, 
+                       as.character(recode(classifier, !!!shortened_labels_map)), "")
   )
 
 # ==============================================================================
@@ -193,8 +201,6 @@ p <- ggplot(mapping = aes(y = adjuster_label)) +
   coord_cartesian(xlim = c(1, max_rank), clip = "off") +
   
   labs(
-    title = "Stability of Batch Adjustment Performance Across Classifiers",
-    subtitle = "Higher-performing adjusters appear at the top. Anomalous adjuster performances are highlighted and labeled.",
     y = NULL,
     x = "Adjuster Rank Among Other Adjusters (1 = Best)",
     color = "Classifier"
@@ -214,6 +220,5 @@ p <- ggplot(mapping = aes(y = adjuster_label)) +
   )
 
 # Save output
-# Removed caption from labs() as requested for manuscript submission
 ggsave(args$output, p, width = args$width, height = args$height, dpi = args$dpi, bg = "white")
 cat("Saved plot to:", args$output, "\n")
