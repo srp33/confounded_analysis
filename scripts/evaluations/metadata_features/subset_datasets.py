@@ -43,15 +43,9 @@ def log_transform_per_dataset(df, test_source):
             idx = sub_df["meta_source"] == ds
             mat_ds = num_mat[idx, :]
 
-            if np.all(mat_ds >= 0) and (
-                np.nanmax(mat_ds) > 100 or
-                np.nanquantile(mat_ds, 0.99) > 50
-            ):
-                min_val = np.nanmin(mat_ds)
-                print(f">>> Applying log1p to dataset: {ds} (min={min_val})")
-                mat_ds = np.log1p(mat_ds - min_val)
-            else:
-                print(f">>> Skipping log transform for dataset: {ds}")
+            min_val = np.nanmin(mat_ds)
+            print(f">>> Applying log1p to dataset: {ds} (min={min_val})")
+            mat_ds = np.log1p(mat_ds - min_val)
 
             num_mat[idx, :] = mat_ds
 
@@ -70,7 +64,7 @@ def log_transform_per_dataset(df, test_source):
 
 def write_subset(df, output_path, n_studies, test):
     os.makedirs(os.path.dirname(output_path), exist_ok=True)
-    output_filename = os.path.join(output_path, f"test_{test}_subset.csv")
+    output_filename = os.path.join(output_path, f"test_{test}-subset.csv")
     df.to_csv(output_filename, index=False)
     print(f">>> Subset written to: {output_path}")
 

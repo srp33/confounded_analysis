@@ -1,13 +1,14 @@
 # config.yaml
 
-output_folder: "/grphome/grp_batch_effects/outputs/metadata_features"
-data_folder: "/grphome/grp_batch_effects/data"
+out_dir: "/grphome/grp_batch_effects/outputs/metadata_features"
+data_dir: "/grphome/grp_batch_effects/data/metadata_features"
 scripts_dir: "."
-combine_script: "../classify_er_all_datasets/combine_all.py"
 adjust_script: "../../adjust/adjust.R"
 scaling_script: "../classify_er_all_datasets/run_scaling_experiment.R"
+combined_file: "/grphome/grp_batch_effects/data/all_combined/all_combined.csv"
+geo_metadata: "/grphome/grp_batch_effects/data/geo_metadata.csv"
 
-adjusters: ["gmm", "min_mean", "mnn", "log_combat", "log_transformed"]
+adjusters: ["gmm", "min_mean", "mnn", "combat", "log_transformed"]
 dataset_ids:
   - "gse19615"
   - "gse20194"
@@ -30,9 +31,10 @@ targets: [
   'meta_her2_status', 
   'meta_sex', 
   'meta_chemotherapy', 
-  'meta_age_at_diagnosis_combined_lt50', 
-  'meta_age_at_diagnosis_combined_50_69', 
-  'meta_age_at_diagnosis_combined_ge70', 
+  'meta_age_at_diagnosis',
+  'meta_age_lt35',
+  'meta_age_lt50',
+  'meta_age_lt70',
   'meta_menopause_status',
   'meta_histological_type'
 ]

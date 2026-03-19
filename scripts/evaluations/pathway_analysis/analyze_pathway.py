@@ -64,7 +64,7 @@ def main():
     top_gene_files = glob(os.path.join(args.gene_lists_dir, "*_ttest.csv"))
 
     for top_csv in sorted(top_gene_files):
-        target_name = os.path.basename(top_csv).replace("*_top_genes_ttest.csv", "")
+        target_name = os.path.basename(top_csv).replace("_top_genes_ttest.csv", "")
         rnk_file = os.path.join(args.gene_lists_dir, f"{target_name}_ttest.rnk")
 
         if not os.path.exists(rnk_file):

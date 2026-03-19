@@ -201,19 +201,3 @@ rule make_order_files:
             --output {output.order_file} \
             &> {log}
         """
-
-rule combine:
-    input: 
-        gold_dir = DATA_FOLDER + "/gold"
-    output:
-        DATA_FOLDER + "/all_combined/all_combined.csv"
-    resources: 
-        mem_mb=16000,
-        runtime=60
-    threads: 1
-    log: 
-        "log/combine.log"
-    shell:
-        """
-        python {SCRIPTS_DIR}/combine_all.py --input-dir {input.gold_dir} --output-file {output} &> {log}
-        """

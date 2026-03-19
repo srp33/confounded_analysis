@@ -2,9 +2,9 @@
 
 # =============================================================================
 # run_scaling_experiment.R
-# Adjusts a subset dataset with a specified adjuster (log_combat, mnn, gmm, etc.)
+# Adjusts a subset dataset with a specified adjuster (combat, mnn, gmm, etc.)
 # Usage:
-#   Rscript run_scaling_experiment.R --adjuster log_combat --subset-path path.csv --k 2 --test GSE12345 --output-dir out --adjust-script adjust.R --metadata-file geo_metadata.csv
+#   Rscript run_scaling_experiment.R --adjuster combat --subset-path path.csv --k 2 --test GSE12345 --output-dir out --adjust-script adjust.R --metadata-file geo_metadata.csv
 # =============================================================================
 
 suppressPackageStartupMessages({
@@ -147,14 +147,18 @@ apply_adjustment <- function(df, method, test_source, metadata_file) {
     batch_levels <- c(geo_meta$gse_id, test_source)
   }
 
+  # ------------------- Detect if data are counts --------------------
+  data_are_counts <- all(num_mat %% 1 == 0) && all(num_mat >= 0)
+  cat("[info] Data are counts:", data_are_counts, "\n")
+
   # ------------------------- Run adjustment -------------------------
   adjusted <- switch(
     method,
     min_mean       = adjust_min_mean(num_mat, batch = batch_vec),
-    log_combat     = adjust_log_combat(num_mat, batch = batch_vec, design = design),
+    combat     = adjust_combat(num_mat, batch = batch_vec, data_are_counts = data_are_counts, design = design),
     mnn            = adjust_mnn(df_ = num_mat, batch = batch_vec, test_source = test_source, 
-                                data_are_counts = FALSE, batch_levels = batch_levels, debug = FALSE),
-    gmm            = adjust_gmm(matrix_ = num_mat, batch = batch_vec, debug = FALSE),
+                                data_are_counts = data_are_counts, batch_levels = batch_levels, debug = FALSE),
+    gmm            = adjust_gmm(matrix_ = num_mat, batch = batch_vec, log_transform = FALSE, debug = FALSE),
     log_transformed = num_mat,
     stop("Unknown adjuster: ", method)
   )
@@ -186,7 +190,7 @@ process_subset <- function(subset_path, adjuster, subset_index, test_source, out
 
   tryCatch({
     adjusted_df <- apply_adjustment(df, adjuster, test_source, metadata_file)
-    out_path <- file.path(out_dir, sprintf("%s_%sstudies_test_%s.csv", adjuster, subset_index, test_source))
+    out_path <- file.path(out_dir, sprintf("%s-%s_studies-test_%s.csv", adjuster, subset_index, test_source))
     write_csv(adjusted_df, out_path)
     cat("Saved adjusted dataset to:", out_path, "\n")
   }, error = function(e) {

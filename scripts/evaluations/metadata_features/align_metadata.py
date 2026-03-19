@@ -104,6 +104,33 @@ def one_hot_encode_age(df, age_col="meta_age_at_diagnosis", bins=(0,50,70,200), 
         df = df.drop(columns=[age_col])
     return df
 
+def threshold_encode_age(
+    df,
+    age_col="meta_age_at_diagnosis",
+    thresholds=(35, 50, 65),
+    drop_original=False
+):
+    if age_col not in df.columns:
+        return df
+
+    # Convert to numeric, invalid parsing → NaN
+    df[age_col] = pd.to_numeric(df[age_col], errors="coerce")
+
+    for t in thresholds:
+        col_name = f"{age_col}_lt{t}"
+
+        # Start with NaN
+        df[col_name] = np.nan
+
+        # Only compute where age is not null
+        valid_mask = df[age_col].notna()
+        df.loc[valid_mask, col_name] = (df.loc[valid_mask, age_col] < t).astype(int)
+
+    if drop_original:
+        df = df.drop(columns=[age_col])
+
+    return df
+
 def write_output(df, output_path):
     df.to_csv(output_path, index=False)
     print(f">>> Standardized file written to: {output_path}")
@@ -187,7 +214,8 @@ def main():
     ])
 
     # Step 3: One-hot encode age
-    df = one_hot_encode_age(df, age_col="meta_age_at_diagnosis_combined", bins=(0,50,70,200), labels=("lt50","50_69","ge70"))
+    #df = one_hot_encode_age(df, age_col="meta_age_at_diagnosis_combined", bins=(0,50,70,200), labels=("lt50","50_69","ge70"))
+    df = threshold_encode_age(df)
 
     # Step 4: Convert selected metadata to binary
     status_cols = ['meta_sex_combined', 'meta_chemotherapy_combined']
