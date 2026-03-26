@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pandas as pd
 import numpy as np
-from scipy.stats import ttest_ind, linregress
+from scipy.stats import ttest_ind, linregress, f_oneway
 
 
 def run_tests(file_path, meta_cols, outdir):
@@ -24,6 +24,7 @@ def run_tests(file_path, meta_cols, outdir):
     # Output DataFrames
     tstat_df = pd.DataFrame(index=gene_cols)
     slope_df = pd.DataFrame(index=gene_cols)
+    fstat_df = pd.DataFrame(index=gene_cols)
     pval_df = pd.DataFrame(index=gene_cols)
 
     base_name = Path(file_path).stem
@@ -60,6 +61,38 @@ def run_tests(file_path, meta_cols, outdir):
 
             tstat_df[meta_col] = t_stats
 
+        # ------------------------
+        # Multi-class -> ANOVA
+        # ------------------------
+        elif all(isinstance(x, int) for x in unique_vals):
+            f_stats = []
+            pvals = []
+
+            for gene in gene_cols:
+                groups = []
+
+                for val in unique_vals:
+                    group = gene_data.loc[labels == val, gene].dropna()
+                    if len(group) > 0:
+                        groups.append(group.values)
+
+                # At least 2 groups with data
+                if len(groups) < 2:
+                    f_stats.append(np.nan)
+                    pvals.append(np.nan)
+                    continue
+
+                try:
+                    f_stat, p_val = f_oneway(*groups)
+                    f_stats.append(f_stat)
+                    pvals.append(p_val)
+                except Exception:
+                    f_stats.append(np.nan)
+                    pvals.append(np.nan)
+
+            tstat_df[meta_col] = f_stats
+            pval_df[meta_col] = pvals
+
         # -------------------------
         # Continuous → Linear regression
         # -------------------------
@@ -95,6 +128,7 @@ def run_tests(file_path, meta_cols, outdir):
     # -------------------------
     tstat_path = os.path.join(outdir, f"{base_name}-tstats.csv")
     slope_path = os.path.join(outdir, f"{base_name}-slopes.csv")
+    fstat_path = os.path.join(outdir, f"{base_name}-fstats.csv")
     pval_path = os.path.join(outdir, f"{base_name}-pvalues.csv")
 
     if not tstat_df.empty:
@@ -106,6 +140,11 @@ def run_tests(file_path, meta_cols, outdir):
         slope_df.index.name = "Gene"
         slope_df.to_csv(slope_path)
         print(f"[Saved] {slope_path}")
+    
+    if not fstat_df.empty:
+        fstat_df.index.name = "Gene"
+        fstat_df.to_csv(fstat_path)
+        print(f"[Saved] {fstat_path}")
 
     if not pval_df.empty:
         pval_df.index.name = "Gene"
