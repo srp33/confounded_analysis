@@ -42,7 +42,7 @@ args <- parser$parse_args()
 classifier_labels_map <- c(
   "rda" = "RDA", "logistic" = "Logistic Regression", "elasticnet" = "ElasticNet",
   "svm" = "SVM", "rf" = "Random Forest", "knn" = "KNN",
-  "xgboost" = "XGBoost", "nnet" = "Neural Net", "shrinkageLDA" = "Shrinkage LDA"
+  "xgboost" = "XGBoost", "nnet" = "Neural Net", "shrinkageLDA" = "RDA"
 )
 
 shortened_labels_map <- c(

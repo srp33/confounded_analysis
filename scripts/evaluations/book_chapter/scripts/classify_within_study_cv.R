@@ -144,7 +144,7 @@ main_analysis <- function() {
     
     # Train classifier
     if (classifier == "shrinkageLDA") {
-      # Shrinkage LDA using sda package
+      # RDA using sda package
       X_train <- t(dat_train)  # Transpose to samples x features
       X_test <- t(dat_test)
       y_train <- as.factor(labels_train)
@@ -157,7 +157,7 @@ main_analysis <- function() {
         X_test <- as.matrix(X_test)
       }
       
-      # Train shrinkage LDA model
+      # Train RDA model
       lda_fit <- sda(
         Xtrain = X_train,
         L = y_train,

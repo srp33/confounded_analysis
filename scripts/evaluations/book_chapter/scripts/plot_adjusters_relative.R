@@ -40,7 +40,7 @@ if (!is.null(opt$adjusters)) {
 mxe_data <- data[data$metric == "mcc" & !is.na(data$n_datasets), ]
 mxe_data$classifier_label <- factor(mxe_data$classifier,
   levels = c("logistic", "elasticnet", "svm", "rf", "knn", "xgboost", "nnet", "shrinkageLDA"),
-  labels = c("Logistic", "ElasticNet", "SVM", "Random Forest", "KNN", "XGBoost", "Neural Net", "Shrinkage LDA"))
+  labels = c("Logistic", "ElasticNet", "SVM", "Random Forest", "KNN", "XGBoost", "Neural Net", "RDA"))
 
 # Generate aggregated relative plot
 generate_relative_plot_aggregated(

@@ -43,7 +43,7 @@ cat("Number of unique test datasets:", n_distinct(data$test_dataset), "\n")
 # Filter to target adjusters
 target_adjusters <- c("unadjusted", "combat", "combat_sup")
 data_filtered <- data %>%
-  filter(adjuster %in% target_adjusters)
+  filter(adjuster %in% target_adjusters, classifier != "knn")
 
 cat("Filtered to", nrow(data_filtered), "rows with target adjusters\n")
 
@@ -180,8 +180,6 @@ p <- ggplot(plot_data, aes(x = imbalance_pct_num, y = mean_rank, color = adjuste
     name = "Batch Adjuster"
   ) +
   labs(
-    title = "Batch Correction Performance Across Class Imbalance Levels",
-    subtitle = "Ranks averaged over classifiers | Shaded region shows min-max range across test sets and training pairs",
     x = "Class Imbalance Level (% Active TB in High-Imbalance Training Set)",
     y = "Average Performance Rank"
   ) +
@@ -193,10 +191,10 @@ p <- ggplot(plot_data, aes(x = imbalance_pct_num, y = mean_rank, color = adjuste
     legend.position = "bottom",
     plot.title = element_text(size = 14, face = "bold"),
     plot.subtitle = element_text(size = 11),
-    axis.title = element_text(size = 12),
-    axis.text = element_text(size = 10),
-    legend.title = element_text(size = 11),
-    legend.text = element_text(size = 10)
+    axis.title = element_text(size = 16),
+    axis.text = element_text(size = 14),
+    legend.title = element_text(size = 14),
+    legend.text = element_text(size = 12)
   )
 
 # Save the plot

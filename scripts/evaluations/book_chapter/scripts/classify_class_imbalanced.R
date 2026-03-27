@@ -103,7 +103,7 @@ train_and_evaluate_classifier <- function(classifier_type, train_data, train_lab
   test_predictions <- NULL
   
   if (classifier_type == "shrinkageLDA") {
-    cat("Training shrinkage LDA (sda)...\n")
+    cat("Training RDA (sda)...\n")
     
     # Transpose data: R (features x samples) -> sda expects (samples x features)
     X_train <- t(train_data)
@@ -114,7 +114,7 @@ train_and_evaluate_classifier <- function(classifier_type, train_data, train_lab
     if (!is.matrix(X_train)) X_train <- as.matrix(X_train)
     if (!is.matrix(X_test)) X_test <- as.matrix(X_test)
     
-    # Train shrinkage LDA model
+    # Train RDA model
     lda_fit <- sda(Xtrain = X_train, L = y_train, diagonal = FALSE)
     
     # Generate predictions on test set

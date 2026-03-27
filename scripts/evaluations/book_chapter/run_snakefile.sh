@@ -22,7 +22,6 @@ find -L "$OUTPUT_DIR" -type d -exec chmod g+s {} +
 
 # The slurm account and slurm partition are essential for grouping
 # Choosing the solver helps snakemake find it
-# The resources and runtime are tuned to marylou, and help snakemake know what size of jobs it can schedule
 echo "Starting Snakemake"
 pixi run snakemake -s $BOOK_CHAPTER_DIR/Snakefile \
     --configfile $BOOK_CHAPTER_DIR/config.yaml \
@@ -30,11 +29,10 @@ pixi run snakemake -s $BOOK_CHAPTER_DIR/Snakefile \
     --executor slurm \
     --default-resources slurm_account=srp33 slurm_partition="(auto)" \
     --jobs 600 \
-    --group-components batch_real_group=2 batch_simulation_group=3 \
-    --resources mem_mb=100000 runtime=4320 \
+    --group-components batch_real_group=2 batch_simulation_group=3 class_imbalance_group=2 \
     --max-jobs-per-second 20 \
     --max-status-checks-per-second 10 \
-    --latency-wait 60 \
+    --latency-wait 20 \
     --rerun-incomplete
     # --keep-going
     # --quiet

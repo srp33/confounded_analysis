@@ -37,6 +37,9 @@ data <- data %>%
 data$adjuster <- trimws(data$adjuster)
 data$classifier <- trimws(data$classifier)
 
+# Exclude within-study CV (not a cross-study method)
+data <- data %>% filter(adjuster != "within_study_cv")
+
 # Filter N-Datasets
 n_datasets_label <- args$n_datasets
 if (tolower(args$n_datasets) != "all") {
