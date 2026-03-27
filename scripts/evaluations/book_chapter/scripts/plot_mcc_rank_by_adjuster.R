@@ -48,7 +48,7 @@ classifier_labels_map <- c(
 shortened_labels_map <- c(
   "rda" = "RDA", "logistic" = "LR", "elasticnet" = "ENet",
   "svm" = "SVM", "rf" = "RF", "knn" = "KNN",
-  "xgboost" = "XGB", "nnet" = "NN", "shrinkageLDA" = "LDA"
+  "xgboost" = "XGB", "nnet" = "NN", "shrinkageLDA" = "RDA"
 )
 
 target_n <- if (tolower(args$n_datasets) != "all") as.integer(args$n_datasets) else NULL

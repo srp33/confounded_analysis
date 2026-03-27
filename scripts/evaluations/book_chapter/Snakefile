@@ -464,7 +464,7 @@ if config.get("class_imbalance_analysis", {}).get("enabled", False):
         threads: 1
         resources:
             mem_mb=4000,
-            runtime=10
+            runtime=20
         params:
             data_dir=DATA_FOLDER + "/class_imbalanced"
         shell:
