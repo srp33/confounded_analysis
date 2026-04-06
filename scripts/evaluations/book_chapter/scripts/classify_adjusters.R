@@ -1470,7 +1470,7 @@ main_analysis_function <- function() {
     test_predictions <- NULL
     
     if (classifier_type == "shrinkageLDA") {
-      cat("Training shrinkage LDA (sda)...\n")
+      cat("Training RDA (sda)...\n")
       
       # Transpose data: R (features x samples) -> sda expects (samples x features)
       X_train <- t(train_data)
@@ -1488,7 +1488,7 @@ main_analysis_function <- function() {
       cat(sprintf("  X_train dimensions: %d x %d (class: %s)\n", nrow(X_train), ncol(X_train), class(X_train)[1]))
       cat(sprintf("  X_test dimensions: %d x %d (class: %s)\n", nrow(X_test), ncol(X_test), class(X_test)[1]))
       
-      # Train shrinkage LDA model
+      # Train RDA model
       lda_fit <- sda(
         Xtrain = X_train,
         L = y_train,

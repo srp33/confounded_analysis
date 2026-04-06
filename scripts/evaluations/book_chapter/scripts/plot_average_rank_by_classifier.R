@@ -21,7 +21,7 @@ parser <- ArgumentParser(description = "Create MCC violin plot by classifier wit
 parser$add_argument("-i", "--input", type = "character", required = TRUE, help = "Input CSV")
 parser$add_argument("-o", "--output", type = "character", required = TRUE, help = "Output PNG")
 parser$add_argument("--width", type = "double", default = 10)
-parser$add_argument("--height", type = "double", default = 10)
+parser$add_argument("--height", type = "double", default = 13)
 parser$add_argument("--dpi", type = "integer", default = 300)
 parser$add_argument("--adjusters", type = "character", default = NULL, help = "Filter adjusters")
 parser$add_argument("--n-datasets", type = "character", default = "4", help = "Filter n_datasets")
@@ -36,6 +36,9 @@ data <- data %>%
 # Clean whitespace to prevent matching errors
 data$adjuster <- trimws(data$adjuster)
 data$classifier <- trimws(data$classifier)
+
+# Exclude within-study CV (not a cross-study method)
+data <- data %>% filter(adjuster != "within_study_cv")
 
 # Filter N-Datasets
 n_datasets_label <- args$n_datasets
@@ -57,7 +60,7 @@ if (!is.null(args$adjusters)) {
 classifier_labels <- c(
   "logistic" = "Logistic\nRegression", "elasticnet" = "ElasticNet", "svm" = "SVM",
   "rf" = "Random\nForest", "knn" = "KNN", "xgboost" = "XGBoost",
-  "nnet" = "Neural\nNet", "shrinkageLDA" = "Shrinkage\nLDA"
+  "nnet" = "Neural\nNet", "shrinkageLDA" = "RDA"
 )
 data$classifier_label <- classifier_labels[data$classifier]
 
@@ -100,7 +103,13 @@ data <- data %>% filter(!is.na(classifier_label))
 group_highlight_1 <- c("Within-Study CV")
 group_highlight_2 <- c("ComBat Sup.")
 group_aggregate_1 <- c("ComBat", "ComBat Mean", "NPN", "Rank Twice", "Naive")
-group_aggregate_2 <- c("MNN", "FastMNN", "Rank Features", "Log Only")
+group_aggregate_2 <- c()
+
+# Individual colors for MNN family + Rank Features
+group_mnn      <- c("MNN")
+group_fastmnn  <- c("FastMNN")
+group_rank_feat <- c("Rank Features")
+group_log_only <- c("Log Only")
 
 all_adjusters <- levels(data$adjuster_label)
 palette_map <- character(length(all_adjusters))
@@ -113,8 +122,11 @@ names(palette_map) <- all_adjusters
 # Custom professional palette
 color_vermilion <- "#D55E00" # Strong Highlight
 color_blue      <- "#7c3bb4ff" # Secondary Highlight
-color_slate     <- "#7296bcff" # Muted Blue-Gray 
-color_sky       <- "#A0CBE8" # Soft Cyan-Gray
+color_slate     <- "#acb1b7ff" # Muted Gray 
+color_mnn       <- "#4292C6" # Deeper Blue (MNN)
+color_fastmnn   <- "#6ab7e0ff" # Light-Medium Blue (FastMNN)
+color_rank_feat <- "#BDD7E7" # Light Blue (Rank Features)
+color_log_only  <- "#636363" # Dark Grey (Log Only)
 color_fallback   <- "#F0E442" # Warning
 
 all_adjusters <- levels(data$adjuster_label)
@@ -130,6 +142,14 @@ for (lbl in all_adjusters) {
     palette_map[lbl] <- color_slate
   } else if (lbl %in% group_aggregate_2) {
     palette_map[lbl] <- color_sky
+  } else if (lbl %in% group_mnn) {
+    palette_map[lbl] <- color_mnn
+  } else if (lbl %in% group_fastmnn) {
+    palette_map[lbl] <- color_fastmnn
+  } else if (lbl %in% group_rank_feat) {
+    palette_map[lbl] <- color_rank_feat
+  } else if (lbl %in% group_log_only) {
+    palette_map[lbl] <- color_log_only
   } else {
     palette_map[lbl] <- color_fallback
   }
@@ -179,7 +199,7 @@ p <- ggplot(data, aes(x = value)) +
   geom_density(aes(fill = adjuster_label),
                alpha = 1.0,
                position = "stack", 
-               color = "darkgrey",
+               color = "white",
                size = 0.1) +  
 
   # 2. Manual Boxplot (Rect)

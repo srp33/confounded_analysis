@@ -42,13 +42,13 @@ args <- parser$parse_args()
 classifier_labels_map <- c(
   "rda" = "RDA", "logistic" = "Logistic Regression", "elasticnet" = "ElasticNet",
   "svm" = "SVM", "rf" = "Random Forest", "knn" = "KNN",
-  "xgboost" = "XGBoost", "nnet" = "Neural Net", "shrinkageLDA" = "Shrinkage LDA"
+  "xgboost" = "XGBoost", "nnet" = "Neural Net", "shrinkageLDA" = "RDA"
 )
 
 shortened_labels_map <- c(
   "rda" = "RDA", "logistic" = "LR", "elasticnet" = "ENet",
   "svm" = "SVM", "rf" = "RF", "knn" = "KNN",
-  "xgboost" = "XGB", "nnet" = "NN", "shrinkageLDA" = "LDA"
+  "xgboost" = "XGB", "nnet" = "NN", "shrinkageLDA" = "RDA"
 )
 
 target_n <- if (tolower(args$n_datasets) != "all") as.integer(args$n_datasets) else NULL

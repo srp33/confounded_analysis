@@ -46,9 +46,10 @@ for n in config["num_datasets"]:
 rule all:
     input:
         adjuster_main=OUTPUT_FOLDER + "/adjusters_on_classifiers.png",
-        adjuster_relative_agg=OUTPUT_FOLDER + "/adjusters_on_classifiers_relative_aggregated.png",
+        adjuster_relative_agg=OUTPUT_FOLDER + "/adjusters_on_classifiers_relative.png",
         avg_rank_study=OUTPUT_FOLDER + "/average_rank_by_classifier.png",
         mcc_rank_by_adjuster=OUTPUT_FOLDER + "/mcc_rank_by_adjuster.png",
+        mean_over_classifiers=OUTPUT_FOLDER + "/mean_over_classifiers.png",
         within_study_baseline=OUTPUT_FOLDER + "/within_study_baseline.csv",
         class_imbalance_results=OUTPUT_FOLDER + "/class_imbalanced_results.csv" if config.get("class_imbalance_analysis", {}).get("enabled", False) else [],
         class_imbalance_trend_plot=OUTPUT_FOLDER + "/class_imbalance_trend.png" if config.get("class_imbalance_analysis", {}).get("enabled", False) else []
@@ -83,14 +84,14 @@ rule make_fig2_main:
 rule make_fig2_relative_aggregated:
     input:
         data=OUTPUT_FOLDER + "/adjusters_on_classifiers.csv",
-        script=SCRIPTS_FOLDER + "/plot_adjusters_relative_aggregated.R",
+        script=SCRIPTS_FOLDER + "/plot_adjusters_relative.R",
         utils=SCRIPTS_FOLDER + "/adjuster_plot_utils.R",
         generator=SCRIPTS_FOLDER + "/generate_relative_plot_aggregated.R"
     output:
-        plot=OUTPUT_FOLDER + "/adjusters_on_classifiers_relative_aggregated.png",
-        sig=OUTPUT_FOLDER + "/adjusters_on_classifiers_relative_aggregated_significance.csv"
+        plot=OUTPUT_FOLDER + "/adjusters_on_classifiers_relative.png",
+        sig=OUTPUT_FOLDER + "/adjusters_on_classifiers_relative_significance.csv"
     log:
-        OUTPUT_FOLDER + "/logs/plot_adjusters_relative_aggregated.log"
+        OUTPUT_FOLDER + "/logs/plot_adjusters_relative.log"
     threads: 1
     resources:
         mem_mb=4000,
@@ -144,6 +145,27 @@ rule make_mcc_rank_by_adjuster:
     shell:
         """
         Rscript {input.script} -i {input.data} -o {output} --adjusters {params.adjusters} --n-datasets {params.n_datasets} &> {log}
+        """
+
+# Step 1.3e: Mean performance gap averaged over classifiers
+rule make_mean_over_classifiers:
+    input:
+        data=OUTPUT_FOLDER + "/adjusters_on_classifiers.csv",
+        script=SCRIPTS_FOLDER + "/plot_mean_over_classifiers.R",
+        utils=SCRIPTS_FOLDER + "/adjuster_plot_utils.R"
+    output:
+        OUTPUT_FOLDER + "/mean_over_classifiers.png"
+    log:
+        OUTPUT_FOLDER + "/logs/plot_mean_over_classifiers.log"
+    threads: 1
+    resources:
+        mem_mb=4000,
+        runtime=10
+    params:
+        adjusters=",".join(config.get("viz_adjusters", config["adjusters"]))
+    shell:
+        """
+        Rscript {input.script} -i {input.data} -o {output} --adjusters {params.adjusters} &> {log}
         """
 
 
@@ -441,8 +463,8 @@ if config.get("class_imbalance_analysis", {}).get("enabled", False):
         group: "class_imbalance_group"
         threads: 1
         resources:
-            mem_mb=32000,
-            runtime=60
+            mem_mb=4000,
+            runtime=20
         params:
             data_dir=DATA_FOLDER + "/class_imbalanced"
         shell:
