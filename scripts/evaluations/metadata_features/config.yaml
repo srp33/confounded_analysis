@@ -39,6 +39,17 @@ targets: [
   'meta_histological_type'
 ]
 
+ttest_targets: [
+  'meta_er_status', 
+  'meta_her2_status', 
+  'meta_sex', 
+  'meta_chemotherapy', 
+  'meta_age_lt35',
+  'meta_age_lt50',
+  'meta_age_lt70',
+  'meta_menopause_status'
+]
+
 test_sources:
 - "metabric"
 
@@ -54,3 +65,6 @@ random_state: 42
 # Feature Selection
 top_k: 100
 threshold: 0.05
+
+# Plotting
+top_n: 10

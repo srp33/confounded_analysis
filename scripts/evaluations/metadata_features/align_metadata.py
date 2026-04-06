@@ -106,8 +106,8 @@ def one_hot_encode_age(df, age_col="meta_age_at_diagnosis", bins=(0,50,70,200), 
 
 def threshold_encode_age(
     df,
-    age_col="meta_age_at_diagnosis",
-    thresholds=(35, 50, 65),
+    age_col="meta_age_at_diagnosis_combined",
+    thresholds=(35, 50, 70),
     drop_original=False
 ):
     if age_col not in df.columns:
@@ -117,7 +117,7 @@ def threshold_encode_age(
     df[age_col] = pd.to_numeric(df[age_col], errors="coerce")
 
     for t in thresholds:
-        col_name = f"{age_col}_lt{t}"
+        col_name = f"meta_age_lt{t}"
 
         # Start with NaN
         df[col_name] = np.nan
@@ -230,7 +230,7 @@ def main():
             print(f"❓ Unclassified values in {col}:")
             print(unclassified.value_counts(dropna=False))
         print(f"✅ Post-conversion unique values in {col}:")
-        print(df[col].value_counts(dropna=False))
+        print(df[[col, "meta_source"]].value_counts(dropna=False))
 
     # Step 5: Rename _combined and drop original columns
     columns_to_drop = [

@@ -43,12 +43,13 @@ def main():
     # -------------------------
     # Load selected genes
     # -------------------------
-    genes_df = pd.read_csv(args.genes)
+    genes_df = pd.read_csv(args.genes, index_col=False)
 
     if "gene" not in genes_df.columns:
+        print("Columns: ", genes_df.columns)
         raise ValueError("Selected genes file must contain a 'gene' column.")
 
-    selected_genes = genes_df["gene"].astype(str).tolist()
+    selected_genes = genes_df['gene'].astype(str).tolist()
 
     # -------------------------
     # Identify columns

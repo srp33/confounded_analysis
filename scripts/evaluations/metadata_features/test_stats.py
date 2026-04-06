@@ -60,96 +60,101 @@ def run_tests(file_path, meta_cols, outdir):
             )
 
             tstat_df[meta_col] = t_stats
+            pval_df[meta_col] = p_vals
 
         # ------------------------
         # Multi-class -> ANOVA
         # ------------------------
         elif all(isinstance(x, int) for x in unique_vals):
             f_stats = []
-            pvals = []
+            pvals_list = []
 
             for gene in gene_cols:
-                groups = []
+                groups = [gene_data.loc[labels == val, gene].dropna().values for val in unique_vals]
+                groups = [g for g in groups if len(g) > 0]
 
-                for val in unique_vals:
-                    group = gene_data.loc[labels == val, gene].dropna()
-                    if len(group) > 0:
-                        groups.append(group.values)
-
-                # At least 2 groups with data
                 if len(groups) < 2:
                     f_stats.append(np.nan)
-                    pvals.append(np.nan)
+                    pvals_list.append(np.nan)
                     continue
 
                 try:
                     f_stat, p_val = f_oneway(*groups)
                     f_stats.append(f_stat)
-                    pvals.append(p_val)
+                    pvals_list.append(p_val)
                 except Exception:
                     f_stats.append(np.nan)
-                    pvals.append(np.nan)
+                    pvals_list.append(np.nan)
 
             tstat_df[meta_col] = f_stats
-            pval_df[meta_col] = pvals
+            pval_df[meta_col] = pvals_list
 
         # -------------------------
         # Continuous → Linear regression
         # -------------------------
         else:
             slopes = []
-            pvals = []
+            pvals_list = []
 
             x = labels.values.astype(float)
 
             for gene in gene_cols:
                 y = gene_data[gene].values
-
-                # Remove NaNs pairwise
                 mask = ~np.isnan(x) & ~np.isnan(y)
                 if mask.sum() < 3:
                     slopes.append(np.nan)
-                    pvals.append(np.nan)
+                    pvals_list.append(np.nan)
                     continue
 
                 try:
                     res = linregress(x[mask], y[mask])
                     slopes.append(res.slope)
-                    pvals.append(res.pvalue)
+                    pvals_list.append(res.pvalue)
                 except Exception:
                     slopes.append(np.nan)
-                    pvals.append(np.nan)
+                    pvals_list.append(np.nan)
 
             slope_df[meta_col] = slopes
-            pval_df[meta_col] = pvals
+            pval_df[meta_col] = pvals_list
 
     # -------------------------
     # Save outputs
     # -------------------------
-    tstat_path = os.path.join(outdir, f"{base_name}-tstats.csv")
-    slope_path = os.path.join(outdir, f"{base_name}-slopes.csv")
-    fstat_path = os.path.join(outdir, f"{base_name}-fstats.csv")
-    pval_path = os.path.join(outdir, f"{base_name}-pvalues.csv")
+    save_df_with_append_and_targets(tstat_df, outdir, base_name, "tstats")
+    save_df_with_append_and_targets(slope_df, outdir, base_name, "slopes")
+    save_df_with_append_and_targets(fstat_df, outdir, base_name, "fstats")
+    save_df_with_append_and_targets(pval_df, outdir, base_name, "pvalues")
 
-    if not tstat_df.empty:
-        tstat_df.index.name = "Gene"
-        tstat_df.to_csv(tstat_path)
-        print(f"[Saved] {tstat_path}")
 
-    if not slope_df.empty:
-        slope_df.index.name = "Gene"
-        slope_df.to_csv(slope_path)
-        print(f"[Saved] {slope_path}")
-    
-    if not fstat_df.empty:
-        fstat_df.index.name = "Gene"
-        fstat_df.to_csv(fstat_path)
-        print(f"[Saved] {fstat_path}")
+def save_df_with_append_and_targets(df, outdir, base_name, suffix):
+    """
+    Save a DataFrame to a CSV, appending new columns if the file exists,
+    and also save one CSV per column (target).
+    """
+    os.makedirs(outdir, exist_ok=True)
+    combined_path = os.path.join(outdir, f"{base_name}-{suffix}.csv")
 
-    if not pval_df.empty:
-        pval_df.index.name = "Gene"
-        pval_df.to_csv(pval_path)
-        print(f"[Saved] {pval_path}")
+    # Append columns if file exists
+    if os.path.exists(combined_path) and os.path.getsize(combined_path) > 0:
+        existing = pd.read_csv(combined_path, index_col=0)
+        # Overwrite columns if they exist
+        for col in df.columns:
+            existing[col] = df[col]
+        combined = existing
+        combined.index.name = "Gene"
+        combined.to_csv(combined_path)
+        print(f"[Updated combined] {combined_path}")
+    else:
+        df.index.name = "Gene"
+        df.to_csv(combined_path)
+        print(f"[Saved combined] {combined_path}")
+        combined = df
+
+    # Save individual target/column CSVs
+    for target in df.columns:
+        target_path = os.path.join(outdir, f"{base_name}-{target}-{suffix}.csv")
+        combined[[target]].to_csv(target_path)
+        print(f"[Saved target] {target_path}")
 
 
 def main():
