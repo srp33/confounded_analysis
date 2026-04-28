@@ -261,20 +261,56 @@ AccuracyBinary <- function(actual, predicted) {
 
 
 predSVM <- function(trn_set, y_trn){
-  tune_ctrl <- e1071::tune.control(sampling="cross", cross=4)
-  obj <- e1071::tune(e1071::svm, train.x=t(trn_set), train.y=as.factor(y_trn),
-              tunecontrol=tune_ctrl,
-              ranges=list(type="C-classification",
-                          kernel="linear",
-                          cost=exp(seq(from=-10, to=10, by=2))))
-  best_cost <- obj$best.parameters[,"cost"]
-  mod_svm <- e1071::svm(x=t(trn_set), y=as.factor(y_trn),
+  y_trn_factor <- as.factor(y_trn)
+  tab <- table(y_trn_factor)
+  min_samples <- min(tab)
+  
+  if (min_samples < 2) {
+    stop(sprintf("SVM training failed: minimum 2 samples per class required (found classes: %s)", paste(names(tab), "=", as.numeric(tab), collapse=", ")))
+  }
+  
+  # Ensure cross-validation folds do not exceed minimum samples in any class
+  n_folds <- min(4, min_samples)
+  tune_ctrl <- e1071::tune.control(sampling="cross", cross=n_folds)
+  
+  obj <- tryCatch({
+    e1071::tune(e1071::svm, train.x=t(trn_set), train.y=y_trn_factor,
+                tunecontrol=tune_ctrl,
+                ranges=list(type="C-classification",
+                            kernel="linear",
+                            cost=exp(seq(from=-10, to=10, by=2))))
+  }, error = function(e) {
+    stop(sprintf("SVM tuning (tune) failed: %s", e$message))
+  })
+  
+  if (is.null(obj) || is.null(obj$best.parameters)) {
+    stop("SVM tuning failed to return valid parameters.")
+  }
+  
+  best_cost <- obj$best.parameters[1, "cost"]
+  mod_svm <- e1071::svm(x=t(trn_set), y=y_trn_factor,
                  type="C-classification", kernel="linear",
                  cost=best_cost, probability=TRUE)
-  pred_train_svm <- predict(mod_svm, t(trn_set), probability=TRUE)
-  pred_train_svm <- attr(pred_train_svm, "probabilities")[,"1"]
   
-  res <- list(mod=mod_svm, pred_trn_prob=pred_train_svm, pred_tst_prob=NULL,
+  pred_train_svm_raw <- predict(mod_svm, t(trn_set), probability=TRUE)
+  probs <- attr(pred_train_svm_raw, "probabilities")
+  
+  if (is.null(probs)) {
+    stop("SVM prediction failed: probabilities not found in output attributes.")
+  }
+  
+  # Ensure we extract the probability for the correct class (labeled "1")
+  if ("1" %in% colnames(probs)) {
+    pred_train_svm <- probs[, "1", drop=TRUE]
+  } else if (ncol(probs) >= 2) {
+    # Fallback to the second column if "1" is missing
+    cat("WARNING: SVM probability column '1' not found. Available columns:", paste(colnames(probs), collapse=", "), "\n")
+    pred_train_svm <- probs[, 2, drop=TRUE]
+  } else {
+    stop(sprintf("SVM prediction failed: unexpected probability matrix dimensions %d x %d", nrow(probs), ncol(probs)))
+  }
+  
+  res <- list(mod=mod_svm, pred_trn_prob=as.vector(pred_train_svm), pred_tst_prob=NULL,
               pred_trn_class=NULL, pred_tst_class=NULL)
   return(res)
 }

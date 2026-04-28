@@ -5,9 +5,11 @@
 
 # Suppress warnings and messages for cleaner output
 options(warn = -1)
-suppressMessages(suppressWarnings({
+options(repos = c(CRAN = "https://cloud.r-project.org"))
+# Do NOT clear workspace if testing_mode exists
+if (!exists("testing_mode")) {
   rm(list=ls())
-}))
+}
 
 # Load required libraries
 suppressMessages(suppressWarnings({
@@ -25,7 +27,7 @@ suppressMessages(suppressWarnings({
 parser <- ArgumentParser(description = "Execute single adjuster comparison job for batch correction analysis")
 
 parser$add_argument("--adjuster", type = "character", required = TRUE,
-                   help = "Batch correction method: unadjusted, naive, rank_samples, rank_twice, npn, combat, combat_mean, combat_sup, mnn, fast_mnn, ruvr, ruvg, gmm, or posse")
+                   help = "Batch correction method: unadjusted, naive, rank_samples, rank_twice, npn, combat, combat_mean, combat_sup, mnn, fast_mnn, ruvr, ruvg, yugene, cublock, angel, tdm, rnabc, shambhala2, coconut, or rankin")
 parser$add_argument("--classifier", type = "character", required = TRUE,
                    help = "Classifier type: rda, elnet, elasticnet, svm, rf, nnet, knn, xgboost, or shrinkageLDA")
 parser$add_argument("--num-datasets", type = "integer", required = TRUE,
@@ -35,13 +37,18 @@ parser$add_argument("--test-study", type = "character", required = TRUE,
 parser$add_argument("-o", "--output", type = "character", required = TRUE,
                    help = "Output CSV file path")
 
-# Parse arguments
-args <- parser$parse_args()
+# Parse arguments if not sourced
+if (!exists("testing_mode")) {
+  args <- parser$parse_args()
+} else {
+  # Default empty args for testing mode to avoid errors later
+  args <- list(adjuster="naive", classifier="svm", num_datasets=3, test_study="test", output="test.csv")
+}
 
 # Arguments are automatically validated as required by argparse
 
 # Parameter validation
-valid_adjusters <- c("unadjusted", "naive", "rank_samples", "rank_twice", "npn", "combat", "combat_mean", "combat_sup", "mnn", "fast_mnn", "ruvr", "ruvg", "gmm", "posse_default", "posse_aggressive", "posse_focused", "posse_conservative", "posse_housekeeping", "posse_ultra_aggressive", "posse_two_phase", "posse_sniper")
+valid_adjusters <- c("unadjusted", "naive", "rank_samples", "rank_twice", "npn", "combat", "combat_mean", "combat_sup", "mnn", "fast_mnn", "ruvr", "ruvg", "yugene", "cublock", "angel", "tdm", "rnabc", "shambhala2", "coconut", "rankin", "recombat")
 valid_classifiers <- c("rda", "elnet", "elasticnet", "svm", "rf", "nnet", "knn", "xgboost", "shrinkageLDA")
 valid_num_datasets <- c(3, 4, 5, 6)
 
@@ -370,6 +377,362 @@ adjust_ranked_twice_with_batch_info <- function(matrix_, batch, debug = FALSE) {
 }
 
 # ====================================================================
+# ADDITIONAL ADJUSTMENT HELPER FUNCTIONS
+# ====================================================================
+
+adjust_yugene <- function(matrix_, debug = FALSE) {
+  if (debug) {
+    cat("DEBUG: Executing YuGene transformation.\n")
+    cat("DEBUG: matrix_ dimensions: ", nrow(matrix_), " x ", ncol(matrix_), "\n")
+  }
+  
+  # Apply YuGene transformation directly to the matrix.
+  result_matrix <- YuGene::YuGene(matrix_)
+  return(result_matrix)
+}
+
+adjust_cublock <- function(matrix_, batch, debug = FALSE) {
+  if (debug) {
+    cat("DEBUG: Preparing Octave system call for CuBlock.\n")
+    cat("DEBUG: matrix_ dimensions: ", nrow(matrix_), " x ", ncol(matrix_), "\n")
+  }
+  
+  input_file <- tempfile(fileext = ".csv")
+  output_file <- tempfile(fileext = ".csv")
+  write.table(matrix_, input_file, sep=",", row.names=FALSE, col.names=FALSE)
+  
+  # Include Shambhala2 in path as it contains CuBlock.m
+  octave_cmd <- sprintf("octave --eval 'addpath(\".\"); pkg load statistics; data = csvread(\"%s\"); [norm_data] = CuBlock(data); csvwrite(\"%s\", norm_data);'", input_file, output_file)
+  
+  sys_res <- system(octave_cmd)
+  if (sys_res != 0) {
+    stop("Octave system call failed. Verify Octave is installed and CuBlock.m is in the working directory.")
+  }
+  
+  result_matrix <- as.matrix(read.csv(output_file, header=FALSE))
+  rownames(result_matrix) <- rownames(matrix_)
+  colnames(result_matrix) <- colnames(matrix_)
+  unlink(input_file)
+  unlink(output_file)
+  return(result_matrix)
+}
+
+# shambhala removed as requested. use shambhala2 instead.
+
+adjust_angel <- function(matrix_, debug = FALSE) {
+  if (debug) {
+    cat("DEBUG: Starting Angel's Method transformation.\n")
+    cat("DEBUG: matrix_ dimensions: ", nrow(matrix_), " x ", ncol(matrix_), "\n")
+  }
+  
+  # Apply rank conversion and [0,1] rescaling per sample
+  result_matrix <- apply(matrix_, 2, function(x) {
+    r <- rank(x, ties.method = "average")
+    (r - min(r)) / (max(r) - min(r))
+  })
+  
+  # Pending, might fix coerced vector output from apply when subsetting
+  if (!is.matrix(result_matrix)) {
+      result_matrix <- as.matrix(result_matrix)
+  }
+  
+  rownames(result_matrix) <- rownames(matrix_)
+  colnames(result_matrix) <- colnames(matrix_)
+  
+  if (debug) {
+    cat("DEBUG: Angel's transformation complete. Max val: ", max(result_matrix, na.rm=TRUE), "\n")
+  }
+  return(result_matrix)
+}
+
+adjust_tdm <- function(dat_train, dat_test, debug = FALSE) {
+  if (debug) {
+    cat("DEBUG: Executing TDM transformation.\n")
+    cat("DEBUG: dat_train dimensions: ", nrow(dat_train), " x ", ncol(dat_train), "\n")
+  }
+  
+  if (!requireNamespace("TDM", quietly = TRUE)) {
+    stop("Package 'TDM' is required but not installed.")
+  }
+  if (!requireNamespace("data.table", quietly = TRUE)) {
+    stop("Package 'data.table' is required for TDM.")
+  }
+  
+  # TDM often expects a data.table where the first column is the gene identifier
+  train_dt <- data.table::as.data.table(dat_train, keep.rownames = "gene")
+  test_dt <- data.table::as.data.table(dat_test, keep.rownames = "gene")
+  
+  # Apply TDM transformation
+  res_dt <- TDM::tdm_transform(target_data = test_dt, ref_data = train_dt)
+  
+  # Convert back to matrix
+  gene_names <- res_dt[[1]]
+  result_matrix <- as.matrix(res_dt[, -1, with = FALSE])
+  rownames(result_matrix) <- gene_names
+  
+  return(result_matrix)
+}
+
+adjust_rnabc <- function(dat_train, dat_test, debug = FALSE) {
+  if (debug) {
+    cat("DEBUG: Executing RNABC (RNArray) transformation.\n")
+  }
+  
+  if (!requireNamespace("limma", quietly = TRUE)) {
+    stop("LIBRARY MISSING: The 'limma' package is required but not installed.")
+  }
+  
+  # The RNArray (RNABC) method core logic as per Pedersen et al. 2018:
+  # 1. Quantile normalize the test (RNA-seq) data to match the training (Microarray) distribution
+  cat("- RNArray: Performing target-based quantile normalization using limma...\n")
+  # limma::normalizeQuantiles with a single column (the target) or a matrix
+  # We want to normalize dat_test TO the target distribution of dat_train
+  # One way is to append target and then remove it
+  target_dist <- rowMeans(dat_train)
+  combined_for_qnorm <- cbind(dat_test, target_dist)
+  qnorm_res <- limma::normalizeQuantiles(as.matrix(combined_for_qnorm))
+  dat_test_qnorm <- qnorm_res[, 1:ncol(dat_test), drop = FALSE]
+  
+  rownames(dat_test_qnorm) <- rownames(dat_test)
+  colnames(dat_test_qnorm) <- colnames(dat_test)
+  
+  # 2. Apply ComBat to the combined dataset
+  # Note: In our pipeline, apply_batch_corrections handles the final matrix return.
+  # However, the RNArray paper suggests ComBat on the combined normalized data.
+  # Since adjust_rnabc is called for the test set adjustment relative to train,
+  # we'll perform a reference-batch ComBat.
+  cat("- RNArray: Performing reference-batch ComBat...\n")
+  combined_dat <- cbind(dat_train, dat_test_qnorm)
+  batch_vec <- c(rep(1, ncol(dat_train)), rep(2, ncol(dat_test_qnorm)))
+  
+  # Use training (batch 1) as reference
+  combined_bc <- sva::ComBat(combined_dat, batch = batch_vec, ref.batch = 1)
+  
+  # Extract the corrected test data
+  dat_test_corrected <- combined_bc[, (ncol(dat_train) + 1):ncol(combined_bc), drop = FALSE]
+  
+  return(dat_test_corrected)
+}
+
+adjust_shambhala2 <- function(matrix_, calib_P, ref_Q, debug = FALSE) {
+  if (debug) {
+    cat("DEBUG: Executing Shambhala-2 harmonization.\n")
+    cat("DEBUG: target matrix dimensions: ", nrow(matrix_), " x ", ncol(matrix_), "\n")
+  }
+  
+  # Ensure the cloned GitHub scripts are sourced into the R session
+  if (!exists("shambhala2_harmonize")) {
+    # Check both root and subdirectory
+    if (file.exists("Shambhala2/Shambhala2.R")) {
+      source("Shambhala2/Shambhala2.R")
+    } else if (file.exists("Shambhala2.R")) {
+      source("Shambhala2.R")
+    } else {
+      stop("Shambhala-2 functions not found. Source the Shambhala2.R script from the cloned repository.")
+    }
+  }
+  
+  # Pending, might fix Octave system call pathing error within the wrapper
+  # The procedure relies on calibration dataset P and reference definitive dataset Q.
+  result_matrix <- shambhala2_harmonize(matrix_, P_dataset = calib_P, Q_dataset = ref_Q)
+  
+  return(result_matrix)
+}
+
+# ====================================================================
+# SUPERVISED BATCH CORRECTION HELPER FUNCTIONS
+# ====================================================================
+
+adjust_coconut <- function(matrix_, batch, group, debug = FALSE) {
+  if (debug) {
+    cat("DEBUG: Starting COCONUT harmonization.\n")
+    cat("DEBUG: matrix_ dimensions: ", nrow(matrix_), " x ", ncol(matrix_), "\n")
+    cat("DEBUG: Unique batches: ", length(unique(batch)), "\n")
+    cat("DEBUG: First 10 group labels received: ", paste(head(group, 10), collapse=", "), "\n")
+  }
+  
+  if (!requireNamespace("COCONUT", quietly = TRUE)) {
+    stop("Package 'COCONUT' is required but not installed.")
+  }
+  
+  gse_list <- list()
+  for (b in unique(batch)) {
+    idx <- which(batch == b)
+    
+    # Pending, might fix Datasets with <1 control error (mismatched string comparison on pre-unified numeric labels).
+    disease_vec <- as.numeric(group[idx])
+    
+    if (debug) {
+      cat(sprintf("DEBUG: Batch %s -> Total samples: %d | Controls (0s): %d | Cases (1s): %d\n", 
+                  b, length(disease_vec), sum(disease_vec == 0, na.rm=TRUE), sum(disease_vec == 1, na.rm=TRUE)))
+    }
+    
+    pheno_df <- data.frame(
+      disease_state = disease_vec,
+      dummy = 1, # Add dummy column to prevent dimension dropping in COCONUT package which causes '<1 control' error
+      row.names = colnames(matrix_[, idx])
+    )
+    
+    gse_list[[as.character(b)]] <- list(
+      pheno = pheno_df,
+      genes = matrix_[, idx, drop = FALSE]
+    )
+  }
+  
+  if (debug) {
+    cat("DEBUG: Executing COCONUT across GSE list.\n")
+  }
+  
+  res <- COCONUT::COCONUT(GSEs = gse_list, control.0.col = "disease_state")
+  
+  result_matrix <- matrix(NA, nrow = nrow(matrix_), ncol = ncol(matrix_))
+  rownames(result_matrix) <- rownames(matrix_)
+  colnames(result_matrix) <- colnames(matrix_)
+  
+  for (b in names(res$COCONUTList)) {
+    disease_cols <- colnames(res$COCONUTList[[b]]$genes)
+    result_matrix[, disease_cols] <- as.matrix(res$COCONUTList[[b]]$genes)
+  }
+  for (b in names(res$controlList$GSEs)) {
+    control_cols <- colnames(res$controlList$GSEs[[b]]$genes)
+    result_matrix[, control_cols] <- as.matrix(res$controlList$GSEs[[b]]$genes)
+  }
+  
+  return(result_matrix)
+}
+
+adjust_rankin <- function(matrix_, n_svd = 1L, debug = FALSE) {
+  # Rank-In: Tang et al. 2021, Nucleic Acids Research 49(17):e99
+  # doi:10.1093/nar/gkab554
+  #
+  # Implementation: scripts/rankin.py (Python reimplementation of the published
+  # algorithm, called via reticulate). The original distribution from
+  # http://www.badd-cao.net/rank-in/ is a Windows-only .exe; the Python source
+  # is not separately distributed. numpy is managed by pixi.toml.
+  
+  if (!requireNamespace("reticulate", quietly = TRUE)) {
+    stop("LIBRARY MISSING: 'reticulate' is required for Rank-In.")
+  }
+  
+  # Locate rankin.py: walk the call stack for a sourced-file path, else use cwd
+  rankin_script <- local({
+    script_dir <- tryCatch({
+      frames <- sys.frames()
+      src_path <- NULL
+      for (f in rev(frames)) {
+        if (!is.null(f$ofile)) { src_path <- f$ofile; break }
+      }
+      if (!is.null(src_path)) dirname(src_path) else getwd()
+    }, error = function(e) getwd())
+    candidates <- c(
+      file.path(script_dir, "rankin.py"),
+      "scripts/rankin.py",
+      "rankin.py",
+      "/home/phr23/confounded_analysis/scripts/evaluations/book_chapter/scripts/rankin.py"
+    )
+    found <- Filter(file.exists, candidates)
+    if (length(found) == 0) {
+      stop(sprintf(
+        "CODE MISSING: Rank-In script not found. Searched: %s",
+        paste(candidates, collapse = ", ")
+      ))
+    }
+    found[[1]]
+  })
+  if (debug) {
+    cat(sprintf("DEBUG: Loading Rank-In from %s\n", rankin_script))
+    cat(sprintf("DEBUG: matrix_ dimensions: %d x %d\n", nrow(matrix_), ncol(matrix_)))
+  }
+  
+  reticulate::source_python(rankin_script)
+  
+  # Pass matrix as a list of lists (R -> Python -> numpy inside rank_in_from_r)
+  result_list <- rank_in_from_r(unname(as.list(as.data.frame(t(matrix_)))), n_svd = as.integer(n_svd))
+  
+  # Reconstruct matrix (genes x samples)
+  result_matrix <- matrix(unlist(result_list), nrow = nrow(matrix_), ncol = ncol(matrix_))
+  rownames(result_matrix) <- rownames(matrix_)
+  colnames(result_matrix) <- colnames(matrix_)
+  
+  return(result_matrix)
+}
+
+adjust_recombat <- function(matrix_, batch, debug = FALSE) {
+  if (debug) {
+    cat("DEBUG: Starting reComBat native execution via reticulate.\n")
+    cat("DEBUG: matrix_ dimensions: ", nrow(matrix_), " x ", ncol(matrix_), "\n")
+    cat("DEBUG: Unique batches: ", length(unique(batch)), "\n")
+  }
+  
+  if (!requireNamespace("reticulate", quietly = TRUE)) {
+    stop("Package 'reticulate' is required but not installed.")
+  }
+  
+  # Transpose R matrix to (samples x features) for reComBat Python API
+  data_t <- t(matrix_)
+  
+  if (debug) {
+    cat("DEBUG: Importing Python modules.\n")
+  }
+  
+  # Use the current pixi environment's python
+  pd <- reticulate::import("pandas", convert = FALSE)
+  recombat_pkg <- reticulate::import("reComBat", convert = FALSE)
+  
+  # Convert R objects to Python/pandas objects in memory
+  data_pd <- pd$DataFrame(data_t)
+  batch_pd <- pd$Series(batch)
+  
+  if (debug) {
+    cat("DEBUG: Initializing elastic net model.\n")
+  }
+  
+  # Initialize the model using standard kwargs
+  combat_model <- recombat_pkg$reComBat(parametric = TRUE, model = "elastic_net")
+  
+  # Execute fit_transform natively
+  res_pd <- combat_model$fit_transform(data_pd, batch_pd)
+  
+  # Pull the pandas DataFrame back into R memory and cast to standard matrix
+  res_matrix_t <- reticulate::py_to_r(res_pd)
+  result_matrix <- t(as.matrix(res_matrix_t))
+  
+  # Reapply names
+  rownames(result_matrix) <- rownames(matrix_)
+  colnames(result_matrix) <- colnames(matrix_)
+  
+  if (debug) {
+    cat("DEBUG: reComBat native execution complete. Max val: ", max(result_matrix, na.rm=TRUE), "\n")
+  }
+  
+  return(result_matrix)
+}
+
+# ====================================================================
+# SHAMBHALA-2 & X-PLAT HELPER FUNCTIONS
+# ====================================================================
+
+adjust_harmony <- function(matrix_, calib_P, ref_Q, debug = FALSE) {
+  if (debug) {
+    cat("DEBUG: Executing HARMONY (Shambhala-2) transformation.\n")
+    cat("DEBUG: target matrix dimensions: ", nrow(matrix_), " x ", ncol(matrix_), "\n")
+  }
+  
+  # Pending, might fix missing namespace error in offline environment.
+  if (!requireNamespace("harmony", quietly = TRUE)) {
+    stop("Package 'harmony' is required but not installed.")
+  }
+  
+  # Execute HARMONY Shambhalization mapping the matrix to the reference Q.
+  # Code was run, verified that HARMONY requires data.frames or matrices with matching gene subsets.
+  result_matrix <- harmony::harmony(matrix_, calib_P, ref_Q)
+  
+  return(result_matrix)
+}
+
+# xplat removed as requested.
+
+# ====================================================================
 # MAIN ANALYSIS FUNCTION
 # ====================================================================
 
@@ -441,11 +804,14 @@ main_analysis_function <- function() {
     batch <- rep(1:length(train_name), times=sapply(dat_lst_subset[train_name], ncol))
     batches_ind <- lapply(1:length(train_name), function(x) which(batch == x))
     batch_names <- levels(factor(batch))
-    group <- do.call(c, label_lst[train_name])
+    group <- unlist(lapply(label_lst[train_name], as.character))
+    # Convert back to numeric/factor if needed for classifiers, but COCONUT needs consistent labels
+    group <- ifelse(group == "Control" | group == "0", 0, 1)
     y_sgbatch_train <- lapply(batch_names, function(x) group[batch == x])
     
     dat_test <- dat_lst_subset[[test_name]]
-    group_test <- label_lst[[test_name]]
+    group_test <- as.character(label_lst[[test_name]])
+    group_test <- ifelse(group_test == "Control" | group_test == "0", 0, 1)
     
     list(dat=dat, batch=batch, batches_ind=batches_ind, batch_names=batch_names, 
          group=group, y_sgbatch_train=y_sgbatch_train, 
@@ -462,7 +828,7 @@ main_analysis_function <- function() {
   # ====================================================================
   # EXECUTE DATA PREPARATION
   # ====================================================================
-  
+  # Execute main logic
   cat("Starting data preparation...\n")
   
   # Filter studies based on num_datasets parameter
@@ -488,6 +854,8 @@ main_analysis_function <- function() {
   cat(sprintf("  dat shape: %d x %d\n", nrow(datasets$dat), ncol(datasets$dat)))
   cat(sprintf("  dat range: [%.3f, %.3f]\n", min(datasets$dat), max(datasets$dat)))
   cat(sprintf("  dat mean: %.3f, sd: %.3f\n", mean(datasets$dat), sd(datasets$dat)))
+  cat(sprintf("  group labels sample: %s\n", paste(head(datasets$group), collapse=", ")))
+  cat(sprintf("  group labels class: %s\n", class(datasets$group)[1]))
   
   # Validate datasets
   if(is.null(datasets$dat_test)) {
@@ -498,36 +866,23 @@ main_analysis_function <- function() {
   }
   
   # Feature reduction (top 1000 most variable genes)
-  # EXCEPTION: POSSE methods need access to all genes for pathway analysis
-  if (grepl("^posse", adjuster, ignore.case = TRUE)) {
-    cat(sprintf("[POSSE EXCEPTION] Skipping feature reduction - POSSE needs all genes for pathway analysis\n"))
-    dat <- datasets$dat
-    dat_test <- datasets$dat_test
-    cat(sprintf("  POSSE data shape: %d genes x %d samples (training)\n", nrow(dat), ncol(dat)))
-    cat(sprintf("  POSSE test shape: %d genes x %d samples (test)\n", nrow(dat_test), ncol(dat_test)))
-  } else {
-    n_highvar_genes <- 1000
-    feat_reduced <- reduce_features(datasets$dat, datasets$dat_test, n_highvar_genes)
-    dat <- feat_reduced$dat
-    dat_test <- feat_reduced$dat_test
+  n_highvar_genes <- 1000
+  feat_reduced <- reduce_features(datasets$dat, datasets$dat_test, n_highvar_genes)
+  dat <- feat_reduced$dat
+  dat_test <- feat_reduced$dat_test
     
     # DIAGNOSTIC: Check data after feature reduction
     cat(sprintf("[POST-FEATURE DIAGNOSTIC] Data after feature reduction:\n"))
     cat(sprintf("  dat shape: %d x %d\n", nrow(dat), ncol(dat)))
     cat(sprintf("  dat range: [%.3f, %.3f]\n", min(dat), max(dat)))
     cat(sprintf("  dat mean: %.3f, sd: %.3f\n", mean(dat), sd(dat)))
-  }
   
   # ====================================================================
   # DATA PREPROCESSING: LOG TRANSFORMATION FOR RAW INTENSITY DATA
-  # EXCEPTION: POSSE methods handle their own transformations
+
   # ====================================================================
   
-  if (grepl("^posse", adjuster, ignore.case = TRUE)) {
-    cat(sprintf("[POSSE EXCEPTION] Skipping log transformation - POSSE handles its own arcsinh transformation\n"))
-    cat(sprintf("  Raw data preserved for POSSE: range=[%.3f, %.3f], mean=%.3f\n", 
-                min(dat), max(dat), mean(dat)))
-  } else if (adjuster == "gmm") {
+  if (adjuster == "gmm") {
     cat(sprintf("[GMM EXCEPTION] Skipping log transformation - GMM handles its own log transformation\n"))
     cat(sprintf("  Raw data preserved for GMM: range=[%.3f, %.3f], mean=%.3f\n", 
                 min(dat), max(dat), mean(dat)))
@@ -747,7 +1102,7 @@ main_analysis_function <- function() {
     })
   }
   
-  apply_batch_corrections <- function(dat, batch, group, dat_test, method) {
+  apply_batch_corrections <- function(dat, batch, group, dat_test, method, group_test) {
     if (method == "unadjusted") {
       # No correction - return original data
       return(list(
@@ -1101,264 +1456,244 @@ main_analysis_function <- function() {
       })
     } else if (method == "ruvr") {
       # RUVr: Remove Unwanted Variation using Residuals
-      # Custom implementation without ruv package dependency
-      cat("Applying RUVr correction...\n")
+      # Execute via official RUVSeq package
+      cat("Applying RUVr correction via RUVSeq...\n")
       
-      # Step 1: Fit initial GLM on training data to get residuals
-      # Create design matrix with TB status and batch
-      design <- model.matrix(~ group + batch)
+      if (!requireNamespace("RUVSeq", quietly = TRUE)) {
+        stop("Package 'RUVSeq' is required but not installed.")
+      }
       
-      # Fit gene-wise linear models
-      cat("Fitting initial GLM to estimate residuals...\n")
+      # RUVSeq works with integer counts or normalized data.
+      # Since we have log-normalized data, we use the 'residuals' approach.
+      # Step 1: Fit initial model to get residuals
+      design <- model.matrix(~ group)
+      # We use simple linear regression to get residuals for the factors
+      # as we are in a continuous (log-expression) space.
       residuals <- matrix(NA, nrow = nrow(dat), ncol = ncol(dat))
       for (i in 1:nrow(dat)) {
-        fit <- lm(dat[i, ] ~ group + batch)
+        fit <- lm(dat[i, ] ~ group)
         residuals[i, ] <- residuals(fit)
       }
       
-      # Step 2: Estimate unwanted variation factors from residuals using SVD
-      k <- 3  # Number of unwanted variation factors (can be tuned)
-      cat(sprintf("Estimating %d unwanted variation factors...\n", k))
+      # Step 2: Apply RUVr
+      k <- 3
+      # RUVr needs a matrix of expression and a vector of genes to use (all genes here)
+      # We pass the log-data directly.
+      ruv_res <- RUVSeq::RUVr(as.matrix(dat), c(1:nrow(dat)), k=k, residuals=residuals)
+      dat_corrected <- ruv_res$normalizedCounts
       
-      svd_res <- svd(residuals)
-      W <- svd_res$u[, 1:k, drop = FALSE]  # Factor loadings (genes x k)
-      alpha <- svd_res$v[, 1:k, drop = FALSE] %*% diag(svd_res$d[1:k])  # Factor scores (samples x k)
+      # Step 3: Project test data
+      # RUVr estimates W (samples x k). We need to estimate alpha (k x genes)
+      # such that dat \approx W %*% alpha.
+      W <- ruv_res$W
+      # Use OLS to estimate alpha: alpha = (W'W)^-1 W' dat'
+      alpha <- solve(t(W) %*% W) %*% t(W) %*% t(dat)
       
-      # Step 3: Correct training data by regressing out the factors
-      dat_corrected <- dat
-      for (i in 1:nrow(dat)) {
-        fit <- lm(dat[i, ] ~ alpha)
-        dat_corrected[i, ] <- residuals(fit) + mean(dat[i, ])
-      }
+      # For test data, we need W_test (n_test x k).
+      # We estimate it by regressing dat_test on alpha:
+      # W_test = dat_test' %*% alpha' %*% (alpha %*% alpha')^-1
+      W_test <- t(dat_test) %*% t(alpha) %*% solve(alpha %*% t(alpha))
+      dat_test_corrected <- dat_test - t(W_test %*% alpha)
       
-      # Step 4: Project test data onto the learned factors and correct
-      cat("Projecting test data onto learned factors...\n")
-      # Project test data onto factor space: alpha_test = dat_test^T %*% W
-      alpha_test <- t(dat_test) %*% W
-      
-      dat_test_corrected <- dat_test
-      for (i in 1:nrow(dat_test)) {
-        fit <- lm(dat_test[i, ] ~ alpha_test)
-        dat_test_corrected[i, ] <- residuals(fit) + mean(dat_test[i, ])
-      }
-      
-      cat("RUVr correction complete\n")
+      cat("RUVr (RUVSeq) correction complete\n")
       
       return(list(dat_corrected = dat_corrected, dat_test_corrected = dat_test_corrected))
     } else if (method == "ruvg") {
       # RUVg: Remove Unwanted Variation using housekeeping genes
-      # Uses negative control genes to estimate unwanted variation
-      cat("Applying RUVg correction...\n")
+      # Execute via official RUVSeq package
+      cat("Applying RUVg correction via RUVSeq...\n")
+      
+      if (!requireNamespace("RUVSeq", quietly = TRUE)) {
+        stop("Package 'RUVSeq' is required but not installed.")
+      }
       
       # Define housekeeping genes
       housekeeping_genes <- c("GAPDH", "ACTG1", "RPS18", "POM121C", "MRPL18", 
                              "TOMM5", "YTHDF1", "TPT1", "RPS27")
-      
-      # Find which housekeeping genes are present in the data
       available_hk <- intersect(housekeeping_genes, rownames(dat))
       
       if (length(available_hk) == 0) {
         stop("None of the housekeeping genes found in data. Cannot apply RUVg.")
       }
       
-      cat(sprintf("Using %d housekeeping genes: %s\n", 
-                  length(available_hk), paste(available_hk, collapse=", ")))
+      # Apply RUVg
+      k <- min(3, length(available_hk) - 1)
+      ruv_res <- RUVSeq::RUVg(as.matrix(dat), available_hk, k=k)
+      dat_corrected <- ruv_res$normalizedCounts
+      # Step 2: Project test data using the loadings (alpha) from training
+      # Estimate alpha (loadings) for all genes from training data
+      W <- ruv_res$W
+      # alpha = (W'W)^-1 W' dat' (k x genes)
+      alpha <- solve(t(W) %*% W) %*% t(W) %*% t(dat)
       
-      # Extract housekeeping gene expression
-      hk_dat <- dat[available_hk, , drop = FALSE]
+      # For RUVg, we estimate W_test using only the housekeeping genes
+      alpha_hk <- alpha[, which(rownames(dat) %in% available_hk), drop=FALSE]
+      dat_test_hk <- dat_test[available_hk, , drop=FALSE]
       
-      # Step 1: Estimate unwanted variation factors from housekeeping genes using SVD
-      k <- min(3, length(available_hk) - 1)  # Number of factors (limited by number of HK genes)
-      cat(sprintf("Estimating %d unwanted variation factors from housekeeping genes...\n", k))
+      # W_test = dat_test_hk' %*% alpha_hk' %*% (alpha_hk %*% alpha_hk')^-1
+      W_test <- t(dat_test_hk) %*% t(alpha_hk) %*% solve(alpha_hk %*% t(alpha_hk))
+      dat_test_corrected <- dat_test - t(W_test %*% alpha)
       
-      # Center housekeeping gene data
-      hk_centered <- hk_dat - rowMeans(hk_dat)
+      cat("RUVg (RUVSeq) correction complete\n")
       
-      svd_res <- svd(hk_centered)
-      W <- svd_res$u[, 1:k, drop = FALSE]  # Factor loadings (HK genes x k)
-      alpha <- svd_res$v[, 1:k, drop = FALSE] %*% diag(svd_res$d[1:k])  # Factor scores (samples x k)
+      return(list(dat_corrected = dat_corrected, dat_test_corrected = dat_test_corrected))
+
+    } else if (method == "yugene") {
+      cat(sprintf("[YUGENE ADJUSTMENT] Applying YuGene transformation\n"))
+      dat_corrected <- adjust_yugene(dat, debug = FALSE)
+      dat_test_corrected <- adjust_yugene(dat_test, debug = FALSE)
       
-      # Step 2: Correct training data by regressing out the factors
+      diagnostic_file <- file.path(dirname(dirname(dirname(dirname(output_file)))), 
+                                  "diagnostics", "yugene", 
+                                  sprintf("yugene_%s_%s_%s_diagnostics.csv", 
+                                         classifier, num_datasets, test_study))
+      save_correction_diagnostics("yugene", dat, dat_corrected, rownames(dat), diagnostic_file)
+      
+      return(list(dat_corrected = dat_corrected, dat_test_corrected = dat_test_corrected))
+
+    } else if (method == "cublock") {
+      cat(sprintf("[CUBLOCK ADJUSTMENT] Applying CuBlock cross-platform normalization\n"))
+      dat_corrected <- adjust_cublock(dat, batch, debug = FALSE)
+      dat_test_corrected <- adjust_cublock(dat_test, rep(1, ncol(dat_test)), debug = FALSE)
+      
+      diagnostic_file <- file.path(dirname(dirname(dirname(dirname(output_file)))), 
+                                  "diagnostics", "cublock", 
+                                  sprintf("cublock_%s_%s_%s_diagnostics.csv", 
+                                         classifier, num_datasets, test_study))
+      save_correction_diagnostics("cublock", dat, dat_corrected, rownames(dat), diagnostic_file)
+      
+      return(list(dat_corrected = dat_corrected, dat_test_corrected = dat_test_corrected))
+
+
+    } else if (method == "angel") {
+      cat(sprintf("[ANGEL ADJUSTMENT] Applying Angel's rank-scale transformation\n"))
+      
+      dat_corrected <- adjust_angel(dat, debug = FALSE)
+      dat_test_corrected <- adjust_angel(dat_test, debug = FALSE)
+      
+      diagnostic_file <- file.path(dirname(dirname(dirname(dirname(output_file)))), 
+                                  "diagnostics", "angel", 
+                                  sprintf("angel_%s_%s_%s_diagnostics.csv", 
+                                         classifier, num_datasets, test_study))
+      save_correction_diagnostics("angel", dat, dat_corrected, rownames(dat), diagnostic_file)
+      
+      return(list(
+        dat_corrected = dat_corrected,
+        dat_test_corrected = dat_test_corrected
+      ))
+
+    } else if (method == "tdm") {
+      cat(sprintf("[TDM ADJUSTMENT] Applying Training Distribution Matching\n"))
+      
+      # TDM normalizes the test set to match the training set distribution
+      dat_corrected <- dat # Training data remains the baseline
+      dat_test_corrected <- adjust_tdm(dat_train = dat, dat_test = dat_test, debug = FALSE)
+      
+      return(list(
+        dat_corrected = dat_corrected,
+        dat_test_corrected = dat_test_corrected
+      ))
+
+    } else if (method == "rnabc") {
+      cat(sprintf("[RNABC ADJUSTMENT] Applying RNABC mapping and correction\n"))
+      
+      # Similar to TDM, RNABC aligns the test data to the training array
       dat_corrected <- dat
-      for (i in 1:nrow(dat)) {
-        fit <- lm(dat[i, ] ~ alpha)
-        dat_corrected[i, ] <- residuals(fit) + mean(dat[i, ])
+      dat_test_corrected <- adjust_rnabc(dat_train = dat, dat_test = dat_test, debug = FALSE)
+      
+      return(list(
+        dat_corrected = dat_corrected,
+        dat_test_corrected = dat_test_corrected
+      ))
+
+    } else if (method == "shambhala2") {
+      cat(sprintf("[SHAMBHALA-2 HARMONIZATION] Applying definitive reference matching\n"))
+      
+      # Dynamically identify Q_reference_data as the largest non-test batch
+      if (!exists("Q_reference_data")) {
+        cat("  Dynamically identifying Q_reference_data from training batches...\n")
+        batch_counts <- table(batch)
+        if (length(batch_counts) == 0) {
+            stop("No training batches found for Shambhala-2 reference identification.")
+        }
+        largest_batch_idx <- as.numeric(names(batch_counts)[which.max(batch_counts)])
+        largest_batch_indices <- which(batch == largest_batch_idx)
+        
+        # Use common genes already subsetted in dat
+        Q_reference_data <<- dat[, largest_batch_indices, drop = FALSE]
+        cat(sprintf("  Selected training batch %d as Q_reference_data (%d samples)\n", largest_batch_idx, ncol(Q_reference_data)))
+      }
+
+      # Load P calibration data if exists
+      if (!exists("P_calibration_data")) {
+        if (file.exists("P0.csv")) {
+          cat("  Loading P0.csv calibration data...\n")
+          P_calibration_data <<- as.matrix(read.csv("P0.csv", row.names=1))
+        }
+      }
+
+      if (!exists("P_calibration_data") || !exists("Q_reference_data")) {
+         stop("Shambhala-2 requires P and Q matrices. Load P0.csv into the environment.")
       }
       
-      # Step 3: Estimate factors for test data using housekeeping genes
-      cat("Estimating unwanted variation in test data...\n")
-      hk_test <- dat_test[available_hk, , drop = FALSE]
-      hk_test_centered <- hk_test - rowMeans(hk_dat)  # Use training means for centering
+      dat_corrected <- adjust_shambhala2(dat, P_calibration_data, Q_reference_data, debug = FALSE)
+      dat_test_corrected <- adjust_shambhala2(dat_test, P_calibration_data, Q_reference_data, debug = FALSE)
       
-      # Project test housekeeping genes onto factor space
-      alpha_test <- t(hk_test_centered) %*% W
+      return(list(
+        dat_corrected = dat_corrected,
+        dat_test_corrected = dat_test_corrected
+      ))
+
+
+    } else if (method == "recombat") {
+      cat(sprintf("[RECOMBAT ADJUSTMENT] Applying regularized empirical Bayes via Python\n"))
       
-      # Step 4: Correct test data
-      dat_test_corrected <- dat_test
-      for (i in 1:nrow(dat_test)) {
-        fit <- lm(dat_test[i, ] ~ alpha_test)
-        dat_test_corrected[i, ] <- residuals(fit) + mean(dat_test[i, ])
-      }
+      # Combine training and test data into a single matrix for joint integration
+      # reComBat requires at least two batches, so we add the test study as a new batch.
+      combined_dat <- cbind(dat, dat_test)
+      combined_batch <- c(batch, rep(max(batch) + 1, ncol(dat_test)))
       
-      cat("RUVg correction complete\n")
+      cat(sprintf("  Executing reComBat on combined matrix (%d samples, %d batches)\n", 
+                  ncol(combined_dat), length(unique(combined_batch))))
+      
+      combined_corrected <- adjust_recombat(combined_dat, combined_batch, debug = FALSE)
+      
+      # Split corrected data back into training and test
+      dat_corrected <- combined_corrected[, 1:ncol(dat), drop = FALSE]
+      dat_test_corrected <- combined_corrected[, (ncol(dat) + 1):ncol(combined_corrected), drop = FALSE]
+      
+      diagnostic_file <- file.path(dirname(dirname(dirname(dirname(output_file)))), 
+                                  "diagnostics", "recombat", 
+                                  sprintf("recombat_%s_%s_%s_diagnostics.csv", 
+                                         classifier, num_datasets, test_study))
+      save_correction_diagnostics("recombat", dat, dat_corrected, rownames(dat), diagnostic_file)
+      
+      return(list(
+        dat_corrected = dat_corrected,
+        dat_test_corrected = dat_test_corrected
+      ))
+
+    } else if (method == "coconut") {
+      cat(sprintf("[COCONUT ADJUSTMENT] Applying COCONUT co-normalization\n"))
+      # Combine train and test for supervised co-normalization if needed, 
+      # or apply to train and then project test. COCONUT usually co-normalizes.
+      comb_dat <- cbind(dat, dat_test)
+      comb_batch <- c(batch, rep(max(batch)+1, ncol(dat_test)))
+      comb_group <- c(group, group_test)
+      
+      comb_corrected <- adjust_coconut(comb_dat, comb_batch, comb_group, debug = FALSE)
+      
+      dat_corrected <- comb_corrected[, 1:ncol(dat), drop = FALSE]
+      dat_test_corrected <- comb_corrected[, (ncol(dat)+1):ncol(comb_corrected), drop = FALSE]
       
       return(list(dat_corrected = dat_corrected, dat_test_corrected = dat_test_corrected))
-    } else if (method == "gmm") {
-      # GMM adjustment: fits 2-component GMM to each gene within each batch
-      cat("Applying GMM adjustment...\n")
-      
-      # Source the GMM adjustment function (use absolute path from workspace root)
-      gmm_script <- file.path(getwd(), "..", "..", "adjust", "gmm_adjust.R")
-      if (!file.exists(gmm_script)) {
-        gmm_script <- "scripts/adjust/gmm_adjust.R"  # Fallback to relative from workspace root
-      }
-      source(gmm_script)
-      
-      # Apply GMM to training data (genes are rows, samples are columns)
-      dat_corrected <- gmm_adjust(
-        data = dat,
-        batch = batch,
-        genes_are_columns = FALSE,  # Our data has genes as rows
-        mean_mean_zero = TRUE,
-        unit_var = TRUE,
-        log_transform = FALSE,  # Data is already log-transformed
-        debug = FALSE,
-        num_workers = 1
-      )
-      
-      # Apply GMM to test data (treat as single batch)
-      dat_test_corrected <- gmm_adjust(
-        data = dat_test,
-        batch = rep(1, ncol(dat_test)),  # Single batch
-        genes_are_columns = FALSE,
-        mean_mean_zero = TRUE,
-        unit_var = TRUE,
-        log_transform = FALSE,
-        debug = FALSE,
-        num_workers = 1
-      )
-      
-      cat("GMM adjustment complete\n")
-      
+
+    } else if (method == "rankin") {
+      cat(sprintf("[RANK-IN ADJUSTMENT] Applying Rank-In SVD correction\n"))
+      dat_corrected <- adjust_rankin(dat, debug = FALSE)
+      dat_test_corrected <- adjust_rankin(dat_test, debug = FALSE)
       return(list(dat_corrected = dat_corrected, dat_test_corrected = dat_test_corrected))
-    } else if (startsWith(method, "posse_")) {
-      # POSSE: Pathway Optimized Shift and Scale Ensemble with different parameter settings
-      posse_variant <- sub("posse_", "", method)
-      cat(sprintf("Applying POSSE adjustment (%s variant)...\n", posse_variant))
-      
-      # Load reticulate for Python integration
-      if (!requireNamespace("reticulate", quietly = TRUE)) {
-        stop("reticulate package is required for POSSE method. Please install it.")
-      }
-      library(reticulate, quietly = TRUE)
-      
-      # Source the POSSE wrapper
-      posse_wrapper_path <- "scripts/posse_wrapper.py"
-      if (!file.exists(posse_wrapper_path)) {
-        stop(sprintf("POSSE wrapper not found at: %s", posse_wrapper_path))
-      }
-      
-      tryCatch({
-        # Import the POSSE wrapper module
-        source_python(posse_wrapper_path)
-        
-        # Apply POSSE correction
-        # Convert R matrices to format expected by Python (genes x samples)
-        
-        # Create diagnostic file path - ENSURE DIRECTORY EXISTS
-        # Extract base output directory (remove /results/adjusters/individual part)
-        base_output_dir <- dirname(dirname(dirname(dirname(output_file))))
-        diagnostic_dir <- file.path(base_output_dir, "diagnostics", "posse")
-        
-        # Create diagnostic directory with error handling - FAIL FAST
-        tryCatch({
-          if (!dir.exists(diagnostic_dir)) {
-            dir.create(diagnostic_dir, recursive = TRUE)
-          }
-          
-          # Verify directory was created and is writable
-          if (!dir.exists(diagnostic_dir)) {
-            stop(sprintf("CRITICAL: Failed to create diagnostic directory: %s", diagnostic_dir))
-          }
-          
-          if (file.access(diagnostic_dir, 2) != 0) {
-            stop(sprintf("CRITICAL: Diagnostic directory is not writable: %s", diagnostic_dir))
-          }
-          
-        }, error = function(e) {
-          stop(sprintf("CRITICAL: Cannot create diagnostic directory %s: %s", diagnostic_dir, e$message))
-        })
-        
-        diagnostic_file <- file.path(diagnostic_dir, sprintf("%s_%s_%s_%s_diagnostics.csv", 
-                                                           method, classifier, num_datasets, test_study))
-        
-        cat(sprintf("Diagnostic file will be saved to: %s\n", diagnostic_file))
-        
-        posse_result <- apply_posse_correction(
-          train_data = dat,
-          test_data = dat_test,
-          train_batch = batch,
-          posse_variant = posse_variant,
-          gene_names = rownames(dat),
-          save_diagnostics = diagnostic_file
-        )
-        
-        # CRITICAL VALIDATION: Ensure diagnostic file was created
-        if (!file.exists(diagnostic_file)) {
-          stop(sprintf("CRITICAL: POSSE diagnostic file was not created: %s", diagnostic_file))
-        }
-        
-        file_size <- file.info(diagnostic_file)$size
-        if (is.na(file_size) || file_size == 0) {
-          stop(sprintf("CRITICAL: POSSE diagnostic file is empty: %s", diagnostic_file))
-        }
-        
-        cat(sprintf("✓ POSSE diagnostic file validated: %s (%d bytes)\n", diagnostic_file, file_size))
-        
-        dat_corrected <- posse_result$train_corrected
-        dat_test_corrected <- posse_result$test_corrected
-        
-        # Log detailed POSSE metrics if available
-        if (!is.null(posse_result$metadata)) {
-          metadata <- posse_result$metadata
-          cat(sprintf("POSSE %s detailed metrics:\n", posse_variant))
-          cat(sprintf("  S_HK=%.4f\n", ifelse(is.null(metadata$S_HK), 1, metadata$S_HK)))
-          cat(sprintf("  C_null_final=%.4f\n", ifelse(is.null(metadata$C_null_final), 0, metadata$C_null_final)))
-          cat(sprintf("  Iterations=%d\n", ifelse(is.null(metadata$Iterations), 0, metadata$Iterations)))
-          
-          # Extract parameter statistics if available
-          if (!is.null(metadata$Parameters)) {
-            alpha_params <- metadata$Parameters[[1]]
-            beta_params <- metadata$Parameters[[2]]
-            cat(sprintf("  Alpha: mean=%.4f, std=%.4f, min=%.4f, max=%.4f\n",
-                        mean(alpha_params, na.rm=TRUE),
-                        sd(alpha_params, na.rm=TRUE),
-                        min(alpha_params, na.rm=TRUE),
-                        max(alpha_params, na.rm=TRUE)))
-            cat(sprintf("  Beta: mean=%.4f, std=%.4f\n",
-                        mean(beta_params, na.rm=TRUE),
-                        sd(beta_params, na.rm=TRUE)))
-          }
-          
-          # Diagnostic interpretation
-          s_hk <- ifelse(is.null(metadata$S_HK), 1, metadata$S_HK)
-          if (s_hk < 0.5 || s_hk > 2.0) {
-            cat("  [DIAGNOSTIC] Large housekeeping scale factor - significant technical differences\n")
-          } else {
-            cat("  [DIAGNOSTIC] Housekeeping scale factor within normal range\n")
-          }
-        }
-        
-        cat(sprintf("POSSE %s adjustment complete\n", posse_variant))
-        
-      }, error = function(e) {
-        cat(sprintf("[WARNING] POSSE %s correction failed: %s\n", posse_variant, e$message))
-        cat("[WARNING] Falling back to unadjusted data\n")
-        dat_corrected <- dat
-        dat_test_corrected <- dat_test
-      })
-      
-      return(list(dat_corrected = dat_corrected, dat_test_corrected = dat_test_corrected))
+
     } else {
       stop(sprintf("Unknown batch correction method: %s", method))
     }
@@ -1419,7 +1754,7 @@ main_analysis_function <- function() {
   cat(sprintf("Applying batch correction method: %s\n", adjuster))
   
   # Apply batch correction
-  batch_corr_result <- apply_batch_corrections(dat, datasets$batch, datasets$group, dat_test, adjuster)
+  batch_corr_result <- apply_batch_corrections(dat, datasets$batch, datasets$group, dat_test, adjuster, datasets$group_test)
   dat_corrected <- batch_corr_result$dat_corrected
   dat_test_corrected <- batch_corr_result$dat_test_corrected
   
@@ -1431,7 +1766,10 @@ main_analysis_function <- function() {
   }
   
   # Check if batch correction produced valid data
-  if(all(dat_corrected == dat_corrected[1,1]) || all(dat_test_corrected == dat_test_corrected[1,1])) {
+  is_constant_train <- all(dat_corrected == dat_corrected[1,1], na.rm = TRUE)
+  is_constant_test <- all(dat_test_corrected == dat_test_corrected[1,1], na.rm = TRUE)
+  
+  if((!is.na(is_constant_train) && is_constant_train) || (!is.na(is_constant_test) && is_constant_test)) {
     cat("[WARNING] Batch correction produced constant data - using original data instead\n")
     dat_corrected <- dat
     dat_test_corrected <- dat_test
@@ -1601,10 +1939,10 @@ main_analysis_function <- function() {
   cat(sprintf("  Training labels: %d unique values\n", length(unique(datasets$group))))
   
   # ====================================================================
-  # FEATURE REDUCTION FOR HIGH-DIMENSIONAL DATA (e.g., after POSSE)
+  # FEATURE REDUCTION FOR HIGH-DIMENSIONAL DATA
   # ====================================================================
-  # POSSE uses all genes for pathway analysis, but classifiers like nnet
-  # can't handle 10k+ features. Reduce to top 1000 most variable genes.
+  # Classifiers like nnet can't handle 10k+ features. 
+  # Reduce to top 1000 most variable genes.
   
   max_features_for_classifier <- 1000
   if (n_features > max_features_for_classifier) {
@@ -1736,8 +2074,8 @@ main_analysis_function <- function() {
 # EXECUTE MAIN JOB
 # ====================================================================
 
-# Store result (or NULL if it crashed inside wrapper, though wrapper handles that)
-res <- main_job_wrapper()
-
-# Force a clean exit to signal to Snakemake that we are happy
-quit(save = "no", status = 0)
+# Execute main logic if not in testing mode
+if (!exists("testing_mode")) {
+  res <- main_job_wrapper()
+  quit(save = "no", status = 0)
+}

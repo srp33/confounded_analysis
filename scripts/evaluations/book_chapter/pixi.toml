@@ -8,6 +8,7 @@ platforms = ["linux-64"]
 [dependencies]
 # === R Base ===
 r-base = ">=4.3"
+cmake = "*"
 
 # === Data Manipulation ===
 r-tidyverse = "*"     # Core tidyverse packages (dplyr, purrr, ggplot2, etc.)
@@ -23,6 +24,8 @@ r-nnet = "*"          # Neural networks (classify_*.R)
 r-class = "*"         # KNN (classify_*.R)
 r-xgboost = "*"       # XGBoost (classify_*.R)
 r-klar = { version = ">=1.7_3,<2", channel = "conda-forge" }
+r-nnls = "*"          # Required by classify_adjusters.R
+r-sda = "*"           # Required by classify_adjusters.R
                       # RDA (classify_*.R)
 
 # === Statistical Packages ===
@@ -43,6 +46,8 @@ bioconductor-sva = "*"                      # ComBat (classify_*.R)
 bioconductor-batchelor = "*"                # MNN (classify_*.R)
 bioconductor-summarizedexperiment = "*"     # Data structures (classify_*.R)
 bioconductor-deseq2 = "*"                   # Used in classify_adjusters.R
+bioconductor-ruvseq = "*"                   # RUVr/RUVg official package
+# preprocesscore: no longer used (replaced by limma::normalizeQuantiles in adjust_rnabc)
 
 # === Bioconductor Support ===
 bioconductor-limma = "*"                    # Linear models (classify_batch_effects.R, 2_TB_getdata.R)
@@ -61,5 +66,38 @@ r-doparallel = "*"    # Parallel backend (classify_batch_effects.R)
 
 # === Workflow ===
 snakemake = ">=9.13.7,<10"
-snakemake-executor-plugin-slurm = ">=1.9.2,<2"
 r-caret = ">=6.0_94,<7"
+octave = ">=10.3.0,<11"
+r-remotes = ">=2.5.0,<3"
+r-reticulate = "*"
+bioconductor-mixomics = ">=6.26.0,<7"
+r-coconut = ">=1.0.2,<2"
+unrar = ">=0.4,<0.5"
+libunrar = ">=7.2.5,<8"
+octave-statistics = ">=1.8.2,<2"
+pandas = "<2.0.0"          # reComBat requires pandas < 2.0.0
+scikit-learn = ">=1.8.0,<2"
+numpy = "*"                # Rank-In Python implementation (scripts/rankin.py)
+snakemake-executor-plugin-slurm = ">=1.4.0,<2"
+
+[pypi-dependencies]
+recombat = ">=0.1.4, <0.2"
+
+[tasks]
+# ============================================================
+# POST-INSTALL TASKS
+# These packages cannot be distributed via conda-forge/PyPI and
+# must be installed once after `pixi install` by running:
+#   pixi run install-rnabc
+#   pixi run install-yugene
+#   pixi run install-tdm
+#
+# NOTE: Shambhala-2 (oncobox-admin/harmony) is NOT an installable
+# R package. The repo ships a compiled HARMONY.tar.gz binary.
+# The open implementation is the local Shambhala2/ git clone,
+# which uses Octave + CuBlock.m and is already present in the repo.
+# ============================================================
+
+install-rnabc = "Rscript -e \"if (!requireNamespace('RNArray', quietly = TRUE)) remotes::install_github('cbligaard/RNArray')\""
+install-yugene = "Rscript -e \"if (!requireNamespace('YuGene', quietly = TRUE)) remotes::install_version('YuGene', version='1.1.5', repos='https://cloud.r-project.org')\""
+install-tdm   = "Rscript -e \"if (!requireNamespace('TDM', quietly = TRUE)) remotes::install_github('greenelab/TDM')\""

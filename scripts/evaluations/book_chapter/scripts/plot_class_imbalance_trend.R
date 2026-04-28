@@ -41,7 +41,7 @@ cat("Number of unique training pairs:", n_distinct(data$training_pair), "\n")
 cat("Number of unique test datasets:", n_distinct(data$test_dataset), "\n")
 
 # Filter to target adjusters
-target_adjusters <- c("unadjusted", "combat", "combat_sup")
+target_adjusters <- c("unadjusted", "combat", "combat_sup", "coconut", "rankin")
 data_filtered <- data %>%
   filter(adjuster %in% target_adjusters, classifier != "knn")
 

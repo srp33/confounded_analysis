@@ -20,6 +20,11 @@ mkdir -p "$OUTPUT_DIR"
 find -L "$OUTPUT_DIR" -type d -exec chmod g+s {} + 
 
 
+# Load system profile to ensure sbatch and module commands are available
+if [ -f /etc/profile ]; then
+    source /etc/profile
+fi
+
 # The slurm account and slurm partition are essential for grouping
 # Choosing the solver helps snakemake find it
 echo "Starting Snakemake"
@@ -27,7 +32,7 @@ pixi run snakemake -s $BOOK_CHAPTER_DIR/Snakefile \
     --configfile $BOOK_CHAPTER_DIR/config.yaml \
     --scheduler-ilp-solver COIN_CMD \
     --executor slurm \
-    --default-resources slurm_account=srp33 slurm_partition="(auto)" \
+    --default-resources slurm_account=srp33 \
     --jobs 600 \
     --group-components batch_real_group=2 batch_simulation_group=3 class_imbalance_group=2 \
     --max-jobs-per-second 20 \

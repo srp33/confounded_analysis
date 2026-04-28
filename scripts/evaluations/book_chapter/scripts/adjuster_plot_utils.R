@@ -36,3 +36,14 @@ get_classifier_ordering <- function(mxe_data, classifier_name) {
 create_adjuster_labels <- function(adjuster_order) {
   sapply(adjuster_order$adjuster, format_adjuster_label)
 }
+
+format_study_label <- function(study_name) {
+  labels <- c(
+    "GSE37250_SA" = "South Africa",
+    "GSE37250_M"  = "Malawi",
+    "GSE39941_M"  = "Children",
+    "Africa"      = "Adolescents",
+    "India"       = "UK"
+  )
+  ifelse(study_name %in% names(labels), labels[study_name], study_name)
+}

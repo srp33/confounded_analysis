@@ -52,7 +52,8 @@ rule all:
         mean_over_classifiers=OUTPUT_FOLDER + "/mean_over_classifiers.png",
         within_study_baseline=OUTPUT_FOLDER + "/within_study_baseline.csv",
         class_imbalance_results=OUTPUT_FOLDER + "/class_imbalanced_results.csv" if config.get("class_imbalance_analysis", {}).get("enabled", False) else [],
-        class_imbalance_trend_plot=OUTPUT_FOLDER + "/class_imbalance_trend.png" if config.get("class_imbalance_analysis", {}).get("enabled", False) else []
+        class_imbalance_trend_plot=OUTPUT_FOLDER + "/class_imbalance_trend.png" if config.get("class_imbalance_analysis", {}).get("enabled", False) else [],
+        sample_counts=OUTPUT_FOLDER + "/sample_counts.csv"
 
 
 
@@ -265,7 +266,7 @@ rule classify_adjusters:
         OUTPUT_FOLDER + "/results/adjusters/individual/{adjuster}_{classifier}_{n_datasets}_{test_study}.csv"
     log:
         OUTPUT_FOLDER + "/logs/classify_adjusters/{adjuster}_{classifier}_{n_datasets}_{test_study}.log"
-    group: "batch_real_group"
+    # group: "batch_real_group"
     threads: 1
     resources:
         mem_mb=48000,
@@ -331,6 +332,25 @@ rule aggregate_within_study_baseline:
         Rscript {input.script} \
             --input-dir {params.input_dir} -o {output} \
             &> {log}
+        """
+
+
+# Step 1.1d: Report sample counts per study
+rule report_sample_counts:
+    input:
+        data=DATA_FOLDER + "/TB_real_data.RData",
+        script=SCRIPTS_FOLDER + "/report_sample_counts.R"
+    output:
+        OUTPUT_FOLDER + "/sample_counts.csv"
+    log:
+        OUTPUT_FOLDER + "/logs/report_sample_counts.log"
+    threads: 1
+    resources:
+        mem_mb=2000,
+        runtime=5
+    shell:
+        """
+        Rscript {input.script} -i {input.data} -o {output} &> {log}
         """
 
 

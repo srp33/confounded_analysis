@@ -32,6 +32,17 @@ adjusters:
   - "combat_sup"
   - "mnn"
   - "fast_mnn"
+  - "ruvr"
+  - "ruvg"
+  - "yugene"
+  - "cublock"
+  - "angel"
+  - "tdm"
+  - "rnabc"
+  - "shambhala2"
+  - "coconut"
+  - "rankin"
+  - "recombat"
 
 # Subset of adjusters to visualize (within_study_cv is always included as baseline)
 viz_adjusters:
@@ -46,6 +57,17 @@ viz_adjusters:
   - "combat_sup"
   - "mnn"
   - "fast_mnn"
+  - "ruvr"
+  - "ruvg"
+  - "yugene"
+  - "cublock"
+  - "angel"
+  - "tdm"
+  - "rnabc"
+  - "shambhala2"
+  - "coconut"
+  - "rankin"
+  - "recombat"
 
 split_seed_start: 42
 split_seed_count: 200
