@@ -1,62 +1,25 @@
 % =========================================================================================
-% CUBLOCK: Cross-platform normalization based on clustering and cubic polynomials
+% CUBLOCK: Optimized Version with Vectorized Polynomial Fitting
 % =========================================================================================
 % Original Method: Valentin Junet, et al. (Bioinformatics, 2021)
-%
-% MODIFICATIONS FOR THIS PIPELINE:
-% 1. VARIANCE FILTERING: Added protection against zero-variance genes which caused
-%    k-means failures during batch alignment.
-% 2. NaN PROTECTION: Implemented explicit checks for NaN values in input and 
-%    k-means results to ensure stability in sparse datasets.
+% Modifications: 
+% - Vectorized sorting and polynomial estimation
+% - Minimized redundant calculations inside loops
 % =========================================================================================
 
 function dataN = CuBlock(data,N,k)
-%CuBlock: Cross-platform normalization method based on dividing the gene
-%expression microarray into blocks, approximating a cubical polynomial
-%to each of them and transforming them accordingly.
-%
-%   DESCRIPTION: Normalization of a microarray using CuBlock, a
-%   cross-platform normalization method for gene expression microarray.
-%   The micro array cannot contain NaN values.
-%   The micro array raw intensities must be log2 transformed and at the
-%   probes level.
-%   Reference: Valentin Junet, Judith Farrés, José M Mas, Xavier Daura,
-%   CuBlock: a cross-platform normalization method for gene-expression microarrays,
-%   Bioinformatics, 2021;, btab105, https://doi.org/10.1093/bioinformatics/btab105
-%
-%   INPUTS:
-%
-%       - data -> log2 transform of microarray raw intensities.
-%       Rows are probes and columns are samples.
-%       - N (OPTIONAL) -> the number of times the algorithm is
-%       repeated. By default it is 30.
-%       - k (OPTIONAL) -> the number of probe clusters for the
-%       application of k-means to find probe-cluster partitions.
-%       By default it is 5.
-%
-%   OUTPUTS:
-%
-%       - dataN -> Normalized microarray.
-%
-%   EXAMPLES:
-%
-%       -  dataN = CuBlock(data)
-%       -  dataN = CuBlock(data,20,5)
-%       -  dataN = CuBlock(data,[],5)
-%
-%default arguments
 if nargin<3 || isempty(k)
     k = 5;
 end
 if nargin<2 || isempty(N)
     N = 30;
 end
-%initialize
+
 data = double(data);
 [nbProbes,nbSamples] = size(data);
 dataN = zeros(nbProbes,nbSamples);
 count = dataN;
-% Filter out genes with zero variance across samples to prevent k-means failure
+
 gene_vars = var(data, 0, 2);
 valid_genes = (gene_vars > 0) & (!any(isnan(data), 2));
 num_valid = sum(valid_genes);
@@ -65,9 +28,12 @@ if num_valid < k
     error('CuBlock failure: only %d genes with non-zero variance found, but k=%d clusters requested.', num_valid, k);
 end
 
-%beginning of the algorithm
+% Pre-calculate p powers for target calculation
+p_vals = 3:2:21;
+num_p = numel(p_vals);
+tol = 1e-1;
+
 for nRep = 1:N
-    % Run k-means only on valid genes
     try
         indProbes_valid = kmeans(data(valid_genes, :), k, 'maxiter', 1000);
     catch err
@@ -77,72 +43,83 @@ for nRep = 1:N
     indProbes = zeros(nbProbes, 1);
     indProbes(valid_genes) = indProbes_valid;
     
-    for j=1:nbSamples                                                                   %run along the blocks (one block is the probes of one cluster partition and one sample)
-        for i=1:k
-            if sum(indProbes==i)>100                                                    %don't transform if the block is too small
-                dataCurr = data(indProbes==i,j);
+    for i=1:k
+        cluster_mask = (indProbes == i);
+        n_cluster = sum(cluster_mask);
+        
+        if n_cluster > 100
+            % Pre-calculate target values for this cluster size
+            X_all = (linspace(-1,1,n_cluster)').^p_vals;
+            
+            for j=1:nbSamples
+                dataCurr = data(cluster_mask,j);
                 dataCurrStd = std(dataCurr,'omitnan');
-                if dataCurrStd>0                                                        %don't transform if the block has a unique value
-                    dataCurr = (dataCurr - mean(dataCurr,'omitnan'))/dataCurrStd;       %Z-transform
-                    [dataCurrS,indS] = sort(dataCurr);                                  %sort the Z-transformed block and keep the indices for sorting back
-                    %The GetTargetValues algorithm (implemented in the main
-                    %function); obtain the values that the polynomial in
-                    %the next step should best fit
-                    p = 3:2:21;
-                    tol = 1e-1;
-                    X = (linspace(-1,1,numel(dataCurr))').^p;
+                
+                if dataCurrStd > 0
+                    % Z-transform
+                    dataCurr_z = (dataCurr - mean(dataCurr,'omitnan'))/dataCurrStd;
+                    [dataCurrS, indS] = sort(dataCurr_z);
+                    
+                    % Get target index
                     [~,indStdUp] = min(abs(dataCurrS-1));
                     [~,indStdDown] = min(abs(dataCurrS+1));
-                    S = mean(abs(X(indStdDown:indStdUp,:)));
-                    indP = min([numel(p),find(S<tol,1)]);
-                    %The cubic polynomial fitting
-                    pol = polyfit(dataCurrS,X(:,indP),3);
-                    %The ModPol Algorithm; modify the decreasing part of
-                    %the polynomial
-                    currDataN = ModPol(dataCurr,indS,pol);
-                    %Store the values
-                    dataN(indProbes==i,j) = dataN(indProbes==i,j) + currDataN;
-                    count(indProbes==i,j) = count(indProbes==i,j) + 1;
+                    S = mean(abs(X_all(indStdDown:indStdUp,:)));
+                    indP = min([num_p, find(S<tol, 1)]);
+                    if isempty(indP); indP = num_p; end
+                    
+                    target = X_all(:, indP);
+                    
+                    % Vectorized cubic polyfit: pol = polyfit(dataCurrS, target, 3)
+                    % Matrix form: V * p = target, where V is Vandermonde matrix
+                    V = [dataCurrS.^3, dataCurrS.^2, dataCurrS, ones(n_cluster, 1)];
+                    pol = V \ target;
+                    
+                    % ModPol logic integrated
+                    dataNS = V * pol;
+                    
+                    % ModPol adjustments
+                    diff_vals = dataNS(2:end) - dataNS(1:(end-1));
+                    changeInDirectionDown = diff_vals < 0;
+                    indDown1 = find(changeInDirectionDown, 1);
+                    
+                    if ~isempty(indDown1)
+                        indDownL = find(changeInDirectionDown, 1, 'last') + 1;
+                        changeInDirectionUp = diff_vals > 0;
+                        indUp1 = find(changeInDirectionUp, 1);
+                        indUpL = find(changeInDirectionUp, 1, 'last') + 1;
+                        
+                        if ~isempty(indUp1) && ~isempty(indUpL) && dataNS(indUp1) == dataNS(1) && dataNS(indUpL) == dataNS(n_cluster)
+                            M = dataNS(indDown1);
+                            m = dataNS(indDownL);
+                            if (n_cluster-indDownL+1) <= indDown1
+                                dataNS(indDown1:indDownL) = M;
+                                dataNS((indDownL+1):end) = M + dataNS((indDownL+1):end) - m;
+                            else
+                                dataNS(indDown1:indDownL) = m;
+                                dataNS(1:(indDown1-1)) = m + dataNS(1:(indDown1-1)) - M;
+                            end
+                        else
+                            indUpL_final = find(changeInDirectionUp, 1, 'last') + 1;
+                            indUp1_final = find(changeInDirectionUp, 1);
+                            if ~isempty(indUpL_final); dataNS(indUpL_final:end) = dataNS(indUpL_final); end
+                            if ~isempty(indUp1_final); dataNS(1:indUp1_final) = dataNS(indUp1_final); end
+                        end
+                    end
+                    
+                    % Store
+                    currDataN = zeros(n_cluster, 1);
+                    currDataN(indS) = dataNS;
+                    
+                    dataN(cluster_mask, j) = dataN(cluster_mask, j) + currDataN;
+                    count(cluster_mask, j) = count(cluster_mask, j) + 1;
                 end
             end
         end
     end
 end
-% Finalize the average across repetitions
-dataN_final = data; % Default to original data
+
+dataN_final = data;
 idx_normalized = count > 0;
 dataN_final(idx_normalized) = dataN(idx_normalized) ./ count(idx_normalized);
 dataN = dataN_final;
-end
-
-function dataN = ModPol(data,indS,pol)
-dataNS = polyval(pol,data(indS));
-diff=dataNS(2:end)-dataNS(1:(end-1));
-changeInDirectionDown = diff<0;
-indDown1 = find(changeInDirectionDown,1);
-n = numel(data);
-if ~isempty(indDown1)
-    indDownL = find(changeInDirectionDown,1,'last')+1;
-    changeInDirectionUp = diff>0;
-    indUp1 = find(changeInDirectionUp,1);
-    indUpL = find(changeInDirectionUp,1,'last')+1;
-    if dataNS(indUp1)==dataNS(1) && dataNS(indUpL)==dataNS(n)
-        M = dataNS(indDown1);
-        m = dataNS(indDownL);
-        if (n-indDownL+1)<=indDown1
-            dataNS(indDown1:indDownL) = M;
-            dataNS((indDownL+1):end) = M + dataNS((indDownL+1):end) - m;
-        else
-            dataNS(indDown1:indDownL) = m;
-            dataNS(1:(indDown1-1)) = m + dataNS(1:(indDown1-1)) - M;
-        end
-    else
-        M = dataNS(indUpL);
-        m = dataNS(indUp1);
-        dataNS(indUpL:end) = M;
-        dataNS(1:indUp1) = m;
-    end
-end
-dataN = NaN(n,1);
-dataN(indS) = dataNS;   
 end
