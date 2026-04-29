@@ -94,16 +94,16 @@ def rank_in(matrix: np.ndarray, n_svd: int = N_SVD) -> np.ndarray:
     ])  # shape: (n_genes, n_samples)
 
     # Step 4-5: SVD on the combined weighted-rank matrix, remove top batch PCs
-    # Center columns before SVD (standard practice)
-    col_means = weighted.mean(axis=0)
-    centered = weighted - col_means
+    # Center rows (genes) before SVD to preserve biological differences between genes
+    row_means = weighted.mean(axis=1, keepdims=True)
+    centered = weighted - row_means
 
     U, S, Vt = np.linalg.svd(centered, full_matrices=False)
 
     # Reconstruct without the first n_svd components
     S_reduced = S.copy()
     S_reduced[:n_svd] = 0.0
-    corrected = U @ np.diag(S_reduced) @ Vt + col_means
+    corrected = U @ np.diag(S_reduced) @ Vt + row_means
 
     return corrected
 
