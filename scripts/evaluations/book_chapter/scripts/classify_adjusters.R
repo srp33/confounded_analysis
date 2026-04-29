@@ -20,6 +20,19 @@ suppressMessages(suppressWarnings({
   sapply(required_packages, require, character.only=TRUE, quietly=TRUE)
 }))
 
+# Configure reticulate to use the pixi environment Python
+if (requireNamespace("reticulate", quietly = TRUE)) {
+  # Explicitly disable automatic virtualenv/conda env creation
+  Sys.setenv(RETICULATE_AUTOCREATE_VENV = "FALSE")
+  Sys.setenv(RETICULATE_MINICONDA_ENABLED = "FALSE")
+  
+  # Find the python in the current pixi environment
+  pixi_python <- file.path(getwd(), ".pixi/envs/default/bin/python")
+  if (file.exists(pixi_python)) {
+    reticulate::use_python(pixi_python, required = TRUE)
+  }
+}
+
 # ====================================================================
 # COMMAND-LINE ARGUMENT PARSING
 # ====================================================================
@@ -380,6 +393,7 @@ adjust_ranked_twice_with_batch_info <- function(matrix_, batch, debug = FALSE) {
 # ADDITIONAL ADJUSTMENT HELPER FUNCTIONS
 # ====================================================================
 
+# shambhala removed as requested. use shambhala2 instead.
 adjust_yugene <- function(matrix_, debug = FALSE) {
   if (debug) {
     cat("DEBUG: Executing YuGene transformation.\n")
@@ -388,6 +402,8 @@ adjust_yugene <- function(matrix_, debug = FALSE) {
   
   # Apply YuGene transformation directly to the matrix.
   result_matrix <- YuGene::YuGene(matrix_)
+  # Strip YuGene class to avoid dispatch issues in downstream transposes
+  result_matrix <- as.matrix(unclass(result_matrix))
   return(result_matrix)
 }
 
@@ -416,8 +432,6 @@ adjust_cublock <- function(matrix_, batch, debug = FALSE) {
   unlink(output_file)
   return(result_matrix)
 }
-
-# shambhala removed as requested. use shambhala2 instead.
 
 adjust_angel <- function(matrix_, debug = FALSE) {
   if (debug) {
@@ -1512,8 +1526,9 @@ main_analysis_function <- function() {
                              "TOMM5", "YTHDF1", "TPT1", "RPS27")
       available_hk <- intersect(housekeeping_genes, rownames(dat))
       
-      if (length(available_hk) == 0) {
-        stop("None of the housekeeping genes found in data. Cannot apply RUVg.")
+      if (length(available_hk) < 2) {
+        cat("WARNING: Fewer than 2 housekeeping genes found in the top features. Falling back to unadjusted data for this method.\n")
+        return(list(dat_corrected = dat, dat_test_corrected = dat_test))
       }
       
       # Apply RUVg
@@ -1607,43 +1622,40 @@ main_analysis_function <- function() {
       ))
 
     } else if (method == "shambhala2") {
-      cat(sprintf("[SHAMBHALA-2 HARMONIZATION] Applying definitive reference matching\n"))
+      cat(sprintf("[SHAMBHALA-2 HARMONIZATION] Applying dynamic reference-batch alignment\n"))
       
-      # Dynamically identify Q_reference_data as the largest non-test batch
-      if (!exists("Q_reference_data")) {
-        cat("  Dynamically identifying Q_reference_data from training batches...\n")
-        batch_counts <- table(batch)
-        if (length(batch_counts) == 0) {
-            stop("No training batches found for Shambhala-2 reference identification.")
-        }
-        largest_batch_idx <- as.numeric(names(batch_counts)[which.max(batch_counts)])
-        largest_batch_indices <- which(batch == largest_batch_idx)
-        
-        # Use common genes already subsetted in dat
-        Q_reference_data <<- dat[, largest_batch_indices, drop = FALSE]
-        cat(sprintf("  Selected training batch %d as Q_reference_data (%d samples)\n", largest_batch_idx, ncol(Q_reference_data)))
+      # Step 1: Identify the largest training batch as the target (P and Q)
+      batch_counts <- table(batch)
+      if (length(batch_counts) == 0) {
+        stop("No training batches found for Shambhala-2 reference identification.")
       }
-
-      # Load P calibration data if exists
-      if (!exists("P_calibration_data")) {
-        if (file.exists("P0.csv")) {
-          cat("  Loading P0.csv calibration data...\n")
-          P_calibration_data <<- as.matrix(read.csv("P0.csv", row.names=1))
-        }
-      }
-
-      if (!exists("P_calibration_data") || !exists("Q_reference_data")) {
-         stop("Shambhala-2 requires P and Q matrices. Load P0.csv into the environment.")
+      largest_batch_idx <- as.numeric(names(batch_counts)[which.max(batch_counts)])
+      largest_batch_indices <- which(batch == largest_batch_idx)
+      
+      # Use this batch as the definitive target
+      P_ref_target <<- dat[, largest_batch_indices, drop = FALSE]
+      cat(sprintf("  Selected training batch %d as alignment target (%d samples)\n", 
+                  largest_batch_idx, ncol(P_ref_target)))
+      
+      # Step 2: Harmonize each training batch to the target
+      cat("  Harmonizing training batches...\n")
+      dat_corrected <- dat # Initialize
+      unique_batches <- unique(batch)
+      
+      for (b in unique_batches) {
+        batch_indices <- which(batch == b)
+        cat(sprintf("    Aligning batch %d to reference...\n", b))
+        dat_corrected[, batch_indices] <- adjust_shambhala2(dat[, batch_indices, drop=FALSE], 
+                                                         P_ref_target, P_ref_target, debug = FALSE)
       }
       
-      dat_corrected <- adjust_shambhala2(dat, P_calibration_data, Q_reference_data, debug = FALSE)
-      dat_test_corrected <- adjust_shambhala2(dat_test, P_calibration_data, Q_reference_data, debug = FALSE)
+      # Step 3: Harmonize test data to the same target
+      cat("  Harmonizing test data to reference...\n")
+      dat_test_corrected <- adjust_shambhala2(dat_test, P_ref_target, P_ref_target, debug = FALSE)
       
-      return(list(
-        dat_corrected = dat_corrected,
-        dat_test_corrected = dat_test_corrected
-      ))
-
+      cat("Shambhala-2 (Dynamic Reference) harmonization complete\n")
+      
+      return(list(dat_corrected = dat_corrected, dat_test_corrected = dat_test_corrected))
 
     } else if (method == "recombat") {
       cat(sprintf("[RECOMBAT ADJUSTMENT] Applying regularized empirical Bayes via Python\n"))

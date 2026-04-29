@@ -1,3 +1,15 @@
+% =========================================================================================
+% CUBLOCK: Cross-platform normalization based on clustering and cubic polynomials
+% =========================================================================================
+% Original Method: Valentin Junet, et al. (Bioinformatics, 2021)
+%
+% MODIFICATIONS FOR THIS PIPELINE:
+% 1. VARIANCE FILTERING: Added protection against zero-variance genes which caused
+%    k-means failures during batch alignment.
+% 2. NaN PROTECTION: Implemented explicit checks for NaN values in input and 
+%    k-means results to ensure stability in sparse datasets.
+% =========================================================================================
+
 function dataN = CuBlock(data,N,k)
 %CuBlock: Cross-platform normalization method based on dividing the gene
 %expression microarray into blocks, approximating a cubical polynomial
