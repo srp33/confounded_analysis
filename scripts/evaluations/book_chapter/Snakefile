@@ -270,7 +270,7 @@ rule classify_adjusters:
     threads: 1
     resources:
         mem_mb=16000,
-        runtime=120
+        runtime=300
     shell:
         """
         Rscript {SCRIPTS_FOLDER}/classify_adjusters.R -o {output} \

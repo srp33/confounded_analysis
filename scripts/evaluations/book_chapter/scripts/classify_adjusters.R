@@ -1492,8 +1492,8 @@ main_analysis_function <- function() {
       # Step 2: Apply RUVr
       k <- 3
       # RUVr needs a matrix of expression and a vector of genes to use (all genes here)
-      # We pass the log-data directly.
-      ruv_res <- RUVSeq::RUVr(as.matrix(dat), c(1:nrow(dat)), k=k, residuals=residuals)
+      # We pass the log-data directly and set isLog=TRUE.
+      ruv_res <- RUVSeq::RUVr(as.matrix(dat), c(1:nrow(dat)), k=k, residuals=residuals, isLog=TRUE)
       dat_corrected <- ruv_res$normalizedCounts
       
       # Step 3: Project test data
@@ -1533,7 +1533,7 @@ main_analysis_function <- function() {
       
       # Apply RUVg
       k <- min(3, length(available_hk) - 1)
-      ruv_res <- RUVSeq::RUVg(as.matrix(dat), available_hk, k=k)
+      ruv_res <- RUVSeq::RUVg(as.matrix(dat), available_hk, k=k, isLog=TRUE)
       dat_corrected <- ruv_res$normalizedCounts
       # Step 2: Project test data using the loadings (alpha) from training
       # Estimate alpha (loadings) for all genes from training data
@@ -1701,9 +1701,13 @@ main_analysis_function <- function() {
       return(list(dat_corrected = dat_corrected, dat_test_corrected = dat_test_corrected))
 
     } else if (method == "rankin") {
-      cat(sprintf("[RANK-IN ADJUSTMENT] Applying Rank-In SVD correction\n"))
-      dat_corrected <- adjust_rankin(dat, debug = FALSE)
-      dat_test_corrected <- adjust_rankin(dat_test, debug = FALSE)
+      cat(sprintf("[RANK-IN ADJUSTMENT] Applying Rank-In SVD correction on combined data\n"))
+      combined_dat <- cbind(dat, dat_test)
+      combined_corrected <- adjust_rankin(combined_dat, debug = FALSE)
+      
+      dat_corrected <- combined_corrected[, 1:ncol(dat), drop = FALSE]
+      dat_test_corrected <- combined_corrected[, (ncol(dat) + 1):ncol(combined_corrected), drop = FALSE]
+      
       return(list(dat_corrected = dat_corrected, dat_test_corrected = dat_test_corrected))
 
     } else {

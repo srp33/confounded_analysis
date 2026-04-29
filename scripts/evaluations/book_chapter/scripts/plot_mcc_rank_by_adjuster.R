@@ -95,18 +95,39 @@ ranked_data <- raw_data %>%
 
 max_rank <- max(ranked_data$rank, na.rm = TRUE)
 
-# Aggregate stats and identify outliers
-outlier_stats <- ranked_data %>%
-  mutate(
-    group_center = calc_hodges_lehmann(rank),
-    .by = adjuster_label
-  ) %>%
+# Aggregate stats per classifier-adjuster pair
+classifier_stats <- ranked_data %>%
   summarise(
     avg_rank = calc_hodges_lehmann(rank),
-    group_center = first(group_center),
     classifier = first(classifier),
     .by = c(classifier_label, adjuster_label)
-  ) %>%
+  )
+
+# 1. Identify the strongest outlier per adjuster based on initial central tendencies
+initial_group_centers <- ranked_data %>%
+  summarise(
+    center = calc_hodges_lehmann(rank),
+    .by = adjuster_label
+  )
+
+strongest_outliers <- classifier_stats %>%
+  left_join(initial_group_centers, by = "adjuster_label") %>%
+  mutate(initial_dev = abs(avg_rank - center)) %>%
+  slice_max(initial_dev, n = 1, with_ties = FALSE, by = adjuster_label) %>%
+  select(adjuster_label, outlier_classifier = classifier_label)
+
+# 2. Recalculate the central tendencies (group centers) after removing the strongest outlier
+refined_group_centers <- ranked_data %>%
+  left_join(strongest_outliers, by = "adjuster_label") %>%
+  filter(classifier_label != outlier_classifier) %>%
+  summarise(
+    group_center = calc_hodges_lehmann(rank),
+    .by = adjuster_label
+  )
+
+# 3. Recalculate the outliers based on these refined tendencies
+outlier_stats <- classifier_stats %>%
+  left_join(refined_group_centers, by = "adjuster_label") %>%
   mutate(
     abs_dev = abs(avg_rank - group_center),
     global_iqr = IQR(abs_dev, na.rm = TRUE),
