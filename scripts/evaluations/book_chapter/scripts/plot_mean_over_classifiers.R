@@ -17,11 +17,14 @@ parser$add_argument("-o", "--output", type = "character", required = TRUE,
                     help = "Output PNG file")
 parser$add_argument("--adjusters", type = "character", default = NULL,
                     help = "Comma-separated list of adjusters to include")
+parser$add_argument("--show-log-only", action = "store_true", default = FALSE,
+                    help = "Include the lower panel (vs. Log Only)")
 opt <- parser$parse_args()
 
 source("scripts/adjuster_plot_utils.R")
 
 data <- read.csv(opt$input, stringsAsFactors = FALSE)
+data$test_study <- format_study_label(data$test_study)
 
 if (!is.null(opt$adjusters)) {
   selected <- unique(c(trimws(strsplit(opt$adjusters, ",")[[1]]), "within_study_cv"))
@@ -29,6 +32,7 @@ if (!is.null(opt$adjusters)) {
 }
 
 mxe <- data[data$metric == "mcc" & !is.na(data$n_datasets) & data$classifier != "logistic", ]
+mxe$n_train <- mxe$n_datasets - 1
 
 # --- Helper: compute gaps relative to a reference adjuster, averaged over classifiers ---
 compute_panel_data <- function(mxe, ref_adjuster, exclude_adjusters = c()) {
@@ -45,7 +49,8 @@ compute_panel_data <- function(mxe, ref_adjuster, exclude_adjusters = c()) {
   # Average over classifiers
   avg <- rel %>%
     group_by(adjuster, n_datasets, test_study) %>%
-    summarise(mean_gap = mean(gap, na.rm = TRUE), .groups = "drop")
+    summarise(mean_gap = mean(gap, na.rm = TRUE), .groups = "drop") %>%
+    mutate(n_train = n_datasets - 1)
 
   # Order by overall mean gap (descending)
   adj_order <- avg %>%
@@ -55,6 +60,13 @@ compute_panel_data <- function(mxe, ref_adjuster, exclude_adjusters = c()) {
 
   adj_labels <- sapply(adj_order$adjuster, format_adjuster_label)
   avg$adjuster_label <- factor(avg$adjuster, levels = adj_order$adjuster, labels = adj_labels)
+
+  # Order test studies by average performance (best first)
+  study_order <- avg %>%
+    group_by(test_study) %>%
+    summarise(avg_gap = mean(mean_gap, na.rm = TRUE), .groups = "drop") %>%
+    arrange(desc(avg_gap))
+  avg$test_study <- factor(avg$test_study, levels = study_order$test_study)
 
   grand <- avg %>%
     group_by(adjuster_label) %>%
@@ -83,7 +95,7 @@ compute_panel_data <- function(mxe, ref_adjuster, exclude_adjusters = c()) {
 }
 
 # --- Helper: build one panel ---
-make_panel <- function(panel, title, y_label) {
+make_panel <- function(panel, title, y_label, show_sig = TRUE) {
   avg   <- panel$avg
   grand <- panel$grand
   sig   <- panel$sig
@@ -91,39 +103,52 @@ make_panel <- function(panel, title, y_label) {
   y_max <- max(avg$mean_gap, na.rm = TRUE)
   y_min <- min(avg$mean_gap, na.rm = TRUE)
   y_range <- max(y_max - y_min, 0.01)
-  y_lim <- c(y_min - 0.05 * y_range, y_max + 0.15 * y_range)
 
   p <- ggplot(avg, aes(x = adjuster_label, y = mean_gap)) +
-    geom_hline(yintercept = 0, linetype = "solid", color = "black", linewidth = 0.6, alpha = 0.7) +
-    geom_segment(data = grand,
-                 aes(x = as.numeric(adjuster_label) - 0.3,
-                     xend = as.numeric(adjuster_label) + 0.3,
-                     y = grand_mean, yend = grand_mean),
-                 color = "gray40", linewidth = 0.8) +
-    geom_point(aes(color = test_study, shape = as.factor(n_datasets)), size = 3, alpha = 0.5) +
-    scale_x_discrete(drop = FALSE) +
-    scale_y_continuous(limits = y_lim, expand = expansion(mult = c(0, 0))) +
+    geom_point(aes(color = test_study, shape = as.factor(n_train)), size = 3.5, alpha = 0.5) +
+    geom_crossbar(data = grand,
+                  aes(x = adjuster_label, y = grand_mean, ymin = grand_mean, ymax = grand_mean),
+                  color = "gray30", linewidth = 0.5, width = 0.5, fatten = 2) +
+    geom_hline(yintercept = 0, linetype = "solid", color = "black", linewidth = 0.6) +
+    scale_x_discrete(drop = FALSE, limits = rev) +
+    scale_y_reverse() +
+    coord_flip(clip = "off") +
     scale_color_brewer(palette = "Set2", name = "Test Study") +
-    scale_shape_manual(values = c(15, 16, 17, 18), name = "# Studies") +
+    scale_shape_manual(values = c(15, 16, 17, 18), name = "# Train\nStudies") +
+    guides(
+      color = guide_legend(order = 1),
+      shape = guide_legend(order = 2, title.theme = element_text(size = 11, face = "bold", margin = margin(t = 12)))
+    ) +
     theme_bw() +
     theme(
-      axis.title.x = element_blank(),
-      axis.text.x = element_text(angle = 30, hjust = 1, size = 10),
-      axis.title.y = element_text(size = 11),
-      legend.title = element_text(size = 10, face = "bold"),
+      axis.title.y = element_blank(),
+      axis.text.y = element_text(size = 10),
+      axis.title.x = element_text(size = 11),
+      axis.ticks = element_line(color = "grey70", linewidth = 0.3),
+      panel.border = element_blank(),
+      axis.line.x = element_line(color = "grey40", linewidth = 0.4),
+      axis.line.y = element_blank(),
+      legend.title = element_text(size = 11, face = "bold"),
+      legend.text = element_text(size = 10),
+      legend.key.size = unit(0.55, "cm"),
+      legend.key = element_rect(fill = "transparent", color = NA),
+      legend.spacing.y = unit(0.15, "cm"),
+      legend.box.spacing = unit(0.4, "cm"),
+      legend.margin = margin(0, 0, 0, 0),
       legend.position = "right",
-      panel.grid.major.y = element_line(color = "grey90", linewidth = 0.5),
-      panel.grid.major.x = element_blank(),
+      plot.margin = margin(5, 5, 5, 5),
+      panel.grid.major.x = element_line(color = "grey92", linewidth = 0.3),
+      panel.grid.major.y = element_blank(),
       panel.grid.minor = element_blank(),
       plot.title = element_text(size = 13, hjust = 0.5, face = "bold")
     ) +
     labs(y = y_label, title = title)
 
-  if (nrow(sig) > 0) {
-    sig$y_pos <- y_max + 0.08 * y_range
+  if (show_sig && nrow(sig) > 0) {
+    sig$y_pos <- y_max + 0.06 * y_range
     p <- p + geom_text(data = sig,
                        aes(x = adjuster_label, y = y_pos, label = sig_label),
-                       inherit.aes = FALSE, size = 5, fontface = "bold", vjust = 0)
+                       inherit.aes = FALSE, size = 4.5, fontface = "bold", hjust = 0)
   }
   p
 }
@@ -134,22 +159,39 @@ panel_unadj <- compute_panel_data(mxe, ref_adjuster = "unadjusted",
                                    exclude_adjusters = "within_study_cv")
 
 p_left  <- make_panel(panel_cv,
-                       title = "Gap vs. Within-Study CV",
-                       y_label = "Mean MCC Gap\n(vs. Within-Study CV)")
-p_right <- make_panel(panel_unadj,
-                       title = "Gap vs. Log Only (Unadjusted)",
-                       y_label = "Mean MCC Gap\n(vs. Log Only)")
+                       title = if (opt$show_log_only) "Adjuster Performance vs. Within-Study CV" else "",
+                       y_label = "\u2190 Better                    Difference in Mean MCC (Adjuster - Within-Study CV)          ",
+                       show_sig = opt$show_log_only)
 
-combined <- plot_grid(
-  p_left  + theme(legend.position = "none"),
-  p_right + theme(legend.position = "none"),
-  ncol = 2, align = "h", axis = "tb"
-)
-legend <- get_legend(p_left + theme(legend.position = "right"))
-final  <- plot_grid(combined, legend, rel_widths = c(1, 0.15))
+if (opt$show_log_only) {
+  p_right <- make_panel(panel_unadj,
+                         title = "Adjuster Performance vs. Log Only Transformation",
+                         y_label = "\u2190 Better | Difference in Mean MCC")
 
-ggsave(filename = opt$output, plot = final,
-       width = 18, height = 8, dpi = 300, units = "in", bg = "white")
+  arrow_label <- ggdraw()
+
+  combined <- plot_grid(
+    p_left  + theme(legend.position = "none"),
+    arrow_label,
+    p_right + theme(legend.position = "none"),
+    ncol = 1, align = "v", axis = "lr",
+    rel_heights = c(1, 0.06, 1)
+  )
+  legend <- get_legend(p_left + theme(legend.position = "right"))
+  final  <- plot_grid(combined, legend, rel_widths = c(1, 0.15))
+
+  ggsave(filename = opt$output, plot = final,
+         width = 10, height = 8, dpi = 300, units = "in", bg = "white")
+} else {
+  legend <- get_legend(p_left + theme(legend.position = "right"))
+  final  <- plot_grid(
+    p_left + theme(legend.position = "none"),
+    legend, rel_widths = c(1, 0.15)
+  )
+
+  ggsave(filename = opt$output, plot = final,
+         width = 10, height = 5, dpi = 300, units = "in", bg = "white")
+}
 cat("Saved:", opt$output, "\n")
 
 # Save significance results from both panels

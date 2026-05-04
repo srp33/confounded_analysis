@@ -32,6 +32,17 @@ adjusters:
   - "combat_sup"
   - "mnn"
   - "fast_mnn"
+  - "ruvr"
+  - "ruvg"
+  - "yugene"
+  - "cublock"
+  - "angel"
+  - "tdm"
+  - "rnabc"
+  - "shambhala2"
+  - "coconut"
+  - "rankin"
+  - "recombat"
 
 # Subset of adjusters to visualize (within_study_cv is always included as baseline)
 viz_adjusters:
@@ -46,6 +57,17 @@ viz_adjusters:
   - "combat_sup"
   - "mnn"
   - "fast_mnn"
+  - "ruvr"
+  - "ruvg"
+  - "yugene"
+  - "cublock"
+  - "angel"
+  - "tdm"
+  - "rnabc"
+  - "shambhala2"
+  - "coconut"
+  - "rankin"
+  - "recombat"
 
 split_seed_start: 42
 split_seed_count: 200
@@ -57,8 +79,10 @@ class_imbalance_analysis:
   # Adjusters to test across class imbalance levels
   adjusters:
     - "unadjusted"
+    - "rankin"        # unsupervised
     - "combat"        # unsupervised
     - "combat_sup"    # supervised
+    - "coconut"       # supervised (uses test labels)
   # Random seed for reproducible sampling
   seed: 123
   # Imbalance levels to test (as proportions of active TB in high-imbalance training set).

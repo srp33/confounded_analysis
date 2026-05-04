@@ -1,4 +1,5 @@
-# helper.R - Core helper functions for batch correction analysis
+# Disable Bioconductor version checks for offline cluster nodes
+options(BiocManager.check_repositories = FALSE)
 
 options(warn = -1)
 
@@ -261,20 +262,81 @@ AccuracyBinary <- function(actual, predicted) {
 
 
 predSVM <- function(trn_set, y_trn){
-  tune_ctrl <- e1071::tune.control(sampling="cross", cross=4)
-  obj <- e1071::tune(e1071::svm, train.x=t(trn_set), train.y=as.factor(y_trn),
-              tunecontrol=tune_ctrl,
-              ranges=list(type="C-classification",
-                          kernel="linear",
-                          cost=exp(seq(from=-10, to=10, by=2))))
-  best_cost <- obj$best.parameters[,"cost"]
-  mod_svm <- e1071::svm(x=t(trn_set), y=as.factor(y_trn),
+  # Strip names to prevent metadata-alignment errors in tune()
+  colnames(trn_set) <- NULL
+  rownames(trn_set) <- NULL
+  y_trn <- as.vector(y_trn)
+  names(y_trn) <- NULL
+  
+  y_trn_factor <- as.factor(y_trn)
+  tab <- table(y_trn_factor)
+  min_samples <- min(tab)
+  
+  if (min_samples < 2) {
+    stop(sprintf("SVM training failed: minimum 2 samples per class required (found classes: %s)", paste(names(tab), "=", as.numeric(tab), collapse=", ")))
+  }
+  
+  # Ensure cross-validation folds do not exceed minimum samples in any class
+  n_folds <- min(4, min_samples)
+  tune_ctrl <- e1071::tune.control(sampling="cross", cross=n_folds)
+  
+  if (any(is.na(trn_set)) || any(is.infinite(trn_set))) {
+    stop(sprintf("SVM training failed: trn_set contains NAs or Infs"))
+  }
+  
+  if (any(is.na(y_trn))) {
+    stop(sprintf("SVM training failed: y_trn contains NAs"))
+  }
+
+  # Hard cast to raw types to strip all hidden attributes/classes
+  X_train <- matrix(as.numeric(as.matrix(t(trn_set))), nrow=ncol(trn_set))
+  y_train <- as.factor(as.character(as.vector(y_trn)))
+  
+  cat(sprintf("DEBUG SVM: X_train=%d x %d, y_train=%d, levels=[%s], X_class=%s, y_class=%s\n", 
+              nrow(X_train), ncol(X_train), length(y_train), 
+              paste(levels(y_train), collapse=", "),
+              class(X_train), class(y_train)))
+
+  obj <- tryCatch({
+    e1071::tune(e1071::svm, train.x=X_train, train.y=y_train,
+                type="C-classification",
+                kernel="linear",
+                tunecontrol=tune_ctrl,
+                ranges=list(cost=exp(seq(from=-10, to=10, by=2))))
+  }, error = function(e) {
+    cat(sprintf("WARNING: SVM tuning failed (%s). Falling back to default cost=1.\n", e$message))
+    return(NULL)
+  })
+  
+  if (is.null(obj) || is.null(obj$best.parameters)) {
+    best_cost <- 1
+  } else {
+    best_cost <- obj$best.parameters[1, "cost"]
+  }
+  
+  mod_svm <- e1071::svm(x=X_train, y=y_train,
                  type="C-classification", kernel="linear",
                  cost=best_cost, probability=TRUE)
-  pred_train_svm <- predict(mod_svm, t(trn_set), probability=TRUE)
-  pred_train_svm <- attr(pred_train_svm, "probabilities")[,"1"]
   
-  res <- list(mod=mod_svm, pred_trn_prob=pred_train_svm, pred_tst_prob=NULL,
+  pred_train_svm_raw <- predict(mod_svm, X_train, probability=TRUE)
+  probs <- attr(pred_train_svm_raw, "probabilities")
+  
+  if (is.null(probs)) {
+    stop("SVM prediction failed: probabilities not found in output attributes.")
+  }
+  
+  # Ensure we extract the probability for the correct class (labeled "1")
+  if ("1" %in% colnames(probs)) {
+    pred_train_svm <- probs[, "1", drop=TRUE]
+  } else if (ncol(probs) >= 2) {
+    # Fallback to the second column if "1" is missing
+    cat("WARNING: SVM probability column '1' not found. Available columns:", paste(colnames(probs), collapse=", "), "\n")
+    pred_train_svm <- probs[, 2, drop=TRUE]
+  } else {
+    stop(sprintf("SVM prediction failed: unexpected probability matrix dimensions %d x %d", nrow(probs), ncol(probs)))
+  }
+  
+  res <- list(mod=mod_svm, pred_trn_prob=as.vector(pred_train_svm), pred_tst_prob=NULL,
               pred_trn_class=NULL, pred_tst_class=NULL)
   return(res)
 }
@@ -288,16 +350,14 @@ predLasso_pp <- function(trn_set, y_trn, ...){
 }
 
 predRF_pp <- function(trn_set, y_trn){
-  trn_transposed <- t(trn_set)
-  rownames(trn_transposed) <- NULL
+  trn_set <- as.matrix(trn_set); trn_transposed <- as.data.frame(t(trn_set))
+  colnames(trn_transposed) <- paste0("V", 1:ncol(trn_transposed))
   data <- data.frame(y=as.factor(y_trn), trn_transposed)
   mod <- ranger::ranger(y ~ ., data = data, write.forest=TRUE)
   mod_prob <- ranger::ranger(y ~ ., data = data, write.forest=TRUE, probability=TRUE)
   
-  trn_pred_data <- t(trn_set)
-  rownames(trn_pred_data) <- NULL
-  pred_trn_prob <- predict(mod_prob, data = data.frame(trn_pred_data))$predictions[, "1"]
-  pred_trn_class <- predict(mod, data = data.frame(trn_pred_data))$predictions
+  pred_trn_prob <- predict(mod_prob, data = trn_transposed)$predictions[, "1"]
+  pred_trn_class <- predict(mod, data = trn_transposed)$predictions
   
   return(list(mod = mod_prob, pred_trn_prob=pred_trn_prob, pred_tst_prob=NULL,
               pred_trn_class=pred_trn_class, pred_tst_class=NULL))
@@ -318,9 +378,10 @@ predNnet_pp <- function(trn_set, y_trn){
     stop("Training set or labels are NULL")
   }
   
-  trn_transposed <- t(trn_set)
-  rownames(trn_transposed) <- NULL
+  trn_set <- as.matrix(trn_set); trn_transposed <- as.data.frame(t(trn_set))
+  colnames(trn_transposed) <- paste0("V", 1:ncol(trn_transposed))
   data <- data.frame(y=as.factor(y_trn), trn_transposed)
+
   
   n_samples <- nrow(data)
   network_size <- min(10, max(2, n_samples %/% 3))
@@ -328,21 +389,21 @@ predNnet_pp <- function(trn_set, y_trn){
   mod <- nnet::nnet(y ~ ., data = data, size = network_size, MaxNWts = 50000, 
               decay = 0.01, linout = FALSE, trace = FALSE, maxit = 200)
   
-  pred_trn_prob <- as.vector(predict(mod, newdata = data[,-1]))
-  pred_trn_class <- as.vector(predict(mod, newdata = data[,-1], type="class"))
+  pred_trn_prob <- as.vector(predict(mod, newdata = trn_transposed))
+  pred_trn_class <- as.vector(predict(mod, newdata = trn_transposed, type="class"))
   
   return(list(mod=mod, pred_trn_prob=pred_trn_prob, pred_tst_prob=NULL,
               pred_trn_class=pred_trn_class, pred_tst_class=NULL))
 }
 
 predLogistic_pp <- function(trn_set, y_trn){
-  trn_transposed <- t(trn_set)
-  rownames(trn_transposed) <- NULL
+  trn_set <- as.matrix(trn_set); trn_transposed <- as.data.frame(t(trn_set))
+  colnames(trn_transposed) <- paste0("V", 1:ncol(trn_transposed))
   data <- data.frame(y=as.factor(y_trn), trn_transposed)
   
   mod <- glm(y ~ ., data = data, family = binomial())
   
-  pred_trn_prob <- as.vector(predict(mod, newdata = data[,-1], type="response"))
+  pred_trn_prob <- as.vector(predict(mod, newdata = trn_transposed, type="response"))
   pred_trn_class <- as.vector(ifelse(pred_trn_prob >= 0.5, "1", "0"))
   
   return(list(mod=mod, pred_trn_prob=pred_trn_prob, pred_tst_prob=NULL,
@@ -510,9 +571,8 @@ predXGBoost_pp <- function(trn_set, y_trn){
 
 predWrapper <- function(mod, tst_set, function_name){
   if(function_name=='logistic'){
-    tst_transposed <- t(tst_set)
-    rownames(tst_transposed) <- NULL
-    newdata <- data.frame(tst_transposed)
+    newdata <- as.data.frame(t(tst_set))
+    colnames(newdata) <- paste0("V", 1:ncol(newdata))
     res <- as.vector(predict(mod, newdata = newdata, type="response"))
   }else if(function_name=='lasso'){
     res <- as.vector(predict(mod, newx=t(tst_set), s="lambda.1se", type="response"))
@@ -522,14 +582,12 @@ predWrapper <- function(mod, tst_set, function_name){
     res <- predict(mod, t(tst_set), probability=TRUE)
     res <- attr(res, "probabilities")[,"1"]
   }else if(function_name=='rf'){
-    tst_transposed <- t(tst_set)
-    rownames(tst_transposed) <- NULL
-    newdata <- data.frame(tst_transposed)
+    newdata <- as.data.frame(t(tst_set))
+    colnames(newdata) <- paste0("V", 1:ncol(newdata))
     res <- predict(mod, data = newdata)$predictions[, "1"]
   }else if(function_name=='nnet' || function_name=='nn'){
-    tst_transposed <- t(tst_set)
-    rownames(tst_transposed) <- NULL
-    newdata <- data.frame(tst_transposed)
+    newdata <- as.data.frame(t(tst_set))
+    colnames(newdata) <- paste0("V", 1:ncol(newdata))
     res <- as.vector(predict(mod, newdata = newdata))
   }else if(function_name=='knn'){
     tst_for_knn <- t(tst_set)

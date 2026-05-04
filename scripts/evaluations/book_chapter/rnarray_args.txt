@@ -1,0 +1,4 @@
+function (rna_seq_files, array_files, ref_file, paired_end = T, 
+    frag_length = NA, frag_sd = NA, cores = 1, kallisto_cmd = "kallisto", 
+    tech_prefix = "AFFX", out_dir = NA) 
+NULL
