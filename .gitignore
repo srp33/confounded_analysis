@@ -33,3 +33,4 @@ scripts/evaluations/metadata_features/logs
 scripts/evaluations/metadata_features/.pixi
 scripts/evaluations/pace_posse/.pixi/
 .pixi
+scripts/evaluations/GSOA_python3
