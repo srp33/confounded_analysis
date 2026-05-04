@@ -5,11 +5,9 @@ OUTPUT_FOLDER = config["output_folder"]
 DATA_FOLDER = config["data_folder"]
 SCRIPTS_DIR = config.get("scripts_dir", ".")
 ADJUST_SCRIPT = config.get("adjust_script", "../../adjust/adjust.R")
-BOOTSTRAP_TOTAL = config["bootstrap_total"]
-BOOTSTRAP_PER_JOB = config["bootstrap_per_job"]
 N_HVG = config["n_hvg"]
-CHUNKS = range(BOOTSTRAP_TOTAL // BOOTSTRAP_PER_JOB)
 K_FOLDS = config["k_folds"]
+K_VALUES = config["k_values"]
 
 rule all: 
     input: 
@@ -54,11 +52,10 @@ rule aggregate_metrics:
     priority: 70
     input: 
         metrics_data=expand(
-            DATA_FOLDER + "/classify_metrics/{adjuster}/{adjuster}_{k}studies_test_{test_source}_chunk{chunk}_metrics.csv",
+            DATA_FOLDER + "/classify_metrics/{adjuster}/{adjuster}-{k}_studies-test_{test_source}-metrics.csv",
             adjuster=config["adjuster"],
-            k=list(range(1,15)),
-            test_source=config["dataset_ids"],
-            chunk = CHUNKS
+            k=K_VALUES,
+            test_source=config["dataset_ids"]
         )
     output:
         output_path=DATA_FOLDER + "/classify_metrics/all_metrics.csv"
@@ -79,26 +76,23 @@ rule aggregate_metrics:
 rule classify:
     priority: 80
     input:
-        adjusted_csv = DATA_FOLDER + "/adjusted_data/{adjuster}/{adjuster}_{k}studies_test_{test_source}.csv"
+        adjusted_csv = DATA_FOLDER + "/adjusted_data/{adjuster}/{adjuster}-{k}_studies-test_{test_source}.csv"
     output: 
-        metrics_file = DATA_FOLDER + "/classify_metrics/{adjuster}/{adjuster}_{k}studies_test_{test_source}_chunk{chunk}_metrics.csv"
+        metrics_file = DATA_FOLDER + "/classify_metrics/{adjuster}/{adjuster}-{k}_studies-test_{test_source}-metrics.csv"
     log: 
-        "log/classify/{adjuster}_{k}_{test_source}_chunk{chunk}.log"
+        "log/classify/{adjuster}_{k}_{test_source}.log"
     resources: 
         mem_mb=16000,
         runtime=360
     threads: 1
     params:
-        output_dir = DATA_FOLDER + "/classify_metrics",
-        bootstrap = BOOTSTRAP_PER_JOB
+        output_dir = DATA_FOLDER + "/classify_metrics"
     shell:
         r"""
         set -euo pipefail
         python {SCRIPTS_DIR}/run_classifier.py \
             --csv {input.adjusted_csv} \
             --outdir {params.output_dir} \
-            --chunk {wildcards.chunk} \
-            --chunk-size {params.bootstrap} \
             &> {log}
         """
 
@@ -107,9 +101,9 @@ rule adjust:
     input: 
         DATA_FOLDER + "/subset_data/{k}studies_test_{test_source}.csv"
     output: 
-        DATA_FOLDER + "/adjusted_data/{adjuster}/{adjuster}_{k}studies_test_{test_source}.csv"
+        DATA_FOLDER + "/adjusted_data/{adjuster}/{adjuster}-{k}_studies-test_{test_source}.csv"
     resources: 
-        mem_mb=64000,
+        mem_mb=28000,
         runtime=90
     threads: 1
     log: 
@@ -129,6 +123,7 @@ rule adjust:
             --output-dir {params.output_dir} \
             --adjust-script {params.adjust_script} \
             --metadata-file {params.metadata} \
+            --n_hvg {N_HVG} \
             &> {log}
         """
 
