@@ -41,7 +41,7 @@ cat("Number of unique training pairs:", n_distinct(data$training_pair), "\n")
 cat("Number of unique test datasets:", n_distinct(data$test_dataset), "\n")
 
 # Filter to target adjusters
-target_adjusters <- c("unadjusted", "combat", "combat_sup", "coconut", "rankin")
+target_adjusters <- c("unadjusted", "combat", "combat_sup", "coconut")
 data_filtered <- data %>%
   filter(adjuster %in% target_adjusters, classifier != "knn")
 
@@ -139,11 +139,10 @@ plot_data <- plot_data %>%
       adjuster == "combat" ~ "ComBat (Unsupervised)",
       adjuster == "combat_sup" ~ "ComBat (Supervised)",
       adjuster == "coconut" ~ "COCONUT (Supervised)",
-      adjuster == "rankin" ~ "Rank-In",
       TRUE ~ adjuster
     ),
     adjuster_label = factor(adjuster_label, 
-                           levels = c("Unadjusted", "Rank-In", "ComBat (Unsupervised)", "ComBat (Supervised)", "COCONUT (Supervised)")),
+                           levels = c("Unadjusted", "ComBat (Unsupervised)", "ComBat (Supervised)", "COCONUT (Supervised)")),
     imbalance_pct_num = imbalance_pct * 100
   )
 
@@ -168,7 +167,6 @@ p <- ggplot(plot_data, aes(x = imbalance_pct_num, y = mean_rank, color = adjuste
   scale_color_manual(
     values = c(
       "Unadjusted" = "#E31A1C",
-      "Rank-In" = "#6A3D9A",
       "ComBat (Unsupervised)" = "#1F78B4",
       "ComBat (Supervised)" = "#33A02C",
       "COCONUT (Supervised)" = "#FF7F00"
@@ -178,7 +176,6 @@ p <- ggplot(plot_data, aes(x = imbalance_pct_num, y = mean_rank, color = adjuste
   scale_fill_manual(
     values = c(
       "Unadjusted" = "#E31A1C",
-      "Rank-In" = "#6A3D9A",
       "ComBat (Unsupervised)" = "#1F78B4",
       "ComBat (Supervised)" = "#33A02C",
       "COCONUT (Supervised)" = "#FF7F00"

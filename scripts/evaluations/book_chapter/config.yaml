@@ -32,7 +32,6 @@ adjusters:
   - "combat_sup"
   - "mnn"
   - "fast_mnn"
-  - "ruvr"
   - "ruvg"
   - "yugene"
   - "cublock"
@@ -57,7 +56,6 @@ viz_adjusters:
   - "combat_sup"
   - "mnn"
   - "fast_mnn"
-  - "ruvr"
   - "ruvg"
   - "yugene"
   - "cublock"
@@ -79,7 +77,6 @@ class_imbalance_analysis:
   # Adjusters to test across class imbalance levels
   adjusters:
     - "unadjusted"
-    - "rankin"        # unsupervised
     - "combat"        # unsupervised
     - "combat_sup"    # supervised
     - "coconut"       # supervised (uses test labels)

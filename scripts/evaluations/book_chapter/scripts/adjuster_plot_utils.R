@@ -13,6 +13,16 @@ format_adjuster_label <- function(adjuster_name) {
   if (adjuster_name == "combat_mean") return("ComBat Mean")
   if (adjuster_name == "mnn") return("MNN")
   if (adjuster_name == "fast_mnn") return("FastMNN")
+  if (adjuster_name == "ruvg") return("RUVg")
+  if (adjuster_name == "cublock") return("CuBlock")
+  if (adjuster_name == "angel") return("Angel")
+  if (adjuster_name == "tdm") return("TDM")
+  if (adjuster_name == "rnabc") return("RNAbc")
+  if (adjuster_name == "shambhala2") return("Shambhala2")
+  if (adjuster_name == "coconut") return("COCONUT")
+  if (adjuster_name == "rankin") return("Rank-In")
+  if (adjuster_name == "recombat") return("ReComBat")
+  if (adjuster_name == "yugene") return("YuGene")
   return(tools::toTitleCase(adjuster_name))
 }
 

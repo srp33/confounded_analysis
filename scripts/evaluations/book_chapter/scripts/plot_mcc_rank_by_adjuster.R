@@ -23,7 +23,7 @@ parser$add_argument("-i", "--input", type = "character", required = TRUE,
                     help = "Input CSV file with adjuster results")
 parser$add_argument("-o", "--output", type = "character", required = TRUE,
                     help = "Output PNG file")
-parser$add_argument("--width", type = "double", default = 11)
+parser$add_argument("--width", type = "double", default = 8)
 parser$add_argument("--height", type = "double", default = 9)
 parser$add_argument("--dpi", type = "integer", default = 300)
 parser$add_argument("--adjusters", type = "character", default = NULL,
@@ -209,7 +209,6 @@ p <- ggplot(mapping = aes(y = adjuster_label)) +
     aes(x = avg_rank, label = label_text, group = adjuster_label),
     position = pos_swarm_h,
     size = 3.0,
-    fontface = "bold",
     color = "black",
     vjust = 2.0,
     show.legend = FALSE
@@ -229,14 +228,14 @@ p <- ggplot(mapping = aes(y = adjuster_label)) +
 
   theme_minimal(base_size = 14) +
   theme(
-    axis.text.y = element_text(face = "bold", color = "black"),
-    axis.text.x = element_text(face = "bold", color = "black"),
+    axis.text.y = element_text(color = "black"),
+    axis.text.x = element_text(color = "black"),
     panel.grid.major.y = element_line(color = "gray95"),
     panel.grid.major.x = element_line(color = "gray92", linetype = "dashed"),
     panel.grid.minor = element_blank(),
     legend.position = "right",
-    legend.title = element_text(face = "bold"),
-    plot.title = element_text(face = "bold", size = 18, margin = margin(b = 5)),
+    legend.title = element_text(),
+    plot.title = element_text(size = 18, margin = margin(b = 5)),
     plot.subtitle = element_text(color = "grey40", size = 11, margin = margin(b = 15))
   )
 

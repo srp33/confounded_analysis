@@ -37,6 +37,8 @@ r-dabestr = "*"       # Estimation statistics (generate_*_plot.R)
 r-gridextra = "*"     # Multi-panel plots (generate_*_plot.R)
 r-scales = "*"        # Formatting (generate_main_plot.R)
 r-ggbeeswarm = ">=0.7.2,<0.8"
+r-magick = "*"
+bioconductor-complexheatmap = "*"
 
 # === Dimensionality Reduction ===
 r-umap = "*"          # UMAP (visualize_batch_adjustment.R)
@@ -106,4 +108,5 @@ recombat = ">=0.1.4, <0.2"
 install-rnabc = "Rscript -e \"if (!requireNamespace('RNArray', quietly = TRUE)) remotes::install_github('cbligaard/RNArray')\""
 install-yugene = "Rscript -e \"if (!requireNamespace('YuGene', quietly = TRUE)) remotes::install_version('YuGene', version='1.1.5', repos='https://cloud.r-project.org')\""
 install-tdm   = "Rscript -e \"if (!requireNamespace('TDM', quietly = TRUE)) remotes::install_github('greenelab/TDM')\""
-install-all   = { depends-on = ["install-rnabc", "install-yugene", "install-tdm"] }
+install-gapr  = "Rscript -e \"if (!requireNamespace('GAPR', quietly = TRUE)) install.packages('GAPR', repos='https://cloud.r-project.org')\""
+install-all   = { depends-on = ["install-rnabc", "install-yugene", "install-tdm", "install-gapr"] }

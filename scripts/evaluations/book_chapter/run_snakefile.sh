@@ -28,7 +28,7 @@ fi
 # The slurm account and slurm partition are essential for grouping
 # Choosing the solver helps snakemake find it
 echo "Starting Snakemake"
-pixi run snakemake -s $BOOK_CHAPTER_DIR/Snakefile \
+pixi run --no-progress snakemake -s $BOOK_CHAPTER_DIR/Snakefile \
     --configfile $BOOK_CHAPTER_DIR/config.yaml \
     --scheduler-ilp-solver COIN_CMD \
     --executor slurm \
@@ -37,7 +37,7 @@ pixi run snakemake -s $BOOK_CHAPTER_DIR/Snakefile \
     --group-components batch_real_group=2 batch_simulation_group=3 class_imbalance_group=2 \
     --max-jobs-per-second 20 \
     --max-status-checks-per-second 10 \
-    --latency-wait 20 \
+    --latency-wait 40 \
     --rerun-incomplete
     # --keep-going
     # --quiet

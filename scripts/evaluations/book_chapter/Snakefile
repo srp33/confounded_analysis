@@ -53,7 +53,9 @@ rule all:
         within_study_baseline=OUTPUT_FOLDER + "/within_study_baseline.csv",
         class_imbalance_results=OUTPUT_FOLDER + "/class_imbalanced_results.csv" if config.get("class_imbalance_analysis", {}).get("enabled", False) else [],
         class_imbalance_trend_plot=OUTPUT_FOLDER + "/class_imbalance_trend.png" if config.get("class_imbalance_analysis", {}).get("enabled", False) else [],
-        sample_counts=OUTPUT_FOLDER + "/sample_counts.csv"
+        sample_counts=OUTPUT_FOLDER + "/sample_counts.csv",
+        gapr_heatmap=OUTPUT_FOLDER + "/gapr_heatmap.png",
+        adjuster_similarity=OUTPUT_FOLDER + "/adjuster_similarity.png"
 
 
 
@@ -158,6 +160,48 @@ rule make_mean_over_classifiers:
         OUTPUT_FOLDER + "/mean_over_classifiers.png"
     log:
         OUTPUT_FOLDER + "/logs/plot_mean_over_classifiers.log"
+    threads: 1
+    resources:
+        mem_mb=4000,
+        runtime=10
+    params:
+        adjusters=",".join(config.get("viz_adjusters", config["adjusters"]))
+    shell:
+        """
+        Rscript {input.script} -i {input.data} -o {output} --adjusters {params.adjusters} &> {log}
+        """
+
+# Step 1.3f: GAPR Heatmap with R2E seriation
+rule make_gapr_heatmap:
+    input:
+        data=OUTPUT_FOLDER + "/adjusters_on_classifiers.csv",
+        script=SCRIPTS_FOLDER + "/plot_gapr_heatmap.R",
+        utils=SCRIPTS_FOLDER + "/adjuster_plot_utils.R"
+    output:
+        OUTPUT_FOLDER + "/gapr_heatmap.png"
+    log:
+        OUTPUT_FOLDER + "/logs/plot_gapr_heatmap.log"
+    threads: 1
+    resources:
+        mem_mb=4000,
+        runtime=10
+    params:
+        adjusters=",".join(config.get("viz_adjusters", config["adjusters"]))
+    shell:
+        """
+        Rscript {input.script} -i {input.data} -o {output} --adjusters {params.adjusters} &> {log}
+        """
+
+# Step 1.3g: Adjuster Similarity Heatmap
+rule make_adjuster_similarity:
+    input:
+        data=OUTPUT_FOLDER + "/adjusters_on_classifiers.csv",
+        script=SCRIPTS_FOLDER + "/plot_adjuster_similarity.R",
+        utils=SCRIPTS_FOLDER + "/adjuster_plot_utils.R"
+    output:
+        OUTPUT_FOLDER + "/adjuster_similarity.png"
+    log:
+        OUTPUT_FOLDER + "/logs/plot_adjuster_similarity.log"
     threads: 1
     resources:
         mem_mb=4000,

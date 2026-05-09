@@ -1,0 +1,16 @@
+"adjuster","classifier","n_datasets","test_study","metric","value"
+"rankin","xgboost",3,"USA","mxe",0.794745400527001
+"rankin","xgboost",3,"USA","auc",0.39265306122449
+"rankin","xgboost",3,"USA","rmse",0.545041434611967
+"rankin","xgboost",3,"USA","f",0.574712643678161
+"rankin","xgboost",3,"USA","err",0.528571428571429
+"rankin","xgboost",3,"USA","acc",0.471428571428571
+"rankin","xgboost",3,"USA","tp",24
+"rankin","xgboost",3,"USA","fp",27
+"rankin","xgboost",3,"USA","tn",8
+"rankin","xgboost",3,"USA","fn",11
+"rankin","xgboost",3,"USA","mcc",-0.0963738849304853
+"rankin","xgboost",3,"USA","precision",0.470588235294118
+"rankin","xgboost",3,"USA","recall",0.685714285714286
+"rankin","xgboost",3,"USA","specificity",0.228571428571429
+"rankin","xgboost",3,"USA","balanced_acc",0.457142857142857

@@ -40,7 +40,7 @@ if (requireNamespace("reticulate", quietly = TRUE)) {
 parser <- ArgumentParser(description = "Execute single adjuster comparison job for batch correction analysis")
 
 parser$add_argument("--adjuster", type = "character", required = TRUE,
-                   help = "Batch correction method: unadjusted, naive, rank_samples, rank_twice, npn, combat, combat_mean, combat_sup, mnn, fast_mnn, ruvr, ruvg, yugene, cublock, angel, tdm, rnabc, shambhala2, coconut, or rankin")
+                   help = "Batch correction method: unadjusted, naive, rank_samples, rank_twice, npn, combat, combat_mean, combat_sup, mnn, fast_mnn, ruvg, yugene, cublock, angel, tdm, rnabc, shambhala2, coconut, or rankin")
 parser$add_argument("--classifier", type = "character", required = TRUE,
                    help = "Classifier type: rda, elnet, elasticnet, svm, rf, nnet, knn, xgboost, or shrinkageLDA")
 parser$add_argument("--num-datasets", type = "integer", required = TRUE,
@@ -61,7 +61,7 @@ if (!exists("testing_mode")) {
 # Arguments are automatically validated as required by argparse
 
 # Parameter validation
-valid_adjusters <- c("unadjusted", "naive", "rank_samples", "rank_twice", "npn", "combat", "combat_mean", "combat_sup", "mnn", "fast_mnn", "ruvr", "ruvg", "yugene", "cublock", "angel", "tdm", "rnabc", "shambhala2", "coconut", "rankin", "recombat")
+valid_adjusters <- c("unadjusted", "naive", "rank_samples", "rank_twice", "npn", "combat", "combat_mean", "combat_sup", "mnn", "fast_mnn", "ruvg", "yugene", "cublock", "angel", "tdm", "rnabc", "shambhala2", "coconut", "rankin", "recombat")
 valid_classifiers <- c("rda", "elnet", "elasticnet", "svm", "rf", "nnet", "knn", "xgboost", "shrinkageLDA")
 valid_num_datasets <- c(3, 4, 5, 6)
 
@@ -615,7 +615,7 @@ adjust_coconut <- function(matrix_, batch, group, debug = FALSE) {
   return(result_matrix)
 }
 
-adjust_rankin <- function(matrix_, n_svd = 1L, debug = FALSE) {
+adjust_rankin <- function(matrix_, n_svd = 1L, train_indices = NULL, debug = FALSE) {
   # Rank-In: Tang et al. 2021, Nucleic Acids Research 49(17):e99
   # doi:10.1093/nar/gkab554
   #
@@ -660,11 +660,15 @@ adjust_rankin <- function(matrix_, n_svd = 1L, debug = FALSE) {
   
   reticulate::source_python(rankin_script)
   
-  # Pass matrix as a list of lists (R -> Python -> numpy inside rank_in_from_r)
-  result_list <- rank_in_from_r(unname(as.list(as.data.frame(t(matrix_)))), n_svd = as.integer(n_svd))
+  # Pass matrix and train_indices to Python (reticulate)
+  result_list <- rank_in_from_r(
+    unname(as.list(as.data.frame(t(matrix_)))), 
+    train_indices = train_indices,
+    n_svd = as.integer(n_svd)
+  )
   
-  # Reconstruct matrix (genes x samples)
-  result_matrix <- matrix(unlist(result_list), nrow = nrow(matrix_), ncol = ncol(matrix_))
+  # Reconstruct matrix (genes x samples) row-wise as it is returned as a list of gene vectors
+  result_matrix <- matrix(unlist(result_list), nrow = nrow(matrix_), ncol = ncol(matrix_), byrow = TRUE)
   rownames(result_matrix) <- rownames(matrix_)
   colnames(result_matrix) <- colnames(matrix_)
   
@@ -879,17 +883,9 @@ main_analysis_function <- function() {
     stop(sprintf("Test dataset '%s' has no samples", test_name))
   }
   
-  # Feature reduction (top 1000 most variable genes)
-  n_highvar_genes <- 1000
-  feat_reduced <- reduce_features(datasets$dat, datasets$dat_test, n_highvar_genes)
-  dat <- feat_reduced$dat
-  dat_test <- feat_reduced$dat_test
-    
-    # DIAGNOSTIC: Check data after feature reduction
-    cat(sprintf("[POST-FEATURE DIAGNOSTIC] Data after feature reduction:\n"))
-    cat(sprintf("  dat shape: %d x %d\n", nrow(dat), ncol(dat)))
-    cat(sprintf("  dat range: [%.3f, %.3f]\n", min(dat), max(dat)))
-    cat(sprintf("  dat mean: %.3f, sd: %.3f\n", mean(dat), sd(dat)))
+  # Use all common genes for batch correction
+  dat <- datasets$dat
+  dat_test <- datasets$dat_test
   
   # ====================================================================
   # DATA PREPROCESSING: LOG TRANSFORMATION FOR RAW INTENSITY DATA
@@ -975,9 +971,20 @@ main_analysis_function <- function() {
     }
     
     if (!needs_log_transform_train && !needs_log_transform_test) {
-      cat(sprintf("[PREPROCESSING] Both datasets appear already log-transformed - no transformation applied\n"))
     }
   }
+  
+  # Step 1.4: Feature selection (1000 highly variable genes)
+  # Selecting features based on training data variance only
+  cat(sprintf("[FEATURE SELECTION] Selecting 1000 most variable genes...\n"))
+  reduced <- reduce_features(dat, dat_test, n_genes=1000)
+  dat <- reduced$dat
+  dat_test <- reduced$dat_test
+  
+  cat(sprintf("[POST-FEATURE DIAGNOSTIC] Data after feature reduction:\n"))
+  cat(sprintf("  dat shape: %d x %d\n", nrow(dat), ncol(dat)))
+  cat(sprintf("  dat range: [%.3f, %.3f]\n", min(dat), max(dat)))
+  cat(sprintf("  dat mean: %.3f, sd: %.3f\n", mean(dat), sd(dat)))
   
   # Validate feature-reduced data
   if(is.null(dat_test)) {
@@ -1497,17 +1504,23 @@ main_analysis_function <- function() {
       dat_corrected <- ruv_res$normalizedCounts
       
       # Step 3: Project test data
-      # RUVr estimates W (samples x k). We need to estimate alpha (k x genes)
-      # such that dat \approx W %*% alpha.
+      # To avoid mean-shift distortion, we must center both datasets using training means
       W <- ruv_res$W
-      # Use OLS to estimate alpha: alpha = (W'W)^-1 W' dat'
-      alpha <- solve(t(W) %*% W) %*% t(W) %*% t(dat)
+      gene_means <- rowMeans(dat)
+      dat_centered <- dat - gene_means
       
-      # For test data, we need W_test (n_test x k).
-      # We estimate it by regressing dat_test on alpha:
-      # W_test = dat_test' %*% alpha' %*% (alpha %*% alpha')^-1
-      W_test <- t(dat_test) %*% t(alpha) %*% solve(alpha %*% t(alpha))
-      dat_test_corrected <- dat_test - t(W_test %*% alpha)
+      # Estimate alpha using centered data
+      alpha <- solve(t(W) %*% W) %*% t(W) %*% t(dat_centered)
+      
+      # Center test data using training means
+      dat_test_centered <- dat_test - gene_means
+      
+      # Estimate W_test
+      W_test <- t(dat_test_centered) %*% t(alpha) %*% solve(alpha %*% t(alpha))
+      
+      # Correct test data and add means back
+      dat_test_corrected <- dat_test_centered - t(W_test %*% alpha)
+      dat_test_corrected <- dat_test_corrected + gene_means
       
       cat("RUVr (RUVSeq) correction complete\n")
       
@@ -1522,8 +1535,7 @@ main_analysis_function <- function() {
       }
       
       # Define housekeeping genes
-      housekeeping_genes <- c("GAPDH", "ACTG1", "RPS18", "POM121C", "MRPL18", 
-                             "TOMM5", "YTHDF1", "TPT1", "RPS27")
+      housekeeping_genes <- c("PPIA", "YWHAZ", "HPRT1", "RPLP0")
       available_hk <- intersect(housekeeping_genes, rownames(dat))
       
       if (length(available_hk) < 2) {
@@ -1535,24 +1547,31 @@ main_analysis_function <- function() {
       k <- min(3, length(available_hk) - 1)
       ruv_res <- RUVSeq::RUVg(as.matrix(dat), available_hk, k=k, isLog=TRUE)
       dat_corrected <- ruv_res$normalizedCounts
+      
       # Step 2: Project test data using the loadings (alpha) from training
-      # Estimate alpha (loadings) for all genes from training data
+      # To avoid mean-shift distortion, we must center both datasets using training means
       W <- ruv_res$W
-      # alpha = (W'W)^-1 W' dat' (k x genes)
-      alpha <- solve(t(W) %*% W) %*% t(W) %*% t(dat)
+      gene_means <- rowMeans(dat)
+      dat_centered <- dat - gene_means
+      
+      # Estimate alpha for all genes using centered data
+      alpha <- solve(t(W) %*% W) %*% t(W) %*% t(dat_centered)
       
       # For RUVg, we estimate W_test using only the housekeeping genes
       alpha_hk <- alpha[, which(rownames(dat) %in% available_hk), drop=FALSE]
-      dat_test_hk <- dat_test[available_hk, , drop=FALSE]
+      dat_test_hk_centered <- dat_test[available_hk, , drop=FALSE] - gene_means[available_hk]
       
-      # W_test = dat_test_hk' %*% alpha_hk' %*% (alpha_hk %*% alpha_hk')^-1
-      W_test <- t(dat_test_hk) %*% t(alpha_hk) %*% solve(alpha_hk %*% t(alpha_hk))
-      dat_test_corrected <- dat_test - t(W_test %*% alpha)
+      # Estimate W_test
+      W_test <- t(dat_test_hk_centered) %*% t(alpha_hk) %*% solve(alpha_hk %*% t(alpha_hk))
+      
+      # Correct test data and add means back
+      dat_test_centered <- dat_test - gene_means
+      dat_test_corrected <- dat_test_centered - t(W_test %*% alpha)
+      dat_test_corrected <- dat_test_corrected + gene_means
       
       cat("RUVg (RUVSeq) correction complete\n")
       
       return(list(dat_corrected = dat_corrected, dat_test_corrected = dat_test_corrected))
-
     } else if (method == "yugene") {
       cat(sprintf("[YUGENE ADJUSTMENT] Applying YuGene transformation\n"))
       dat_corrected <- adjust_yugene(dat, debug = FALSE)
@@ -1701,9 +1720,13 @@ main_analysis_function <- function() {
       return(list(dat_corrected = dat_corrected, dat_test_corrected = dat_test_corrected))
 
     } else if (method == "rankin") {
-      cat(sprintf("[RANK-IN ADJUSTMENT] Applying Rank-In SVD correction on combined data\n"))
+      cat(sprintf("[RANK-IN ADJUSTMENT] Applying Rank-In SVD projection (fitting on training only)\n"))
       combined_dat <- cbind(dat, dat_test)
-      combined_corrected <- adjust_rankin(combined_dat, debug = FALSE)
+      
+      # Correctly identify training indices for SVD projection to prevent data leakage
+      train_idx <- 1:ncol(dat)
+      
+      combined_corrected <- adjust_rankin(combined_dat, train_indices = train_idx, debug = FALSE)
       
       dat_corrected <- combined_corrected[, 1:ncol(dat), drop = FALSE]
       dat_test_corrected <- combined_corrected[, (ncol(dat) + 1):ncol(combined_corrected), drop = FALSE]

@@ -7,9 +7,23 @@ suppressMessages(suppressWarnings({
   required_packages <- c("glmnet", "SummarizedExperiment", "sva", "DESeq2", 
                         "ROCR", "ggplot2", "gridExtra", "reshape2", 
                         "dplyr", "purrr", "nnls", "batchelor",
-                        "argparse", "class", "xgboost", "sda")
+                        "argparse", "class", "xgboost", "sda", "reticulate", "COCONUT")
   sapply(required_packages, require, character.only=TRUE, quietly=TRUE)
 }))
+
+# Configure reticulate to use the pixi environment Python
+if (requireNamespace("reticulate", quietly = TRUE)) {
+  # Explicitly disable automatic virtualenv/conda env creation
+  Sys.setenv(RETICULATE_AUTOCREATE_VENV = "FALSE")
+  Sys.setenv(RETICULATE_MINICONDA_ENABLED = "FALSE")
+  
+  # Find the python in the current pixi environment
+  pixi_python <- file.path(getwd(), ".pixi/envs/default/bin/python")
+  if (file.exists(pixi_python)) {
+    reticulate::use_python(pixi_python, required = TRUE)
+  }
+}
+
 
 # ====================================================================
 # COMMAND-LINE ARGUMENT PARSING
@@ -31,7 +45,7 @@ parser$add_argument("-o", "--output", type = "character", required = TRUE,
 args <- parser$parse_args()
 
 # Parameter validation
-valid_adjusters <- c("unadjusted", "combat", "combat_sup")
+valid_adjusters <- c("unadjusted", "combat", "combat_sup", "rankin", "coconut")
 valid_classifiers <- c("rda", "logistic", "elnet", "elasticnet", "svm", "rf", "nnet", "knn", "xgboost", "shrinkageLDA")
 
 if (!args$adjuster %in% valid_adjusters) {
@@ -172,6 +186,81 @@ train_and_evaluate_classifier <- function(classifier_type, train_data, train_lab
     performance = perf_values
   ))
 }
+
+# Adjuster helper functions
+adjust_coconut <- function(matrix_, batch, group, debug = FALSE) {
+  if (debug) {
+    cat("DEBUG: Starting COCONUT harmonization.\n")
+    cat("DEBUG: matrix_ dimensions: ", nrow(matrix_), " x ", ncol(matrix_), "\n")
+    cat("DEBUG: Unique batches: ", length(unique(batch)), "\n")
+  }
+  
+  if (!requireNamespace("COCONUT", quietly = TRUE)) {
+    stop("Package 'COCONUT' is required but not installed.")
+  }
+  
+  gse_list <- list()
+  for (b in unique(batch)) {
+    idx <- which(batch == b)
+    disease_vec <- as.numeric(group[idx])
+    
+    pheno_df <- data.frame(
+      disease_state = disease_vec,
+      dummy = 1, # Add dummy column to prevent dimension dropping
+      row.names = colnames(matrix_[, idx])
+    )
+    
+    gse_list[[as.character(b)]] <- list(
+      pheno = pheno_df,
+      genes = matrix_[, idx, drop = FALSE]
+    )
+  }
+  
+  res <- COCONUT::COCONUT(GSEs = gse_list, control.0.col = "disease_state")
+  
+  result_matrix <- matrix(NA, nrow = nrow(matrix_), ncol = ncol(matrix_))
+  rownames(result_matrix) <- rownames(matrix_)
+  colnames(result_matrix) <- colnames(matrix_)
+  
+  for (b in names(res$COCONUTList)) {
+    disease_cols <- colnames(res$COCONUTList[[b]]$genes)
+    result_matrix[, disease_cols] <- as.matrix(res$COCONUTList[[b]]$genes)
+  }
+  for (b in names(res$controlList$GSEs)) {
+    control_cols <- colnames(res$controlList$GSEs[[b]]$genes)
+    result_matrix[, control_cols] <- as.matrix(res$controlList$GSEs[[b]]$genes)
+  }
+  
+  return(result_matrix)
+}
+
+adjust_rankin <- function(matrix_, n_svd = 1L, debug = FALSE) {
+  if (!requireNamespace("reticulate", quietly = TRUE)) {
+    stop("LIBRARY MISSING: 'reticulate' is required for Rank-In.")
+  }
+  
+  # Locate rankin.py
+  rankin_script <- "scripts/rankin.py"
+  if (!file.exists(rankin_script)) {
+    rankin_script <- "rankin.py"
+  }
+  if (!file.exists(rankin_script)) {
+    stop("CODE MISSING: Rank-In script (rankin.py) not found in scripts/ or current directory.")
+  }
+  
+  reticulate::source_python(rankin_script)
+  
+  # Pass matrix as a list of lists
+  result_list <- rank_in_from_r(unname(as.list(as.data.frame(t(matrix_)))), n_svd = as.integer(n_svd))
+  
+  # Reconstruct matrix (genes x samples)
+  result_matrix <- matrix(unlist(result_list), nrow = nrow(matrix_), ncol = ncol(matrix_))
+  rownames(result_matrix) <- rownames(matrix_)
+  colnames(result_matrix) <- colnames(matrix_)
+  
+  return(result_matrix)
+}
+
 
 # ====================================================================
 # MAIN ANALYSIS FUNCTION
@@ -330,7 +419,27 @@ main_class_imbalanced_analysis <- function() {
                              mod=NULL, ref.batch=ref_batch_id)
     
     dat_test_corrected <- combat_combined[, (ncol(dat_corrected) + 1):ncol(combat_combined)]
+    
+  } else if (adjuster == "rankin") {
+    cat("Applying Rank-In SVD correction on combined data\n")
+    combined_dat <- cbind(dat, dat_test)
+    combined_corrected <- adjust_rankin(combined_dat, debug = FALSE)
+    
+    dat_corrected <- combined_corrected[, 1:ncol(dat), drop = FALSE]
+    dat_test_corrected <- combined_corrected[, (ncol(dat) + 1):ncol(combined_corrected), drop = FALSE]
+    
+  } else if (adjuster == "coconut") {
+    cat("Applying COCONUT co-normalization\n")
+    comb_dat <- cbind(dat, dat_test)
+    comb_batch <- c(batch, rep(max(batch)+1, ncol(dat_test)))
+    comb_group <- c(group, group_test)
+    
+    comb_corrected <- adjust_coconut(comb_dat, comb_batch, comb_group, debug = FALSE)
+    
+    dat_corrected <- comb_corrected[, 1:ncol(dat), drop = FALSE]
+    dat_test_corrected <- comb_corrected[, (ncol(dat)+1):ncol(comb_corrected), drop = FALSE]
   }
+
   
   # ====================================================================
   # CLASSIFICATION

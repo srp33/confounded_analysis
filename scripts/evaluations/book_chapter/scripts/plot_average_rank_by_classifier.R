@@ -20,8 +20,8 @@ if (file.exists("scripts/adjuster_plot_utils.R")) {
 parser <- ArgumentParser(description = "Create MCC violin plot by classifier with adjuster means")
 parser$add_argument("-i", "--input", type = "character", required = TRUE, help = "Input CSV")
 parser$add_argument("-o", "--output", type = "character", required = TRUE, help = "Output PNG")
-parser$add_argument("--width", type = "double", default = 10)
-parser$add_argument("--height", type = "double", default = 13)
+parser$add_argument("--width", type = "double", default = 8)
+parser$add_argument("--height", type = "double", default = 14)
 parser$add_argument("--dpi", type = "integer", default = 300)
 parser$add_argument("--adjusters", type = "character", default = NULL, help = "Filter adjusters")
 parser$add_argument("--n-datasets", type = "character", default = "4", help = "Filter n_datasets")
@@ -102,14 +102,15 @@ data <- data %>% filter(!is.na(classifier_label))
 
 group_highlight_1 <- c("Within-Study CV")
 group_highlight_2 <- c("ComBat Sup.")
-group_aggregate_1 <- c("ComBat", "ComBat Mean", "NPN", "Rank Twice", "Naive")
+group_highlight_3 <- c("Coconut")
+group_aggregate_1 <- c("ReComBat", "CuBlock", "ComBat", "ComBat Mean", "NPN", "Rank Twice", "Naive")
 group_aggregate_2 <- c()
 
 # Individual colors for MNN family + Rank Features
 group_mnn      <- c("MNN")
 group_fastmnn  <- c("FastMNN")
-group_rank_feat <- c("Rank Features")
-group_log_only <- c("Log Only")
+group_rank_feat <- c("Rank Features", "YuGene", "Angel")
+group_log_only <- c("Log Only", "Shambhala2, RUVg", "RNAbc")
 
 all_adjusters <- levels(data$adjuster_label)
 palette_map <- character(length(all_adjusters))
@@ -122,6 +123,7 @@ names(palette_map) <- all_adjusters
 # Custom professional palette
 color_vermilion <- "#D55E00" # Strong Highlight
 color_blue      <- "#7c3bb4ff" # Secondary Highlight
+color_purple    <- "#bfa6d5ff" # Tertiary Highlight
 color_slate     <- "#acb1b7ff" # Muted Gray 
 color_mnn       <- "#4292C6" # Deeper Blue (MNN)
 color_fastmnn   <- "#6ab7e0ff" # Light-Medium Blue (FastMNN)

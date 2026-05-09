@@ -47,11 +47,11 @@ def _rank_and_weight(profile: np.ndarray) -> np.ndarray:
     bin_edges = np.array_split(order, N_GROUPS)
 
     weighted = np.empty(n, dtype=float)
+    current_cum_rank = 0.0
     for bin_indices in bin_edges:
         if len(bin_indices) == 0:
             continue
         bin_vals = profile[bin_indices]
-        bin_ranks = ranks[bin_indices]
 
         # Step 3: slope of raw intensities across the sorted bin positions
         x = np.arange(len(bin_indices), dtype=float)
@@ -62,14 +62,18 @@ def _rank_and_weight(profile: np.ndarray) -> np.ndarray:
         else:
             slope = 1.0  # single-gene bin: neutral weight
 
-        # Weight = rank * |slope| (slope encodes how "spread" this stratum is)
+        # Weight = local slope. To preserve order, we use a cumulative sum of weights.
         weight = abs(slope) if slope != 0 else 1e-8
-        weighted[bin_indices] = bin_ranks * weight
+        
+        # Each gene in the bin contributes 'weight' to the total value
+        for idx in bin_indices:
+            current_cum_rank += weight
+            weighted[idx] = current_cum_rank
 
     return weighted
 
 
-def rank_in(matrix: np.ndarray, n_svd: int = N_SVD) -> np.ndarray:
+def rank_in(matrix: np.ndarray, train_indices=None, n_svd: int = N_SVD) -> np.ndarray:
     """
     Apply the Rank-In algorithm to a gene-expression matrix.
 
@@ -93,22 +97,35 @@ def rank_in(matrix: np.ndarray, n_svd: int = N_SVD) -> np.ndarray:
         _rank_and_weight(matrix[:, j]) for j in range(n_samples)
     ])  # shape: (n_genes, n_samples)
 
-    # Step 4-5: SVD on the combined weighted-rank matrix, remove top batch PCs
-    # Center rows (genes) before SVD to preserve biological differences between genes
-    row_means = weighted.mean(axis=1, keepdims=True)
-    centered = weighted - row_means
+    # Step 4-5: SVD projection to remove top batch PCs
+    if train_indices is None:
+        train_indices = list(range(n_samples))
+    
+    # Fit SVD on training weighted ranks only to avoid data leakage
+    weighted_train = weighted[:, train_indices]
+    gene_means_train = weighted_train.mean(axis=1, keepdims=True)
+    centered_train = weighted_train - gene_means_train
 
-    U, S, Vt = np.linalg.svd(centered, full_matrices=False)
+    U, S, Vt = np.linalg.svd(centered_train, full_matrices=False)
 
-    # Reconstruct without the first n_svd components
-    S_reduced = S.copy()
-    S_reduced[:n_svd] = 0.0
-    corrected = U @ np.diag(S_reduced) @ Vt + row_means
+    # Project ALL data (train + test) into the training SVD space
+    # and remove the first n_svd components.
+    centered_all = weighted - gene_means_train
+    
+    if n_svd > 0:
+        U_k = U[:, :n_svd]
+        projection = U_k @ (U_k.T @ centered_all)
+        corrected_centered = centered_all - projection
+    else:
+        corrected_centered = centered_all
+
+    # Restore training gene means
+    corrected = corrected_centered + gene_means_train
 
     return corrected
 
 
-def rank_in_from_r(matrix_list, n_svd: int = N_SVD):
+def rank_in_from_r(matrix_list, train_indices=None, n_svd: int = N_SVD):
     """
     Entry point called from R via reticulate.
 
@@ -125,5 +142,10 @@ def rank_in_from_r(matrix_list, n_svd: int = N_SVD):
         Corrected matrix as a nested list for R to reconstruct.
     """
     mat = np.array(matrix_list, dtype=float)
-    result = rank_in(mat, n_svd=int(n_svd))
+    
+    if train_indices is not None:
+        # R indices are 1-based, numpy is 0-based
+        train_indices = [int(i) - 1 for i in train_indices]
+        
+    result = rank_in(mat, train_indices=train_indices, n_svd=int(n_svd))
     return result.tolist()

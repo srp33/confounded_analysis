@@ -1,0 +1,16 @@
+"adjuster","classifier","n_datasets","test_study","metric","value"
+"ruvg","xgboost",3,"GSE37250_SA","mxe",0.647131789478673
+"ruvg","xgboost",3,"GSE37250_SA","auc",0.785326086956522
+"ruvg","xgboost",3,"GSE37250_SA","rmse",0.4777637964556
+"ruvg","xgboost",3,"GSE37250_SA","f",0.666666666666667
+"ruvg","xgboost",3,"GSE37250_SA","err",0.48936170212766
+"ruvg","xgboost",3,"GSE37250_SA","acc",0.51063829787234
+"ruvg","xgboost",3,"GSE37250_SA","tp",45
+"ruvg","xgboost",3,"GSE37250_SA","fp",46
+"ruvg","xgboost",3,"GSE37250_SA","tn",2
+"ruvg","xgboost",3,"GSE37250_SA","fn",1
+"ruvg","xgboost",3,"GSE37250_SA","mcc",0.0566724278757254
+"ruvg","xgboost",3,"GSE37250_SA","precision",0.494505494505495
+"ruvg","xgboost",3,"GSE37250_SA","recall",0.978260869565217
+"ruvg","xgboost",3,"GSE37250_SA","specificity",0.0416666666666667
+"ruvg","xgboost",3,"GSE37250_SA","balanced_acc",0.509963768115942
