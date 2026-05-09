@@ -393,7 +393,6 @@ adjust_ranked_twice_with_batch_info <- function(matrix_, batch, debug = FALSE) {
 # ADDITIONAL ADJUSTMENT HELPER FUNCTIONS
 # ====================================================================
 
-# shambhala removed as requested. use shambhala2 instead.
 adjust_yugene <- function(matrix_, debug = FALSE) {
   if (debug) {
     cat("DEBUG: Executing YuGene transformation.\n")
@@ -1705,17 +1704,25 @@ main_analysis_function <- function() {
       ))
 
     } else if (method == "coconut") {
-      cat(sprintf("[COCONUT ADJUSTMENT] Applying COCONUT co-normalization\n"))
-      # Combine train and test for supervised co-normalization if needed, 
-      # or apply to train and then project test. COCONUT usually co-normalizes.
-      comb_dat <- cbind(dat, dat_test)
-      comb_batch <- c(batch, rep(max(batch)+1, ncol(dat_test)))
-      comb_group <- c(group, group_test)
+      cat(sprintf("[COCONUT ADJUSTMENT] Applying COCONUT co-normalization (Leakage-free: training-only fit, then ComBat projection)\n"))
       
-      comb_corrected <- adjust_coconut(comb_dat, comb_batch, comb_group, debug = FALSE)
+      # Step 1: Harmonize training data using COCONUT (supervised by training labels)
+      dat_corrected <- adjust_coconut(dat, batch, group, debug = FALSE)
       
-      dat_corrected <- comb_corrected[, 1:ncol(dat), drop = FALSE]
-      dat_test_corrected <- comb_corrected[, (ncol(dat)+1):ncol(comb_corrected), drop = FALSE]
+      # Step 2: Adjust test data to match corrected training distribution
+      # Treat entire corrected training set as reference batch
+      ref_batch_id <- 1
+      test_batch_id <- 2
+      combined_dat <- cbind(dat_corrected, dat_test)
+      combined_batch <- c(rep(ref_batch_id, ncol(dat_corrected)), 
+                         rep(test_batch_id, ncol(dat_test)))
+      
+      # Apply ComBat with training as reference (no mod matrix to avoid using test labels)
+      # This aligns the test data to the COCONUT-harmonized training space without leakage.
+      combat_combined <- ComBat(combined_dat, batch=combined_batch, 
+                               mod=NULL, ref.batch=ref_batch_id)
+      
+      dat_test_corrected <- combat_combined[, (ncol(dat_corrected) + 1):ncol(combat_combined)]
       
       return(list(dat_corrected = dat_corrected, dat_test_corrected = dat_test_corrected))
 

@@ -234,7 +234,7 @@ adjust_coconut <- function(matrix_, batch, group, debug = FALSE) {
   return(result_matrix)
 }
 
-adjust_rankin <- function(matrix_, n_svd = 1L, debug = FALSE) {
+adjust_rankin <- function(matrix_, n_svd = 1L, train_indices = NULL, debug = FALSE) {
   if (!requireNamespace("reticulate", quietly = TRUE)) {
     stop("LIBRARY MISSING: 'reticulate' is required for Rank-In.")
   }
@@ -250,11 +250,15 @@ adjust_rankin <- function(matrix_, n_svd = 1L, debug = FALSE) {
   
   reticulate::source_python(rankin_script)
   
-  # Pass matrix as a list of lists
-  result_list <- rank_in_from_r(unname(as.list(as.data.frame(t(matrix_)))), n_svd = as.integer(n_svd))
+  # Pass matrix and train_indices to Python (reticulate)
+  result_list <- rank_in_from_r(
+    unname(as.list(as.data.frame(t(matrix_)))), 
+    train_indices = train_indices,
+    n_svd = as.integer(n_svd)
+  )
   
-  # Reconstruct matrix (genes x samples)
-  result_matrix <- matrix(unlist(result_list), nrow = nrow(matrix_), ncol = ncol(matrix_))
+  # Reconstruct matrix (genes x samples) row-wise as it is returned as a list of gene vectors
+  result_matrix <- matrix(unlist(result_list), nrow = nrow(matrix_), ncol = ncol(matrix_), byrow = TRUE)
   rownames(result_matrix) <- rownames(matrix_)
   colnames(result_matrix) <- colnames(matrix_)
   
@@ -421,23 +425,37 @@ main_class_imbalanced_analysis <- function() {
     dat_test_corrected <- combat_combined[, (ncol(dat_corrected) + 1):ncol(combat_combined)]
     
   } else if (adjuster == "rankin") {
-    cat("Applying Rank-In SVD correction on combined data\n")
+    cat("Applying Rank-In SVD projection (fitting on training only to prevent leakage)\n")
     combined_dat <- cbind(dat, dat_test)
-    combined_corrected <- adjust_rankin(combined_dat, debug = FALSE)
+    
+    # Correctly identify training indices for SVD projection to prevent data leakage
+    train_idx <- 1:ncol(dat)
+    
+    combined_corrected <- adjust_rankin(combined_dat, train_indices = train_idx, debug = FALSE)
     
     dat_corrected <- combined_corrected[, 1:ncol(dat), drop = FALSE]
     dat_test_corrected <- combined_corrected[, (ncol(dat) + 1):ncol(combined_corrected), drop = FALSE]
     
   } else if (adjuster == "coconut") {
-    cat("Applying COCONUT co-normalization\n")
-    comb_dat <- cbind(dat, dat_test)
-    comb_batch <- c(batch, rep(max(batch)+1, ncol(dat_test)))
-    comb_group <- c(group, group_test)
+    cat("Applying COCONUT co-normalization (Leakage-free: training-only fit, then ComBat projection)\n")
     
-    comb_corrected <- adjust_coconut(comb_dat, comb_batch, comb_group, debug = FALSE)
+    # Step 1: Harmonize training data using COCONUT (supervised by training labels)
+    dat_corrected <- adjust_coconut(dat, batch, group, debug = FALSE)
     
-    dat_corrected <- comb_corrected[, 1:ncol(dat), drop = FALSE]
-    dat_test_corrected <- comb_corrected[, (ncol(dat)+1):ncol(comb_corrected), drop = FALSE]
+    # Step 2: Adjust test data to match corrected training distribution
+    # Treat entire corrected training set as reference batch
+    ref_batch_id <- 1
+    test_batch_id <- 2
+    combined_dat <- cbind(dat_corrected, dat_test)
+    combined_batch <- c(rep(ref_batch_id, ncol(dat_corrected)), 
+                       rep(test_batch_id, ncol(dat_test)))
+    
+    # Apply ComBat with training as reference (no mod matrix to avoid using test labels)
+    # This aligns the test data to the COCONUT-harmonized training space without leakage.
+    combat_combined <- ComBat(combined_dat, batch=combined_batch, 
+                             mod=NULL, ref.batch=ref_batch_id)
+    
+    dat_test_corrected <- combat_combined[, (ncol(dat_corrected) + 1):ncol(combat_combined)]
   }
 
   
