@@ -148,10 +148,9 @@ outlier_stats <- classifier_stats %>%
 adjuster_order <- ranked_data %>%
   group_by(adjuster_label) %>%
   summarise(
-    med = median(rank, na.rm = TRUE),
     hl_avg = calc_hodges_lehmann(rank)
   ) %>%
-  arrange(desc(med), desc(hl_avg)) %>% 
+  arrange(desc(hl_avg)) %>% 
   pull(adjuster_label)
 
 ranked_data$adjuster_label <- factor(ranked_data$adjuster_label, levels = adjuster_order)
@@ -217,7 +216,7 @@ p <- ggplot(mapping = aes(y = adjuster_label)) +
   # Scales and theme
   scale_alpha_continuous(range = c(0.4, 1.0), guide = "none") +
   scale_x_continuous(breaks = seq(1, max_rank, by = 1), expand = expansion(add = 0.5)) +
-  scale_y_discrete(expand = expansion(add = 1.0)) +
+  scale_y_discrete(expand = expansion(add = 0.6)) +
   coord_cartesian(xlim = c(1, max_rank), clip = "off") +
   
   labs(
@@ -236,7 +235,8 @@ p <- ggplot(mapping = aes(y = adjuster_label)) +
     legend.position = "right",
     legend.title = element_text(),
     plot.title = element_text(size = 18, margin = margin(b = 5)),
-    plot.subtitle = element_text(color = "grey40", size = 11, margin = margin(b = 15))
+    plot.subtitle = element_text(color = "grey40", size = 11, margin = margin(b = 15)),
+    plot.margin = margin(2, 2, 2, 2, "mm")
   )
 
 # Save output

@@ -55,7 +55,16 @@ rule all:
         class_imbalance_trend_plot=OUTPUT_FOLDER + "/class_imbalance_trend.png" if config.get("class_imbalance_analysis", {}).get("enabled", False) else [],
         sample_counts=OUTPUT_FOLDER + "/sample_counts.csv",
         gapr_heatmap=OUTPUT_FOLDER + "/gapr_heatmap.png",
-        adjuster_similarity=OUTPUT_FOLDER + "/adjuster_similarity.png"
+        adjuster_similarity=OUTPUT_FOLDER + "/adjuster_similarity.png",
+        adjuster_recommendation=OUTPUT_FOLDER + "/adjuster_recommendation.png",
+        schematic_matrix=OUTPUT_FOLDER + "/schematic_matrix.png",
+        pca_demonstration=OUTPUT_FOLDER + "/pca_demonstration.png",
+        sa_uk_adjusted=expand(
+            OUTPUT_FOLDER + "/adjusted_data/SA_UK/{adjuster}_target.csv",
+            adjuster=config["adjusters"]
+        )
+
+
 
 
 
@@ -191,7 +200,6 @@ rule make_gapr_heatmap:
         """
         Rscript {input.script} -i {input.data} -o {output} --adjusters {params.adjusters} &> {log}
         """
-
 # Step 1.3g: Adjuster Similarity Heatmap
 rule make_adjuster_similarity:
     input:
@@ -211,6 +219,66 @@ rule make_adjuster_similarity:
     shell:
         """
         Rscript {input.script} -i {input.data} -o {output} --adjusters {params.adjusters} &> {log}
+        """
+
+
+# Step 1.3h: Adjuster Recommendation Plot (Faceted by Classifier)
+rule make_adjuster_recommendation:
+    input:
+        data=OUTPUT_FOLDER + "/adjusters_on_classifiers.csv",
+        script=SCRIPTS_FOLDER + "/plot_adjuster_recommendation.R",
+        utils=SCRIPTS_FOLDER + "/adjuster_plot_utils.R"
+    output:
+        OUTPUT_FOLDER + "/adjuster_recommendation.png"
+    log:
+        OUTPUT_FOLDER + "/logs/plot_adjuster_recommendation.log"
+    threads: 1
+    resources:
+        mem_mb=4000,
+        runtime=10
+    params:
+        adjusters=",".join(config.get("viz_adjusters", config["adjusters"])),
+        top_n=10
+    shell:
+        """
+        Rscript {input.script} -i {input.data} -o {output} --adjusters {params.adjusters} --top-n {params.top_n} &> {log}
+        """
+
+# Step 1.3i: Schematic Data Matrix (Presentation Diagram)
+rule make_schematic_matrix:
+    input:
+        data=DATA_FOLDER + "/TB_real_data.RData",
+        script=SCRIPTS_FOLDER + "/plot_schematic_matrix.R"
+    output:
+        OUTPUT_FOLDER + "/schematic_matrix.png"
+    log:
+        OUTPUT_FOLDER + "/logs/plot_schematic_matrix.log"
+    threads: 1
+    resources:
+        mem_mb=2000,
+        runtime=5
+    shell:
+        """
+        Rscript {input.script} -i {input.data} -o {output} &> {log}
+        """
+
+
+# Step 1.3j: PCA Demonstration (Before vs After)
+rule make_pca_demonstration:
+    input:
+        data=DATA_FOLDER + "/TB_real_data.RData",
+        script=SCRIPTS_FOLDER + "/plot_pca_demonstration.R"
+    output:
+        OUTPUT_FOLDER + "/pca_demonstration.png"
+    log:
+        OUTPUT_FOLDER + "/logs/plot_pca_demonstration.log"
+    threads: 1
+    resources:
+        mem_mb=4000,
+        runtime=10
+    shell:
+        """
+        Rscript {input.script} -i {input.data} -o {output} &> {log}
         """
 
 
@@ -426,6 +494,29 @@ rule visualize_batch_adjustment:
             --test-study {wildcards.test_study} \
             --output-dir {params.output_dir} \
             --reduce 0 \
+            &> {log}
+        """
+
+
+# Custom pipeline for South Africa vs UK batch adjustment and target datasets
+rule adjust_target_data_SA_UK:
+    input:
+        data=DATA_FOLDER + "/TB_real_data.RData",
+        script=SCRIPTS_FOLDER + "/adjust_target_data_SA_UK.R",
+        helper=SCRIPTS_FOLDER + "/helper.R"
+    output:
+        adjusted_target=OUTPUT_FOLDER + "/adjusted_data/SA_UK/{adjuster}_target.csv"
+    log:
+        OUTPUT_FOLDER + "/logs/adjust_target_data_SA_UK/{adjuster}.log"
+    threads: 1
+    resources:
+        mem_mb=4000,
+        runtime=10
+    shell:
+        """
+        Rscript {input.script} \
+            --adjuster {wildcards.adjuster} \
+            --output-data {output.adjusted_target} \
             &> {log}
         """
 

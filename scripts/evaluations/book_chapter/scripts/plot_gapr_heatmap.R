@@ -1,7 +1,7 @@
 #!/usr/bin/env Rscript
 
 # plot_gapr_heatmap.R
-# Generate a hybrid GAPR/ComplexHeatmap for adjuster-classifier rank differences.
+# Generate a hybrid GAPR/ComplexHeatmap for adjuster-classifier performance differences.
 
 suppressPackageStartupMessages({
   library(argparse)
@@ -29,7 +29,10 @@ parser <- ArgumentParser(description = "Generate hybrid GAPR/ComplexHeatmap")
 parser$add_argument("-i", "--input", type = "character", required = TRUE,
                     help = "Input CSV file with adjuster results")
 parser$add_argument("-o", "--output", type = "character", required = TRUE,
-                    help = "Output serialized R2E file (.rds)")
+                    help = "Output PNG file")
+parser$add_argument("--width", type = "double", default = 8)
+parser$add_argument("--height", type = "double", default = 4)
+parser$add_argument("--dpi", type = "integer", default = 300)
 parser$add_argument("--adjusters", type = "character", default = NULL,
                     help = "Comma-separated list of adjusters to include")
 
@@ -64,10 +67,10 @@ raw_data <- raw_data %>%
     !classifier %in% c("logistic")
   )
 
-# Calculate ranks per study
-ranked_data <- raw_data %>%
+# Prepare performance data per study
+mcc_data <- raw_data %>%
   mutate(
-    rank = rank(-value, ties.method = "average"),
+    mcc = value, 
     .by = c(classifier, n_datasets, test_study)
   ) %>%
   mutate(
@@ -79,29 +82,29 @@ ranked_data <- raw_data %>%
   )
 
 # Aggregate stats per classifier-adjuster pair
-classifier_stats <- ranked_data %>%
+classifier_stats <- mcc_data %>%
   mutate(classifier_label = ifelse(classifier %in% names(classifier_labels_map), 
                                    classifier_labels_map[classifier], 
                                    classifier)) %>%
   summarise(
-    avg_rank = calc_hodges_lehmann(rank),
+    avg_mcc = mean(mcc),
     .by = c(classifier_label, adjuster_label)
   )
 
-# Calculate group centers per adjuster
-group_centers <- ranked_data %>%
+# Calculate group medians per adjuster
+group_medians <- mcc_data %>%
   summarise(
-    center = calc_hodges_lehmann(rank),
+    center = calc_hodges_lehmann(mcc),
     .by = adjuster_label
   )
 
-# Calculate difference: avg_rank - center
+# Calculate difference: avg_mcc - center
 heatmap_data <- classifier_stats %>%
-  left_join(group_centers, by = "adjuster_label") %>%
-  mutate(rank_diff = avg_rank - center) %>%
-  mutate(rank_diff = ifelse(is.na(rank_diff), 0, rank_diff)) %>%
-  select(adjuster_label, classifier_label, rank_diff) %>%
-  pivot_wider(names_from = classifier_label, values_from = rank_diff)
+  left_join(group_medians, by = "adjuster_label") %>%
+  mutate(mcc_diff = avg_mcc - center) %>%
+  mutate(mcc_diff = ifelse(is.na(mcc_diff), 0, mcc_diff)) %>%
+  select(adjuster_label, classifier_label, mcc_diff) %>%
+  pivot_wider(names_from = classifier_label, values_from = mcc_diff)
 
 # Convert to matrix
 mat <- as.matrix(heatmap_data[,-1])
@@ -122,7 +125,7 @@ gap_result <- GAPR::GAP(
   data = mat_df, 
   row.name = rownames(mat),
   row.prox = 'euclidean', 
-  col.prox = 'pearson',
+  col.prox = 'euclidean',
   row.order = 'average', 
   col.order = 'average',
   row.flip = 'r2e', 
@@ -153,7 +156,7 @@ row_dend <- dendextend::rotate(row_dend, gap_result$row_names)
 max_val <- max(abs(mat), na.rm = TRUE)
 col_fun_main <- circlize::colorRamp2(
   breaks = c(-max_val, 0, max_val),
-  colors = c("#4575B4", "#FFFFBF", "#D73027")
+  colors = c("#D73027", "#ffffbf70", "#4575B4")
 )
 
 col_fun_row_prox <- circlize::colorRamp2(
@@ -164,27 +167,33 @@ col_fun_row_prox <- circlize::colorRamp2(
 # Draw row similarity matrix (1st on left)
 ht_row_prox <- Heatmap(
   unordered_row_prox,
-  name = "Row Proximity",
+  name = "Adjuster Distance",
   col = col_fun_row_prox,
   cluster_rows = row_dend,       
   cluster_columns = row_dend,    
+  row_order = gap_result$row_order, 
+  column_order = gap_result$row_order, 
   show_row_dend = FALSE,         
   show_column_dend = TRUE,       # Put dendrogram on top
   column_dend_side = "top",
   column_dend_height = unit(2, "cm"),
   show_row_names = TRUE,         # Put row names on far left
   row_names_side = "left",
-  row_names_gp = gpar(fontsize = 12),
+  row_names_gp = gpar(fontsize = 11.2, fontfamily = "sans"),
   show_column_names = FALSE,
-  border = TRUE,
-  width = unit(8, "cm"),         # 2:1 ratio width
-  height = unit(8, "cm")
+  border = FALSE,
+  width = unit(2, "null"),         # 2:1 ratio width
+  height = unit(1, "null"),
+  heatmap_legend_param = list(
+    title_gp = gpar(fontsize = 11.2, fontfamily = "sans"),
+    labels_gp = gpar(fontsize = 11.2, fontfamily = "sans")
+  )
 )
 
 # Draw main matrix (2nd on right)
 ht_main <- Heatmap(
   mat,
-  name = "Rank Diff",
+  name = "MCC Deviation",
   col = col_fun_main,
   cluster_rows = row_dend,       # Maintain alignment with left matrix
   cluster_columns = FALSE,                
@@ -193,15 +202,19 @@ ht_main <- Heatmap(
   show_column_names = TRUE,
   column_names_side = "top",
   column_names_rot = 90,
-  column_names_gp = gpar(fontsize = 12),
-  border = TRUE,
-  width = unit(4, "cm"),         # Skinny width (half of similarity matrix)
-  height = unit(8, "cm")
+  column_names_gp = gpar(fontsize = 11.2, fontfamily = "sans"),
+  border = FALSE,
+  width = unit(1, "null"),         # Skinny width (half of similarity matrix)
+  height = unit(1, "null"),
+  heatmap_legend_param = list(
+    title_gp = gpar(fontsize = 11.2, fontfamily = "sans"),
+    labels_gp = gpar(fontsize = 11.2, fontfamily = "sans")
+  )
 )
 
 # Render plot to file
-png(filename = args$output, width = 3600, height = 2400, res = 300)
-draw(ht_row_prox + ht_main, ht_gap = unit(5, "mm"))
+png(filename = args$output, width = args$width, height = args$height, units = "in", res = args$dpi, bg = "white")
+draw(ht_row_prox + ht_main, ht_gap = unit(5, "mm"), padding = unit(c(2, 2, 2, 2), "mm"))
 dev.off()
 
 cat("Saved Custom Heatmap PNG to:", args$output, "\n")
