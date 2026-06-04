@@ -24,8 +24,8 @@ parser$add_argument("-i", "--input", type = "character", required = TRUE,
                     help = "Input CSV file with adjuster results")
 parser$add_argument("-o", "--output", type = "character", required = TRUE,
                     help = "Output PNG file")
-parser$add_argument("--width", type = "double", default = 14)
-parser$add_argument("--height", type = "double", default = 10)
+parser$add_argument("--width", type = "double", default = 15)
+parser$add_argument("--height", type = "double", default = 7.5)
 parser$add_argument("--dpi", type = "integer", default = 300)
 parser$add_argument("--adjusters", type = "character", default = NULL,
                     help = "Comma-separated list of adjusters to include")
@@ -169,10 +169,11 @@ p <- ggplot(plot_data, aes(x = mcc_delta, y = facet_item)) +
   ) +
 
   # Faceting
-  facet_wrap(~classifier_label, scales = "free_y", ncol = 2) +
+  facet_wrap(~classifier_label, scales = "free_y", ncol = 3) +
 
   # Scales and theme
   scale_y_discrete(labels = function(x) gsub(".*___", "", x)) +
+  scale_x_reverse() +
   
   labs(
     title = NULL,

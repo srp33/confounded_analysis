@@ -10,7 +10,7 @@ scripts_folder: "scripts"
 
 batch_effect_variances: [1, 3, 5]
 batch_effect_means: [0.1, 3, 5, 10]
-num_datasets: [3, 4, 5, 6]
+num_datasets: [2, 3, 4, 5]
 
 classifiers: 
   - "elasticnet"
@@ -42,6 +42,7 @@ adjusters:
   - "coconut"
   - "rankin"
   - "recombat"
+  - "recombat_sup"
 
 # Subset of adjusters to visualize (within_study_cv is always included as baseline)
 viz_adjusters:
@@ -65,6 +66,7 @@ viz_adjusters:
   - "coconut"
   - "rankin"
   - "recombat"
+  - "recombat_sup"
 
 split_seed_start: 42
 split_seed_count: 200
@@ -73,12 +75,22 @@ split_seed_count: 200
 # Class imbalance analysis configuration
 class_imbalance_analysis:
   enabled: true
+  # Classifiers to use for class imbalance analysis (subset of top-level classifiers)
+  classifiers:
+    - "xgboost"
+    - "elasticnet"
+
   # Adjusters to test across class imbalance levels
   adjusters:
     - "unadjusted"
     - "combat"        # unsupervised
     - "combat_sup"    # supervised
     - "coconut"       # supervised (uses test labels)
+    - "naive"
+    - "rank_twice"
+    - "recombat"      # elastic net variant
+    - "recombat_sup"  # elastic net variant, supervised
+    - "rankin"
   # Random seed for reproducible sampling
   seed: 123
   # Imbalance levels to test (as proportions of active TB in high-imbalance training set).

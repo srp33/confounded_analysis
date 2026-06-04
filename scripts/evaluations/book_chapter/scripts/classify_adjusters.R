@@ -40,7 +40,7 @@ if (requireNamespace("reticulate", quietly = TRUE)) {
 parser <- ArgumentParser(description = "Execute single adjuster comparison job for batch correction analysis")
 
 parser$add_argument("--adjuster", type = "character", required = TRUE,
-                   help = "Batch correction method: unadjusted, naive, rank_samples, rank_twice, npn, combat, combat_mean, combat_sup, mnn, fast_mnn, ruvg, yugene, cublock, angel, tdm, rnabc, shambhala2, coconut, or rankin")
+                   help = "Batch correction method: unadjusted, naive, rank_samples, rank_twice, npn, combat, combat_mean, combat_sup, mnn, fast_mnn, ruvg, yugene, cublock, angel, tdm, rnabc, shambhala2, coconut, rankin, recombat, or recombat_sup")
 parser$add_argument("--classifier", type = "character", required = TRUE,
                    help = "Classifier type: rda, elnet, elasticnet, svm, rf, nnet, knn, xgboost, or shrinkageLDA")
 parser$add_argument("--num-datasets", type = "integer", required = TRUE,
@@ -61,7 +61,7 @@ if (!exists("testing_mode")) {
 # Arguments are automatically validated as required by argparse
 
 # Parameter validation
-valid_adjusters <- c("unadjusted", "naive", "rank_samples", "rank_twice", "npn", "combat", "combat_mean", "combat_sup", "mnn", "fast_mnn", "ruvg", "yugene", "cublock", "angel", "tdm", "rnabc", "shambhala2", "coconut", "rankin", "recombat")
+valid_adjusters <- c("unadjusted", "naive", "rank_samples", "rank_twice", "npn", "combat", "combat_mean", "combat_sup", "mnn", "fast_mnn", "ruvg", "ruvr", "yugene", "cublock", "angel", "tdm", "rnabc", "shambhala2", "coconut", "rankin", "recombat", "recombat_sup")
 valid_classifiers <- c("rda", "elnet", "elasticnet", "svm", "rf", "nnet", "knn", "xgboost", "shrinkageLDA")
 valid_num_datasets <- c(3, 4, 5, 6)
 
@@ -722,6 +722,36 @@ adjust_recombat <- function(matrix_, batch, debug = FALSE) {
     cat("DEBUG: reComBat native execution complete. Max val: ", max(result_matrix, na.rm=TRUE), "\n")
   }
   
+  return(result_matrix)
+}
+
+adjust_recombat_sup <- function(matrix_, batch, group, debug = FALSE) {
+  if (debug) {
+    cat("DEBUG: Starting supervised reComBat via reticulate.\n")
+    cat("DEBUG: matrix_ dimensions: ", nrow(matrix_), " x ", ncol(matrix_), "\n")
+    cat("DEBUG: Unique batches: ", length(unique(batch)), "\n")
+  }
+
+  if (!requireNamespace("reticulate", quietly = TRUE)) {
+    stop("Package 'reticulate' is required but not installed.")
+  }
+
+  data_t <- t(matrix_)
+  pd <- reticulate::import("pandas", convert = FALSE)
+  recombat_pkg <- reticulate::import("reComBat", convert = FALSE)
+  data_pd <- pd$DataFrame(data_t)
+  batch_pd <- pd$Series(batch)
+  X_pd <- pd$DataFrame(list(disease = as.integer(group)))
+  combat_model <- recombat_pkg$reComBat(parametric = TRUE, model = "elastic_net")
+  res_pd <- combat_model$fit_transform(data_pd, batch_pd, X = X_pd)
+  res_matrix_t <- reticulate::py_to_r(res_pd)
+  result_matrix <- t(as.matrix(res_matrix_t))
+  rownames(result_matrix) <- rownames(matrix_)
+  colnames(result_matrix) <- colnames(matrix_)
+
+  if (debug) {
+    cat("DEBUG: supervised reComBat complete. Max val: ", max(result_matrix, na.rm=TRUE), "\n")
+  }
   return(result_matrix)
 }
 
@@ -1698,6 +1728,24 @@ main_analysis_function <- function() {
                                          classifier, num_datasets, test_study))
       save_correction_diagnostics("recombat", dat, dat_corrected, rownames(dat), diagnostic_file)
       
+      return(list(
+        dat_corrected = dat_corrected,
+        dat_test_corrected = dat_test_corrected
+      ))
+
+    } else if (method == "recombat_sup") {
+      cat(sprintf("[RECOMBAT_SUP ADJUSTMENT] Applying supervised regularized empirical Bayes via Python\n"))
+
+      # Step 1: supervised reComBat on training data (group labels protect biological signal)
+      dat_corrected <- adjust_recombat_sup(dat, batch, group, debug = FALSE)
+
+      # Step 2: align test data to corrected training space (unsupervised, no leakage)
+      combined_dat <- cbind(dat_corrected, dat_test)
+      combined_batch <- c(rep(1L, ncol(dat_corrected)), rep(2L, ncol(dat_test)))
+      combined_corrected <- adjust_recombat(combined_dat, combined_batch, debug = FALSE)
+      dat_corrected <- combined_corrected[, 1:ncol(dat), drop = FALSE]
+      dat_test_corrected <- combined_corrected[, (ncol(dat) + 1):ncol(combined_corrected), drop = FALSE]
+
       return(list(
         dat_corrected = dat_corrected,
         dat_test_corrected = dat_test_corrected

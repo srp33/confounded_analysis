@@ -40,8 +40,8 @@ print(head(training_pairs_summary, 20))
 cat("Number of unique training pairs:", n_distinct(data$training_pair), "\n")
 cat("Number of unique test datasets:", n_distinct(data$test_dataset), "\n")
 
-# Filter to target adjusters
-target_adjusters <- c("unadjusted", "combat", "combat_sup", "coconut")
+# Filter to target adjusters (all adjusters present in data)
+target_adjusters <- unique(data$adjuster)
 data_filtered <- data %>%
   filter(adjuster %in% target_adjusters, classifier != "knn")
 
@@ -132,17 +132,43 @@ plot_data <- ranks_averaged_over_classifiers %>%
 cat("  Final plot data:", nrow(plot_data), "points\n")
 
 # Create adjuster labels for plotting
+adjuster_label_map <- c(
+  "unadjusted"   = "Unadjusted",
+  "naive"        = "Naive",
+  "rank_twice"   = "RankTwice",
+  "combat"       = "ComBat (Unsupervised)",
+  "combat_sup"   = "ComBat (Supervised)",
+  "coconut"      = "COCONUT (Supervised)",
+  "recombat"     = "reComBat (Unsupervised)",
+  "recombat_sup" = "reComBat (Supervised)",
+  "rankin"       = "Rank-In"
+)
+
+adjuster_level_order <- c(
+  "Unadjusted", "Naive", "RankTwice",
+  "ComBat (Unsupervised)", "ComBat (Supervised)",
+  "COCONUT (Supervised)",
+  "reComBat (Unsupervised)", "reComBat (Supervised)",
+  "Rank-In"
+)
+
+adjuster_colors <- c(
+  "Unadjusted"             = "#E31A1C",
+  "Naive"                  = "#999999",
+  "RankTwice"              = "#6A3D9A",
+  "ComBat (Unsupervised)"  = "#1F78B4",
+  "ComBat (Supervised)"    = "#33A02C",
+  "COCONUT (Supervised)"   = "#FF7F00",
+  "reComBat (Unsupervised)"= "#A6CEE3",
+  "reComBat (Supervised)"  = "#2CA25F",
+  "Rank-In"                = "#B15928"
+)
+
 plot_data <- plot_data %>%
   mutate(
-    adjuster_label = case_when(
-      adjuster == "unadjusted" ~ "Unadjusted",
-      adjuster == "combat" ~ "ComBat (Unsupervised)",
-      adjuster == "combat_sup" ~ "ComBat (Supervised)",
-      adjuster == "coconut" ~ "COCONUT (Supervised)",
-      TRUE ~ adjuster
-    ),
-    adjuster_label = factor(adjuster_label, 
-                           levels = c("Unadjusted", "ComBat (Unsupervised)", "ComBat (Supervised)", "COCONUT (Supervised)")),
+    adjuster_label = adjuster_label_map[adjuster],
+    adjuster_label = factor(adjuster_label,
+                            levels = adjuster_level_order[adjuster_level_order %in% adjuster_label]),
     imbalance_pct_num = imbalance_pct * 100
   )
 
@@ -164,24 +190,8 @@ p <- ggplot(plot_data, aes(x = imbalance_pct_num, y = mean_rank, color = adjuste
     breaks = sort(unique(plot_data$imbalance_pct_num), decreasing = TRUE),
     labels = paste0(sort(unique(plot_data$imbalance_pct_num), decreasing = TRUE), "%")
   ) +
-  scale_color_manual(
-    values = c(
-      "Unadjusted" = "#E31A1C",
-      "ComBat (Unsupervised)" = "#1F78B4",
-      "ComBat (Supervised)" = "#33A02C",
-      "COCONUT (Supervised)" = "#FF7F00"
-    ),
-    name = "Batch Adjuster"
-  ) +
-  scale_fill_manual(
-    values = c(
-      "Unadjusted" = "#E31A1C",
-      "ComBat (Unsupervised)" = "#1F78B4",
-      "ComBat (Supervised)" = "#33A02C",
-      "COCONUT (Supervised)" = "#FF7F00"
-    ),
-    name = "Batch Adjuster"
-  ) +
+  scale_color_manual(values = adjuster_colors, name = "Batch Adjuster") +
+  scale_fill_manual(values = adjuster_colors, name = "Batch Adjuster") +
   labs(
     x = "Class Imbalance Level (% Active TB in High-Imbalance Training Set)",
     y = "Average Performance Rank"

@@ -31,8 +31,24 @@ wildcard_constraints:
 ALL_STUDIES = ["GSE37250_SA", "USA", "India", "GSE37250_M", "Africa", "GSE39941_M"]
 
 # Helper function to get valid test studies for a given n_datasets
+# n = number of TRAINING studies (test study is excluded from training)
+# Any study can be test for any n < len(ALL_STUDIES)
 def get_test_studies_for_n(n):
-    return ALL_STUDIES[:n]
+    return ALL_STUDIES  # All studies valid as test; pipeline excludes test from step-1 training
+
+# Helper to generate all adjusted data combinations for specified adjusters
+def get_all_adjusted_data_combinations():
+    """Generate all adjusted data files for combat & combat_sup × n_datasets × test_study combinations"""
+    # Only generate adjusted data for ComBat and ComBat supervised for investigation
+    focus_adjusters = ["combat", "combat_sup"]
+    combinations = []
+    for adjuster in focus_adjusters:
+        for n in config["num_datasets"]:
+            for test_study in get_test_studies_for_n(n):
+                combinations.append(
+                    f"{OUTPUT_FOLDER}/adjusted_data/all_scenarios/{adjuster}_n{n}_test{test_study}_target.csv"
+                )
+    return combinations
 
 # Generate all valid combinations
 VIZ_TARGETS = []
@@ -49,6 +65,7 @@ rule all:
         adjuster_relative_agg=OUTPUT_FOLDER + "/adjusters_on_classifiers_relative.png",
         avg_rank_study=OUTPUT_FOLDER + "/average_rank_by_classifier.png",
         mcc_rank_by_adjuster=OUTPUT_FOLDER + "/mcc_rank_by_adjuster.png",
+        mcc_rank_by_adjuster_wide=OUTPUT_FOLDER + "/mcc_rank_by_adjuster_wide.png",
         mean_over_classifiers=OUTPUT_FOLDER + "/mean_over_classifiers.png",
         within_study_baseline=OUTPUT_FOLDER + "/within_study_baseline.csv",
         class_imbalance_results=OUTPUT_FOLDER + "/class_imbalanced_results.csv" if config.get("class_imbalance_analysis", {}).get("enabled", False) else [],
@@ -62,7 +79,8 @@ rule all:
         sa_uk_adjusted=expand(
             OUTPUT_FOLDER + "/adjusted_data/SA_UK/{adjuster}_target.csv",
             adjuster=config["adjusters"]
-        )
+        ),
+        all_adjusted=get_all_adjusted_data_combinations()
 
 
 
@@ -144,7 +162,8 @@ rule make_mcc_rank_by_adjuster:
         script=SCRIPTS_FOLDER + "/plot_mcc_rank_by_adjuster.R",
         utils=SCRIPTS_FOLDER + "/adjuster_plot_utils.R"
     output:
-        OUTPUT_FOLDER + "/mcc_rank_by_adjuster.png"
+        skinny=OUTPUT_FOLDER + "/mcc_rank_by_adjuster.png",
+        wide=OUTPUT_FOLDER + "/mcc_rank_by_adjuster_wide.png"
     log:
         OUTPUT_FOLDER + "/logs/plot_mcc_rank_by_adjuster.log"
     threads: 1
@@ -156,7 +175,8 @@ rule make_mcc_rank_by_adjuster:
         n_datasets="all"
     shell:
         """
-        Rscript {input.script} -i {input.data} -o {output} --adjusters {params.adjusters} --n-datasets {params.n_datasets} &> {log}
+        Rscript {input.script} -i {input.data} -o {output.skinny} --adjusters {params.adjusters} --n-datasets {params.n_datasets} &> {log}
+        Rscript {input.script} -i {input.data} -o {output.wide} --adjusters {params.adjusters} --n-datasets {params.n_datasets} --width 8 --height 7 &>> {log}
         """
 
 # Step 1.3e: Mean performance gap averaged over classifiers
@@ -336,10 +356,6 @@ def get_class_imbalance_scenario_names():
 
 # Pre-compute scenario names once (purely from config, no file reads)
 CLASS_IMBALANCE_SCENARIOS = get_class_imbalance_scenario_names()
-
-# Helper to get all expected RData files
-def get_class_imbalance_data_files():
-    return [f"{DATA_FOLDER}/class_imbalanced/{s}.RData" for s in CLASS_IMBALANCE_SCENARIOS]
 
 # Step 1.2: Aggregate all individual adjuster results (including within-study CV baseline)
 rule aggregate_adjusters:
@@ -521,6 +537,32 @@ rule adjust_target_data_SA_UK:
         """
 
 
+# Save adjusted data for all scenarios (all n_datasets and test_study combinations)
+rule adjust_target_data_all_scenarios:
+    input:
+        data=DATA_FOLDER + "/TB_real_data.RData",
+        script=SCRIPTS_FOLDER + "/adjust_target_data_SA_UK.R",
+        helper=SCRIPTS_FOLDER + "/helper.R"
+    output:
+        adjusted_target=OUTPUT_FOLDER + "/adjusted_data/all_scenarios/{adjuster}_n{n_datasets}_test{test_study}_target.csv"
+    log:
+        OUTPUT_FOLDER + "/logs/adjust_target_data_all_scenarios/{adjuster}_n{n_datasets}_test{test_study}.log"
+    priority: 100
+    threads: 1
+    resources:
+        mem_mb=4000,
+        runtime=10
+    shell:
+        """
+        Rscript {input.script} \
+            --adjuster {wildcards.adjuster} \
+            --num-datasets {wildcards.n_datasets} \
+            --test-study {wildcards.test_study} \
+            --output-data {output.adjusted_target} \
+            &> {log}
+        """
+
+
 # Step 2.2: Create comparison grids
 rule create_visualization_grid:
     input:
@@ -558,57 +600,28 @@ rule create_visualization_grid:
 # Helper to generate all valid class imbalance combinations
 def get_class_imbalance_combinations():
     """Generate all valid class imbalance adjuster × classifier × scenario combinations"""
-    if not config.get("class_imbalance_analysis", {}).get("enabled", False):
+    ci_config = config.get("class_imbalance_analysis", {})
+    if not ci_config.get("enabled", False):
         return []
-    
-    class_imbalance_adjusters = config.get("class_imbalance_analysis", {}).get("adjusters", ["unadjusted", "combat", "combat_sup"])
-    
+
+    class_imbalance_adjusters = ci_config.get("adjusters", ["unadjusted", "combat", "combat_sup"])
+    class_imbalance_classifiers = ci_config.get("classifiers", config["classifiers"])
+
     combinations_list = []
     for scenario in CLASS_IMBALANCE_SCENARIOS:
         for adjuster in class_imbalance_adjusters:
-            for classifier in config["classifiers"]:
+            for classifier in class_imbalance_classifiers:
                 combinations_list.append(
                     f"{OUTPUT_FOLDER}/results/class_imbalance/individual/{adjuster}-{classifier}-{scenario}.csv"
                 )
-    
+
     return combinations_list
 
-# Step 3.1: Create ALL class imbalanced datasets. Fails if any scenario can't be created.
+# Step 3.1: Run classification on class imbalanced data (subsetting done inline, no intermediate files)
 if config.get("class_imbalance_analysis", {}).get("enabled", False):
-    rule create_class_imbalanced_data:
-        input:
-            data=DATA_FOLDER + "/TB_real_data.RData",
-            script=SCRIPTS_FOLDER + "/create_class_imbalanced_data.R"
-        output:
-            report=DATA_FOLDER + "/class_imbalance_report.csv",
-            data_files=get_class_imbalance_data_files()
-        log:
-            OUTPUT_FOLDER + "/logs/create_class_imbalanced_data.log"
-        threads: 1
-        resources:
-            mem_mb=8000,
-            runtime=30
-        params:
-            output_dir=DATA_FOLDER + "/class_imbalanced",
-            seed=config.get("class_imbalance_analysis", {}).get("seed", 123),
-            n_replicates=config.get("class_imbalance_analysis", {}).get("n_replicates", 1),
-            imbalance_levels=",".join(str(x) for x in config.get("class_imbalance_analysis", {}).get("imbalance_levels", []))
-        shell:
-            """
-            Rscript {input.script} \
-                --input {input.data} \
-                --output-dir {params.output_dir} \
-                --report-file {output.report} \
-                --seed {params.seed} \
-                --n-replicates {params.n_replicates} \
-                --imbalance-levels {params.imbalance_levels} \
-                &> {log}
-            """
-
-    # Step 3.2: Run classification on class imbalanced data
     rule classify_class_imbalanced:
         input:
-            data=DATA_FOLDER + "/class_imbalanced/{scenario_name}.RData",
+            data=DATA_FOLDER + "/TB_real_data.RData",
             script=SCRIPTS_FOLDER + "/classify_class_imbalanced.R",
             helper=SCRIPTS_FOLDER + "/helper.R"
         output:
@@ -616,19 +629,23 @@ if config.get("class_imbalance_analysis", {}).get("enabled", False):
         log:
             OUTPUT_FOLDER + "/logs/classify_class_imbalanced/{adjuster}-{classifier}-{scenario_name}.log"
         group: "class_imbalance_group"
+        priority: 50
         threads: 1
         resources:
             mem_mb=4000,
             runtime=20
         params:
-            data_dir=DATA_FOLDER + "/class_imbalanced"
+            seed=config.get("class_imbalance_analysis", {}).get("seed", 123),
+            imbalance_levels=",".join(str(x) for x in config.get("class_imbalance_analysis", {}).get("imbalance_levels", []))
         shell:
             """
             Rscript {input.script} \
                 --adjuster {wildcards.adjuster} \
                 --classifier {wildcards.classifier} \
                 --scenario-name {wildcards.scenario_name} \
-                --data-dir {params.data_dir} \
+                --data {input.data} \
+                --seed {params.seed} \
+                --imbalance-levels {params.imbalance_levels} \
                 -o {output} \
                 &> {log}
             """

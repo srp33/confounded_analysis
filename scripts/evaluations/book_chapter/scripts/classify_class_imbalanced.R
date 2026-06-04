@@ -36,20 +36,24 @@ parser$add_argument("--adjuster", type = "character", required = TRUE,
 parser$add_argument("--classifier", type = "character", required = TRUE,
                    help = "Classifier type: logistic, elnet, elasticnet, svm, rf, nnet, knn, xgboost, or shrinkageLDA")
 parser$add_argument("--scenario-name", type = "character", required = TRUE,
-                   help = "Scenario name (e.g., GSE37250_SA_USA_India_imbal20_testGSE37250_SA)")
-parser$add_argument("--data-dir", type = "character", required = TRUE,
-                   help = "Directory containing imbalanced datasets")
+                   help = "Scenario name (e.g., GSE37250_SA-USA-imbal20-testIndia-rep1)")
+parser$add_argument("--data", type = "character", required = TRUE,
+                   help = "Path to TB_real_data.RData")
+parser$add_argument("--seed", type = "integer", default = 123,
+                   help = "Base random seed for reproducible subsetting (default: 123)")
+parser$add_argument("--imbalance-levels", type = "character", required = TRUE,
+                   help = "Comma-separated imbalance proportions used to build scenarios, e.g. '0.1,0.2,0.3,0.4,0.5'")
 parser$add_argument("-o", "--output", type = "character", required = TRUE,
                    help = "Output CSV file path")
 
 args <- parser$parse_args()
 
 # Parameter validation
-valid_adjusters <- c("unadjusted", "combat", "combat_sup", "rankin", "coconut")
+valid_adjusters <- c("unadjusted", "combat", "combat_sup", "rankin", "coconut", "naive", "rank_twice", "recombat", "recombat_sup")
 valid_classifiers <- c("rda", "logistic", "elnet", "elasticnet", "svm", "rf", "nnet", "knn", "xgboost", "shrinkageLDA")
 
 if (!args$adjuster %in% valid_adjusters) {
-  cat(sprintf("Error: Invalid adjuster '%s'. Must be one of: %s\n", 
+  cat(sprintf("Error: Invalid adjuster '%s'. Must be one of: %s\n",
               args$adjuster, paste(valid_adjusters, collapse=", ")))
   quit(status=1)
 }
@@ -63,47 +67,91 @@ if (!args$classifier %in% valid_classifiers) {
 adjuster <- args$adjuster
 classifier <- args$classifier
 scenario_name <- args$scenario_name
-data_dir <- args$data_dir
+data_file <- args$data
+base_seed <- args$seed
+imbalance_levels <- as.numeric(strsplit(args$imbalance_levels, ",")[[1]])
 output_file <- args$output
 
 # ====================================================================
 # HELPER FUNCTIONS
 # ====================================================================
 
-# Parse scenario name to extract components
-parse_scenario_name <- function(scenario_name, dat_lst_names) {
-  # Expected format: TRAININGPAIR-imbalXX-testDATASET-repN
-  # Split by the known markers: -imbal, -test, -rep
-  
+ALL_STUDIES <- c("GSE37250_SA", "USA", "India", "GSE37250_M", "Africa", "GSE39941_M")
+
+# Parse scenario name — derives training pair by matching against all combn pairs
+parse_scenario_name <- function(scenario_name) {
   parts <- strsplit(scenario_name, "-imbal|-test|-rep")[[1]]
-  
   if (length(parts) < 3) {
-    stop(sprintf("Cannot parse scenario name (expected at least 3 parts): %s", scenario_name))
+    stop(sprintf("Cannot parse scenario name: %s", scenario_name))
   }
-  
-  training_pair <- parts[1]
-  imbalance_pct <- as.numeric(parts[2]) / 100
-  test_dataset <- parts[3]
-  replicate <- if (length(parts) >= 4) as.numeric(parts[4]) else 1
-  
-  # Infer train_datasets from the actual dat_lst keys
-  # The training pair should match exactly 2 datasets from dat_lst (excluding test)
-  available_train_datasets <- setdiff(dat_lst_names, test_dataset)
-  
-  if (length(available_train_datasets) != 2) {
-    stop(sprintf("Expected exactly 2 training datasets in loaded data (excluding test=%s), found %d: %s",
-                test_dataset, length(available_train_datasets), paste(available_train_datasets, collapse=", ")))
+
+  training_pair_str <- parts[1]
+  imbalance_pct     <- as.numeric(parts[2]) / 100
+  test_dataset      <- parts[3]
+  replicate         <- if (length(parts) >= 4) as.numeric(parts[4]) else 1
+
+  training_pairs_list <- combn(ALL_STUDIES, 2, simplify = FALSE)
+  pair_names <- sapply(training_pairs_list, paste, collapse = "-")
+  pair_idx   <- which(pair_names == training_pair_str)
+  if (length(pair_idx) == 0) {
+    stop(sprintf("Cannot find training pair '%s' among all combinations", training_pair_str))
   }
-  
-  train_datasets <- available_train_datasets
-  
+  train_datasets <- training_pairs_list[[pair_idx]]
+
   return(list(
     train_datasets = train_datasets,
-    test_dataset = test_dataset,
-    imbalance_pct = imbalance_pct,
-    training_pair = training_pair,
-    replicate = replicate
+    test_dataset   = test_dataset,
+    imbalance_pct  = imbalance_pct,
+    training_pair  = training_pair_str,
+    replicate      = replicate,
+    pair_idx       = pair_idx
   ))
+}
+
+# ── Subsetting helpers (mirror create_class_imbalanced_data.R exactly) ──────
+
+calculate_optimal_samples <- function(n_active, n_latent, target_active_pct, target_total) {
+  target_active <- round(target_total * target_active_pct)
+  target_latent <- target_total - target_active
+  if (target_active > n_active || target_latent > n_latent ||
+      target_active < 3 || target_latent < 3) {
+    return(NULL)
+  }
+  list(total = target_total, active = target_active, latent = target_latent,
+       actual_active_pct = target_active / target_total)
+}
+
+determine_optimal_arrangement_consistent <- function(ds1_stats, ds2_stats, all_imbalance_pcts) {
+  max_totals <- function(hi, lo) {
+    sapply(all_imbalance_pcts, function(p)
+      min(floor(hi$n_active / p), floor(hi$n_latent / (1 - p)),
+          floor(lo$n_active / (1 - p)), floor(lo$n_latent / p)))
+  }
+  t1 <- min(max_totals(ds1_stats, ds2_stats))
+  t2 <- min(max_totals(ds2_stats, ds1_stats))
+  if (t1 >= t2 && t1 >= 30)
+    list(high_active_dataset = ds1_stats$dataset, low_active_dataset = ds2_stats$dataset,
+         total_samples = t1, feasible = TRUE)
+  else if (t2 >= 30)
+    list(high_active_dataset = ds2_stats$dataset, low_active_dataset = ds1_stats$dataset,
+         total_samples = t2, feasible = TRUE)
+  else
+    list(feasible = FALSE)
+}
+
+create_imbalanced_subset <- function(data, labels, target_active_pct, target_total,
+                                     seed_offset = 0, base_seed = 123) {
+  set.seed(base_seed + seed_offset)
+  active_idx <- which(labels == 1)
+  latent_idx <- which(labels == 0)
+  optimal <- calculate_optimal_samples(length(active_idx), length(latent_idx),
+                                       target_active_pct, target_total)
+  if (is.null(optimal)) {
+    stop(sprintf("Cannot create subset: infeasible target %.0f%% with total %.0f",
+                 target_active_pct * 100, target_total))
+  }
+  keep <- sort(c(sample(active_idx, optimal$active), sample(latent_idx, optimal$latent)))
+  list(data = data[, keep, drop = FALSE], labels = labels[keep])
 }
 
 # Define the train_and_evaluate_classifier function
@@ -278,16 +326,60 @@ main_class_imbalanced_analysis <- function() {
   cat(sprintf("Scenario: %s\n", scenario_name))
   cat("==========================================\n\n")
   
-  # Load imbalanced data
-  data_file <- file.path(data_dir, sprintf("%s.RData", scenario_name))
+  # Load full TB data and subset inline (no intermediate files)
   if (!file.exists(data_file)) {
     stop(sprintf("Data file not found: %s", data_file))
   }
-  
-  load(data_file)  # Loads dat_lst and label_lst
-  
-  # Parse scenario name using actual dataset names from loaded data
-  scenario_info <- parse_scenario_name(scenario_name, names(dat_lst))
+  load(data_file)  # loads dat_lst and label_lst (all 6 datasets)
+  dat_lst_original   <- dat_lst
+  label_lst_original <- label_lst
+
+  scenario_info <- parse_scenario_name(scenario_name)
+
+  # Compute arrangement and seed offset (mirrors create_class_imbalanced_data.R)
+  train_datasets <- scenario_info$train_datasets
+  test_dataset   <- scenario_info$test_dataset
+  imbalance_pct  <- scenario_info$imbalance_pct
+  replicate_idx  <- scenario_info$replicate
+
+  original_stats <- lapply(ALL_STUDIES, function(ds) {
+    lbls <- label_lst_original[[ds]]
+    list(dataset = ds, n_active = sum(lbls == 1), n_latent = sum(lbls == 0))
+  })
+  names(original_stats) <- ALL_STUDIES
+
+  arrangement <- determine_optimal_arrangement_consistent(
+    original_stats[[train_datasets[1]]], original_stats[[train_datasets[2]]], imbalance_levels
+  )
+  if (!arrangement$feasible) {
+    stop(sprintf("Infeasible arrangement for pair %s", scenario_info$training_pair))
+  }
+
+  high_ds <- arrangement$high_active_dataset
+  low_ds  <- arrangement$low_active_dataset
+  total_n <- arrangement$total_samples
+
+  test_datasets_for_pair <- setdiff(ALL_STUDIES, train_datasets)
+  seed_offset <- scenario_info$pair_idx * 100000 +
+                 which(imbalance_levels == imbalance_pct) * 10000 +
+                 which(test_datasets_for_pair == test_dataset) * 100 +
+                 replicate_idx
+
+  high_sub <- create_imbalanced_subset(dat_lst_original[[high_ds]],
+                                       label_lst_original[[high_ds]],
+                                       imbalance_pct, total_n,
+                                       seed_offset = seed_offset, base_seed = base_seed)
+  low_sub  <- create_imbalanced_subset(dat_lst_original[[low_ds]],
+                                       label_lst_original[[low_ds]],
+                                       1 - imbalance_pct, total_n,
+                                       seed_offset = seed_offset + 50000, base_seed = base_seed)
+
+  dat_lst   <- list()
+  label_lst <- list()
+  dat_lst[[high_ds]]   <- high_sub$data;   label_lst[[high_ds]]   <- high_sub$labels
+  dat_lst[[low_ds]]    <- low_sub$data;    label_lst[[low_ds]]    <- low_sub$labels
+  dat_lst[[test_dataset]]   <- dat_lst_original[[test_dataset]]
+  label_lst[[test_dataset]] <- label_lst_original[[test_dataset]]
   
   cat(sprintf("Parsed scenario:\n"))
   cat(sprintf("  Training pair: %s\n", scenario_info$training_pair))
@@ -372,15 +464,134 @@ main_class_imbalanced_analysis <- function() {
     batch_active <- sum(batch_group == 1)
     batch_latent <- sum(batch_group == 0)
     batch_total <- batch_active + batch_latent
-    
+
     cat(sprintf("  %s (batch %d): LTBI=%d (%.1f%%), Active TB=%d (%.1f%%), Total=%d\n",
                 train_datasets[i], i, batch_latent, 100 * batch_latent / batch_total,
                 batch_active, 100 * batch_active / batch_total, batch_total))
   }
-  
+
+  # ====================================================================
+  # BATCH CORRECTION HELPER FUNCTIONS
+  # ====================================================================
+
+  rank_normalized <- function(matrix_, dim) {
+    if (dim < 1 || dim > 2) {
+      stop("Invalid dimension. Must be 1 for rows or 2 for columns.")
+    }
+    ranked <- apply(matrix_, dim, rank, ties.method = "average")
+    if (dim == 1 && is.matrix(ranked)) {
+      ranked <- t(ranked)
+    }
+    return(ranked / max(ranked, na.rm = TRUE))
+  }
+
+  adjust_ranked_samples_with_batch_info <- function(matrix_, batch, debug = FALSE) {
+    ranked <- rank_normalized(matrix_, 1)
+    batch_levels <- unique(batch)
+    ranked2 <- matrix(NA, nrow = nrow(ranked), ncol = ncol(ranked))
+    for (b in batch_levels) {
+      batch_indices <- which(batch == b)
+      batch_data <- ranked[, batch_indices, drop = FALSE]
+      if (ncol(batch_data) > 1) {
+        batch_ranked <- rank_normalized(batch_data, 2)
+        ranked2[, batch_indices] <- batch_ranked
+      } else {
+        ranked2[, batch_indices] <- batch_data
+      }
+    }
+    if (any(is.na(ranked2))) {
+      ranked2[is.na(ranked2)] <- ranked[is.na(ranked2)]
+    }
+    max_val <- max(ranked2, na.rm = TRUE)
+    if (max_val == 0) max_val <- 1
+    return(ranked2 / max_val)
+  }
+
+  adjust_ranked_twice_with_batch_info <- function(matrix_, batch, debug = FALSE) {
+    ranked <- rank_normalized(matrix_, 1)
+    batch_levels <- unique(batch)
+    ranked2 <- matrix(NA, nrow = nrow(ranked), ncol = ncol(ranked))
+    for (b in batch_levels) {
+      batch_indices <- which(batch == b)
+      batch_data <- ranked[, batch_indices, drop = FALSE]
+      if (ncol(batch_data) > 1) {
+        batch_ranked <- rank_normalized(batch_data, 2)
+        ranked2[, batch_indices] <- batch_ranked
+      } else {
+        ranked2[, batch_indices] <- batch_data
+      }
+    }
+    if (any(is.na(ranked2))) {
+      ranked2[is.na(ranked2)] <- ranked[is.na(ranked2)]
+    }
+    max_val <- max(ranked2, na.rm = TRUE)
+    if (max_val == 0) max_val <- 1
+    return(ranked2 / max_val)
+  }
+
+  adjust_naive <- function(matrix_, batch, debug = FALSE) {
+    result_matrix <- matrix_
+    unique_batches <- unique(batch)
+    overall_mean <- rowMeans(matrix_)
+    overall_var <- apply(matrix_, 1, var)
+    for (b in unique_batches) {
+      batch_idx <- which(batch == b)
+      batch_data <- matrix_[, batch_idx, drop = FALSE]
+      batch_mean <- rowMeans(batch_data)
+      batch_var <- apply(batch_data, 1, var)
+      batch_sd <- sqrt(pmax(batch_var, 1e-10))
+      overall_sd <- sqrt(pmax(overall_var, 1e-10))
+      for (i in 1:nrow(matrix_)) {
+        if (batch_sd[i] > 1e-10) {
+          result_matrix[i, batch_idx] <- (batch_data[i, ] - batch_mean[i]) / batch_sd[i] * overall_sd[i] + overall_mean[i]
+        } else {
+          result_matrix[i, batch_idx] <- overall_mean[i]
+        }
+      }
+    }
+    return(result_matrix)
+  }
+
+  adjust_recombat <- function(matrix_, batch, debug = FALSE) {
+    if (!requireNamespace("reticulate", quietly = TRUE)) {
+      stop("Package 'reticulate' is required but not installed.")
+    }
+    data_t <- t(matrix_)
+    pd <- reticulate::import("pandas", convert = FALSE)
+    recombat_pkg <- reticulate::import("reComBat", convert = FALSE)
+    data_pd <- pd$DataFrame(data_t)
+    batch_pd <- pd$Series(batch)
+    combat_model <- recombat_pkg$reComBat(parametric = TRUE, model = "elastic_net")
+    res_pd <- combat_model$fit_transform(data_pd, batch_pd)
+    res_matrix_t <- reticulate::py_to_r(res_pd)
+    result_matrix <- t(as.matrix(res_matrix_t))
+    rownames(result_matrix) <- rownames(matrix_)
+    colnames(result_matrix) <- colnames(matrix_)
+    return(result_matrix)
+  }
+
+  adjust_recombat_supervised <- function(matrix_, batch, group, debug = FALSE) {
+    if (!requireNamespace("reticulate", quietly = TRUE)) {
+      stop("Package 'reticulate' is required but not installed.")
+    }
+    data_t <- t(matrix_)
+    pd <- reticulate::import("pandas", convert = FALSE)
+    recombat_pkg <- reticulate::import("reComBat", convert = FALSE)
+    data_pd <- pd$DataFrame(data_t)
+    batch_pd <- pd$Series(batch)
+    X_pd <- pd$DataFrame(list(disease = as.integer(group)))
+    combat_model <- recombat_pkg$reComBat(parametric = TRUE, model = "elastic_net")
+    res_pd <- combat_model$fit_transform(data_pd, batch_pd, X = X_pd)
+    res_matrix_t <- reticulate::py_to_r(res_pd)
+    result_matrix <- t(as.matrix(res_matrix_t))
+    rownames(result_matrix) <- rownames(matrix_)
+    colnames(result_matrix) <- colnames(matrix_)
+    return(result_matrix)
+  }
+
   # ====================================================================
   # BATCH CORRECTION
-  # ====================================================================
+  # ===================================================================
   
   if (adjuster == "unadjusted") {
     cat("Using unadjusted data (no batch correction)\n")
@@ -456,9 +667,43 @@ main_class_imbalanced_analysis <- function() {
                              mod=NULL, ref.batch=ref_batch_id)
     
     dat_test_corrected <- combat_combined[, (ncol(dat_corrected) + 1):ncol(combat_combined)]
+
+  } else if (adjuster == "naive") {
+    cat("Applying naive batch correction\n")
+    dat_corrected <- adjust_naive(dat, batch, debug = FALSE)
+    test_batch <- rep(1, ncol(dat_test))
+    dat_test_corrected <- adjust_naive(dat_test, test_batch, debug = FALSE)
+
+  } else if (adjuster == "rank_twice") {
+    cat("Applying rank_twice batch correction\n")
+    dat_corrected <- adjust_ranked_twice_with_batch_info(dat, batch, debug = FALSE)
+    test_batch <- rep(1, ncol(dat_test))
+    dat_test_corrected <- adjust_ranked_twice_with_batch_info(dat_test, test_batch, debug = FALSE)
+
+  } else if (adjuster == "recombat") {
+    cat("Applying reComBat batch correction\n")
+    combined_dat <- cbind(dat, dat_test)
+    combined_batch <- c(batch, rep(max(batch) + 1, ncol(dat_test)))
+    combined_corrected <- adjust_recombat(combined_dat, combined_batch, debug = FALSE)
+    dat_corrected <- combined_corrected[, 1:ncol(dat), drop = FALSE]
+    dat_test_corrected <- combined_corrected[, (ncol(dat) + 1):ncol(combined_corrected), drop = FALSE]
+
+  } else if (adjuster == "recombat_sup") {
+    cat("Applying reComBat (supervised) batch correction\n")
+
+    # Step 1: supervised reComBat on training data only (group labels protect biological signal)
+    dat_corrected <- adjust_recombat_supervised(dat, batch, group, debug = FALSE)
+
+    # Step 2: align test to corrected training space (unsupervised, no leakage)
+    combined_dat <- cbind(dat_corrected, dat_test)
+    combined_batch <- c(rep(1L, ncol(dat_corrected)), rep(2L, ncol(dat_test)))
+    combined_corrected <- adjust_recombat(combined_dat, combined_batch, debug = FALSE)
+    dat_corrected <- combined_corrected[, 1:ncol(dat), drop = FALSE]
+    dat_test_corrected <- combined_corrected[, (ncol(dat) + 1):ncol(combined_corrected), drop = FALSE]
+
   }
 
-  
+
   # ====================================================================
   # CLASSIFICATION
   # ====================================================================
