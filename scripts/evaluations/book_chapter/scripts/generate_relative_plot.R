@@ -65,10 +65,10 @@ generate_relative_plot <- function(mxe_data, top_adjuster, top_adjuster_label,
     
     # Add dataset label
     plot_data$dataset_label <- factor(paste(plot_data$n_datasets, "studies"),
-                                     levels = c("3 studies", "4 studies", "5 studies", "6 studies"))
-    
+                                     levels = c("2 studies", "3 studies", "4 studies", "5 studies"))
+
     # Create separate dabest objects for each n_datasets group
-    for (n_studies in c(3, 4, 5, 6)) {
+    for (n_studies in c(2, 3, 4, 5)) {
       dataset_label <- paste(n_studies, "studies")
       subset_data <- plot_data %>% filter(dataset_label == !!dataset_label)
       
@@ -166,7 +166,7 @@ generate_relative_plot <- function(mxe_data, top_adjuster, top_adjuster_label,
     effect_data <- all_effect_results %>%
       filter(classifier == !!classifier) %>%
       mutate(dataset_label = factor(dataset_label,
-                                    levels = c("3 studies", "4 studies", "5 studies", "6 studies")))
+                                    levels = c("2 studies", "3 studies", "4 studies", "5 studies")))
     
     # Create two-panel plot: delta values on top, effect sizes on bottom
     # Top panel: Delta MCC values (relative to within-study CV baseline)

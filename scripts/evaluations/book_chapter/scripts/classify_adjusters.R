@@ -63,7 +63,7 @@ if (!exists("testing_mode")) {
 # Parameter validation
 valid_adjusters <- c("unadjusted", "naive", "rank_samples", "rank_twice", "npn", "combat", "combat_mean", "combat_sup", "mnn", "fast_mnn", "ruvg", "ruvr", "yugene", "cublock", "angel", "tdm", "rnabc", "shambhala2", "coconut", "rankin", "recombat", "recombat_sup")
 valid_classifiers <- c("rda", "elnet", "elasticnet", "svm", "rf", "nnet", "knn", "xgboost", "shrinkageLDA")
-valid_num_datasets <- c(3, 4, 5, 6)
+valid_num_datasets <- c(2, 3, 4, 5)
 
 if (!args$adjuster %in% valid_adjusters) {
   cat(sprintf("Error: Invalid adjuster '%s'. Must be one of: %s\n", 
@@ -819,17 +819,18 @@ main_analysis_function <- function() {
   # REAL DATA PREPARATION LOGIC
   # ====================================================================
   
-  filter_studies <- function(dat_lst, label_lst, n_studies) {
+  filter_studies <- function(dat_lst, label_lst, n_studies, test_study) {
     all_studies <- c("GSE37250_SA", "USA", "India", "GSE37250_M", "Africa", "GSE39941_M")
-    selected_studies <- all_studies[1:n_studies]
-    
+    train_studies <- all_studies[all_studies != test_study][seq_len(n_studies)]
+    selected_studies <- c(train_studies, test_study)
+
     # Filter data and labels to keep only selected studies
     dat_lst <- dat_lst[selected_studies]
     label_lst <- label_lst[selected_studies]
     study_names <- names(dat_lst)
-    cat(sprintf("Running %d-study analysis with studies: %s\n", 
-                n_studies, paste(study_names, collapse=", ")))
-    
+    cat(sprintf("Running %d-study analysis with train: %s, test: %s\n",
+                n_studies, paste(train_studies, collapse=", "), test_study))
+
     list(dat_lst = dat_lst, label_lst = label_lst, study_names = study_names)
   }
   
@@ -879,7 +880,7 @@ main_analysis_function <- function() {
   cat("Starting data preparation...\n")
   
   # Filter studies based on num_datasets parameter
-  filtered_data <- filter_studies(dat_lst, label_lst, num_datasets)
+  filtered_data <- filter_studies(dat_lst, label_lst, num_datasets, test_study)
   dat_lst_filtered <- filtered_data$dat_lst
   label_lst_filtered <- filtered_data$label_lst
   study_names <- filtered_data$study_names

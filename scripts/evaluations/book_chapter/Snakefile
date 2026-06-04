@@ -39,8 +39,8 @@ def get_test_studies_for_n(n):
 # Helper to generate all adjusted data combinations for specified adjusters
 def get_all_adjusted_data_combinations():
     """Generate all adjusted data files for combat & combat_sup × n_datasets × test_study combinations"""
-    # Only generate adjusted data for ComBat and ComBat supervised for investigation
-    focus_adjusters = ["combat", "combat_sup"]
+    # Generate adjusted data for ComBat variants needed by mechanism evaluation scripts
+    focus_adjusters = ["combat", "combat_sup", "combat_sup_nat", "combat_sup_mo"]
     combinations = []
     for adjuster in focus_adjusters:
         for n in config["num_datasets"]:
@@ -398,7 +398,7 @@ rule classify_adjusters:
     threads: 1
     resources:
         mem_mb=16000,
-        runtime=300
+        runtime=lambda wildcards: 720 if wildcards.adjuster == "shambhala2" else 300
     shell:
         """
         Rscript {SCRIPTS_FOLDER}/classify_adjusters.R -o {output} \
@@ -544,7 +544,8 @@ rule adjust_target_data_all_scenarios:
         script=SCRIPTS_FOLDER + "/adjust_target_data_SA_UK.R",
         helper=SCRIPTS_FOLDER + "/helper.R"
     output:
-        adjusted_target=OUTPUT_FOLDER + "/adjusted_data/all_scenarios/{adjuster}_n{n_datasets}_test{test_study}_target.csv"
+        adjusted_target=OUTPUT_FOLDER + "/adjusted_data/all_scenarios/{adjuster}_n{n_datasets}_test{test_study}_target.csv",
+        adjusted_reference=OUTPUT_FOLDER + "/adjusted_data/all_scenarios/{adjuster}_n{n_datasets}_test{test_study}_reference.csv"
     log:
         OUTPUT_FOLDER + "/logs/adjust_target_data_all_scenarios/{adjuster}_n{n_datasets}_test{test_study}.log"
     priority: 100
