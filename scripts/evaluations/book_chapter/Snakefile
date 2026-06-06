@@ -388,7 +388,7 @@ rule aggregate_adjusters:
 rule classify_adjusters:
     input:
         data=DATA_FOLDER + "/TB_real_data.RData",
-        # script=SCRIPTS_FOLDER + "/classify_adjusters.R",
+        script=SCRIPTS_FOLDER + "/classify_adjusters.R",
         helper=SCRIPTS_FOLDER + "/helper.R"
     output:
         OUTPUT_FOLDER + "/results/adjusters/individual/{adjuster}_{classifier}_{n_datasets}_{test_study}.csv"

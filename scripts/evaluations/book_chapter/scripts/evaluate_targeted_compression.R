@@ -18,6 +18,7 @@ suppressMessages({
   library(sva)
   library(limma)
   library(matrixStats)
+  library(dplyr)
 })
 source("scripts/ComBat_nat.R")
 
@@ -244,11 +245,14 @@ for (n in 2:5) {
     r_n      <- full_step2(rs[cg,], lr, tst_raw[cg,], lt, supervised=FALSE, mean_only=TRUE)
     s_n      <- if(!is.null(r_n)) as.numeric(t(r_n$corrected) %*% w) else rep(NA, length(lt))
     sep_n    <- sep_fn(s_n, lt)
+    # Use absolute retention ratio with sign-flip flag; avoids division-by-near-zero
+    abs_bef <- max(abs(sep_bef), 1e-6)
     sep_rows[[length(sep_rows)+1]] <- data.frame(
       n=n, test=test,
       sep_before=sep_bef, sep_sup=sep_s, sep_nat=sep_n,
-      ratio_sup=sep_s/max(sep_bef,1e-10),
-      ratio_nat=sep_n/max(sep_bef,1e-10)
+      ratio_sup=sep_s / abs_bef,
+      ratio_nat=sep_n / abs_bef,
+      sign_flip_sup=(sign(sep_s) != sign(sep_bef) & abs(sep_bef) > 0.1)
     )
   }
 }
