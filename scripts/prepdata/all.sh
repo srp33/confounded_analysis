@@ -3,8 +3,13 @@
 # Exit immediately if a command exits with a non-zero status.
 #set -e
 
+# METABRIC removed 2026-07-17: the shared OSF mirror (project eky3p) hosts cBioPortal's Z-SCORE release
+# (data_mrna_illumina_microarray_zscores_ref_diploid_samples.txt), already per-gene standardized -- a
+# platform-inconsistency artifact against every other (raw-scale) dataset in this corpus. METABRIC is now
+# acquired directly from cBioPortal's raw expression file via single_dataset_downloaders/metabric.sh
+# (bypassing this generic OSF route entirely, like the other single_dataset_downloaders/ scripts below).
 osf_datasets="GSE19615,GSE20194,GSE20271,GSE23720,GSE25055,GSE25065,GSE31448,"\
-"GSE45255,GSE58644,GSE62944_Tumor,GSE76275,GSE81538,GSE96058_HiSeq,GSE96058_NextSeq,METABRIC"
+"GSE45255,GSE58644,GSE62944_Tumor,GSE76275,GSE81538,GSE96058_HiSeq,GSE96058_NextSeq"
 
 gdrive_datasets="GSE115577,GSE123845,GSE163882"
 
@@ -44,6 +49,9 @@ python3 /scripts/prepdata/convert_raw_files.py \
 echo "🔗 Generating all dataset combinations with caching (only the unadjusted files)..."
 python3 /scripts/prepdata/generate_all_combinations.py --csv-files unadjusted.csv --debug --parallel 10 |& tee /outputs/prepdata2.log 
 
+
+# https://github.com/cBioPortal/datahub/tree/master/public/brca_metabric (raw, non-z-scored expression)
+# bash /scripts/prepdata/metabric.sh
 
 # https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE20194
 # https://pubmed.ncbi.nlm.nih.gov/20064235/
